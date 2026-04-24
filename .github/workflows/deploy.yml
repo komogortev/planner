@@ -42,6 +42,9 @@ jobs:
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
+        with:
+          # Enable Pages on first run if not already enabled (idempotent)
+          enablement: true
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
