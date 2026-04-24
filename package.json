@@ -9,7 +9,8 @@
     "build": "vue-tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "vue-tsc --noEmit",
-    "test": "vitest"
+    "test": "vitest",
+    "generate-pwa-assets": "pwa-assets-generator"
   },
   "dependencies": {
     "dexie": "^4.0.10",
@@ -21,11 +22,13 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "esbuild",
+      "sharp",
       "vue-demi"
     ]
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "@vite-pwa/assets-generator": "^0.2.6",
     "@vitejs/plugin-vue": "^5.2.3",
     "@vue/tsconfig": "^0.7.0",
     "autoprefixer": "^10.4.0",

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#0f172a"/>
+  <g fill="#e2e8f0" font-family="Inter, system-ui, -apple-system, Segoe UI, sans-serif" font-weight="700" text-anchor="middle">
+    <text x="256" y="296" font-size="220" letter-spacing="-8">PP</text>
+  </g>
+  <rect x="64" y="356" width="384" height="8" rx="4" fill="#38bdf8"/>
+</svg>
