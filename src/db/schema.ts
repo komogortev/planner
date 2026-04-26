@@ -76,3 +76,31 @@ export interface MarketEntry {
   notes: string
   createdAt: string
 }
+
+/**
+ * Singleton app settings. Stores the GitHub sync connection (L1).
+ *
+ * Stored in the `settings` Dexie table with `id: 'singleton'` — there is only
+ * ever one row. Absence of the row means "not connected".
+ *
+ * `pat` is a fine-grained GitHub Personal Access Token scoped to a single
+ * private repo with `Contents: read+write`. See `docs/L1-GITHUB.md`.
+ */
+export interface AppSettings {
+  /** Always 'singleton' — primary key constraint enforces a single row. */
+  id: 'singleton'
+  /** github_pat_… fine-grained token. */
+  pat: string
+  /** GitHub owner login of the data repo. */
+  owner: string
+  /** Name of the private data repo. */
+  repo: string
+  /** Captured from `GET /user .login` at Connect time — receipt that the PAT works. */
+  githubLogin: string
+  /** `${platform}-${YYYY-MM-DD}` of first Connect; used in commit messages + snapshot. */
+  deviceId: string
+  /** sha of data.json from the last successful sync. null until first sync. */
+  lastKnownSha: string | null
+  /** ISO timestamp of last successful sync. null until first sync. */
+  lastSyncedAt: string | null
+}

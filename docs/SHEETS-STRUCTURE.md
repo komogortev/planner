@@ -1,5 +1,9 @@
 # Google Sheets Structure — Personal Planner
 
+> **DEFERRED — REFERENCE ONLY (as of 2026-04-26).** L1 sync was pivoted from Google Sheets to the GitHub Contents API; see `PROJECT.md` decision entry dated 2026-04-26 for the rationale. This document is retained as a reference for a possible future Sheets backend (alternative storage adapter or migration target). **Do not enter data into a sheet built from this spec expecting the app to sync it** — the active L1 plan reads/writes a single `data.json` in a private GitHub repo. See `STORAGE-FORMAT.md` (to be drafted in S0) for the active schema.
+
+---
+
 Until L1 sync ships, you can create + fill the target spreadsheet by hand. When L1 lands, the app will read/write this exact structure, so data you enter now is not throwaway — it becomes the seed for `Restore from Sheets`.
 
 ## Workbook

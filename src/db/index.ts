@@ -1,5 +1,6 @@
 import Dexie, { type Table } from 'dexie'
 import type {
+  AppSettings,
   Commitment,
   Intention,
   MarketEntry,
@@ -10,12 +11,14 @@ import type {
  * Personal-planner IndexedDB schema (Dexie).
  *
  * Version 1 — initial schema. Bump version + add upgrade() when shape changes.
+ * Version 2 — added `settings` singleton table for L1 GitHub sync (2026-04-26).
  */
 export class PlannerDb extends Dexie {
   commitments!: Table<Commitment, string>
   payments!: Table<Payment, string>
   intentions!: Table<Intention, string>
   marketEntries!: Table<MarketEntry, string>
+  settings!: Table<AppSettings, string>
 
   constructor() {
     super('personal-planner')
@@ -25,6 +28,17 @@ export class PlannerDb extends Dexie {
       payments: 'id, commitmentId, date',
       intentions: 'id, status, category, updatedAt',
       marketEntries: 'id, intentionId, observedAt',
+    })
+
+    // v2 — add settings singleton table for L1 GitHub sync.
+    // No upgrade callback needed: absence of the row means "not connected".
+    // Existing v1 data is untouched.
+    this.version(2).stores({
+      commitments: 'id, type, startDate, updatedAt',
+      payments: 'id, commitmentId, date',
+      intentions: 'id, status, category, updatedAt',
+      marketEntries: 'id, intentionId, observedAt',
+      settings: 'id',
     })
 
     // ---------------------------------------------------------------------
