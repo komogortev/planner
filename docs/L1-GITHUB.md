@@ -66,7 +66,9 @@ Original Sheets plan stored OAuth tokens in memory only — fine for short-lived
 | Restore | `GET` | `/repos/{owner}/{repo}/contents/data.json` | "Restore from GitHub" button |
 | Sync | `PUT` | `/repos/{owner}/{repo}/contents/data.json` | "Sync now" button |
 
-All requests carry `Authorization: Bearer <pat>` and `Accept: application/vnd.github+json`. Restore additionally sets `Accept: application/vnd.github.raw` to get the file body directly without base64 wrapping.
+All requests carry `Authorization: Bearer <pat>` and `Accept: application/vnd.github+json`.
+
+> **Restore deviation (decided during S2 implementation, 2026-04-26):** Restore uses the **standard JSON wrapper** (not `Accept: vnd.github.raw`). The wrapper response includes both `content` (base64) and `sha` in a single response, eliminating a second metadata round-trip. Base64 overhead is negligible at expected payload sizes (10–100 KB). Decoding is via `atob` + `TextDecoder('utf-8')` to preserve non-ASCII (notes fields, emoji). See `src/db/github.ts:getDataJson`.
 
 ### Sync request body
 
@@ -112,9 +114,12 @@ User opens Settings → pastes PAT, owner, repo → clicks Connect
 ```
 User clicks "Restore from GitHub"
   │
-  ├─▶ GET /contents/data.json (Accept: raw)
-  │     ├─ 404 → first-run case. Show: "No data.json yet in this repo. Run 'Sync now'
-  │     │        on a device that has data to seed it." Exit flow.
+  ├─▶ GET /contents/data.json (JSON wrapper — see deviation note above)
+  │     ├─ 404 → first-run case. Copy now also covers PAT propagation:
+  │     │        "No data.json yet in {owner}/{repo}. Run 'Sync now' on a device
+  │     │         that has data to seed it. (If you just created or updated the PAT,
+  │     │         wait 30 seconds — GitHub takes a moment to propagate access changes.)"
+  │     │        Exit flow.
   │     ├─ 401 → "GitHub rejected your token. Reconnect in Settings."
   │     ├─ network error → "Can't reach github.com." retry button.
   │     └─ 200 → parse JSON, capture sha from response headers

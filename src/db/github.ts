@@ -6,7 +6,8 @@
  * full error mapping table.
  *
  * S1 scope: auth validation only (`getUser`, `getRepo`).
- * S2/S3 will add: `getDataJson`, `putDataJson`, `getLatestDataCommit`.
+ * S2 adds: `getDataJson`.
+ * S3 will add: `putDataJson`, `getLatestDataCommit`.
  */
 
 const GITHUB_API = 'https://api.github.com'
@@ -81,7 +82,9 @@ export async function getRepo(
     throw new GitHubError(
       'not-found',
       `Repo ${owner}/${repo} not found, or your token doesn't have access. ` +
-        `Check the spelling and your token's repository access list.`,
+        `Check the spelling and your token's repository access list. ` +
+        `(If you just created or updated the PAT, wait 30 seconds — GitHub takes ` +
+        `a moment to propagate access changes.)`,
     )
   }
   if (res.status === 401) {
@@ -104,9 +107,78 @@ export async function getRepo(
   return meta
 }
 
+/**
+ * Fetch `data.json` from the data repo. Returns the raw JSON text + the blob
+ * sha (used as the optimistic-concurrency token for subsequent PUTs).
+ *
+ * Uses the standard JSON wrapper (not `Accept: vnd.github.raw`) so we get
+ * `{ content, sha }` in a single response — see L1-GITHUB.md "Restore (S2)".
+ *
+ * Throws:
+ *   - `not-found` if no `data.json` exists yet (first-run case)
+ *   - `unauthorized` if the PAT is rejected
+ *   - `rate-limited` / `network` / `unknown` per `genericHttpError`
+ */
+export async function getDataJson(
+  pat: string,
+  owner: string,
+  repo: string,
+): Promise<{ rawText: string; sha: string }> {
+  const res = await ghFetch(
+    `${GITHUB_API}/repos/${owner}/${repo}/contents/data.json`,
+    pat,
+  )
+  if (res.status === 404) {
+    throw new GitHubError(
+      'not-found',
+      `No data.json yet in ${owner}/${repo}. Run "Sync now" on a device that ` +
+        `has data to seed it. (If you just created or updated the PAT, wait ` +
+        `30 seconds — GitHub takes a moment to propagate access changes.)`,
+    )
+  }
+  if (res.status === 401) {
+    throw new GitHubError(
+      'unauthorized',
+      'GitHub rejected your token. Reconnect in Settings.',
+    )
+  }
+  if (!res.ok) {
+    throw genericHttpError(res)
+  }
+  const body = (await res.json()) as {
+    content?: string
+    encoding?: string
+    sha?: string
+  }
+  if (!body.sha || typeof body.content !== 'string' || body.encoding !== 'base64') {
+    throw new GitHubError(
+      'unknown',
+      'GitHub returned an unexpected response shape for data.json.',
+    )
+  }
+  // GitHub wraps base64 at column 60 with newlines; atob rejects them.
+  const cleanBase64 = body.content.replace(/\n/g, '')
+  const rawText = decodeBase64Utf8(cleanBase64)
+  return { rawText, sha: body.sha }
+}
+
 // ---------------------------------------------------------------------------
 // internals
 // ---------------------------------------------------------------------------
+
+/**
+ * Decode a base64 string as UTF-8. `atob` returns a binary string of code
+ * units 0–255, which corrupts multi-byte characters (e.g. emoji) — we route
+ * the bytes through TextDecoder to recover the original text.
+ */
+function decodeBase64Utf8(b64: string): string {
+  const binary = atob(b64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i)
+  }
+  return new TextDecoder('utf-8').decode(bytes)
+}
 
 async function ghFetch(url: string, pat: string, init?: RequestInit): Promise<Response> {
   try {

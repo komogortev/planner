@@ -4,6 +4,7 @@ import { clearAllData, getDbStats, seedSampleData } from '@/db/seed'
 import { useOnline } from '@/composables/useOnline'
 import { useSettingsStore } from '@/stores/settings'
 import { GitHubError } from '@/db/github'
+import ConfirmRestoreModal from '@/components/ConfirmRestoreModal.vue'
 
 const online = useOnline()
 const settingsStore = useSettingsStore()
@@ -66,6 +67,18 @@ async function doConnect(): Promise<void> {
   } finally {
     connecting.value = false
   }
+}
+
+// --- Restore (S2) ---
+
+async function onRestoreClick(): Promise<void> {
+  await settingsStore.fetchAndPrepareRestore()
+}
+
+async function onConfirmRestore(): Promise<void> {
+  await settingsStore.applyPendingRestore()
+  // Refresh local stats panel — the entity tables just got rewritten.
+  await refreshStats()
 }
 
 async function doDisconnect(): Promise<void> {
@@ -154,13 +167,25 @@ async function doDisconnect(): Promise<void> {
           </div>
         </dl>
 
-        <div class="border-t border-slate-800 pt-4">
-          <p class="text-xs text-slate-500 mb-3">
-            Sync and Restore actions land in S2/S3 (next session). Connection persists across reloads.
+        <div class="border-t border-slate-800 pt-4 space-y-3">
+          <p class="text-xs text-slate-500">
+            Restore replaces local data with the GitHub snapshot. Sync (S3) lands next.
           </p>
+
+          <div
+            v-if="settingsStore.restoreError"
+            class="rounded-md border border-rose-900/60 bg-rose-950/40 px-3 py-2 text-sm text-rose-200"
+          >
+            {{ settingsStore.restoreError }}
+          </div>
+
           <div class="flex flex-wrap gap-2">
-            <button class="btn-ghost" disabled title="Lands in S2">
-              Restore from GitHub
+            <button
+              class="btn-ghost"
+              :disabled="settingsStore.restoreInFlight"
+              @click="onRestoreClick"
+            >
+              {{ settingsStore.restoreInFlight && !settingsStore.pendingRestore ? 'Fetching…' : 'Restore from GitHub' }}
             </button>
             <button class="btn-ghost" disabled title="Lands in S3">Sync now</button>
             <button class="btn-danger" @click="doDisconnect">Disconnect</button>
@@ -285,5 +310,15 @@ async function doDisconnect(): Promise<void> {
         <button class="btn-danger" @click="doClear">Clear all data</button>
       </div>
     </section>
+
+    <ConfirmRestoreModal
+      v-if="settingsStore.pendingRestore"
+      :remote-counts="settingsStore.pendingRestore.remoteCounts"
+      :local-counts="settingsStore.pendingRestore.localCounts"
+      :last-synced-at="settingsStore.settings?.lastSyncedAt ?? null"
+      :in-flight="settingsStore.restoreInFlight"
+      @cancel="settingsStore.cancelPendingRestore"
+      @confirm="onConfirmRestore"
+    />
   </div>
 </template>
