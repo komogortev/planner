@@ -151,7 +151,9 @@ User clicks "Restore from GitHub"
         → UI live-queries re-render automatically
 ```
 
-### Sync now (S3)
+### Sync now (S3) — ✅ shipped 2026-04-26
+
+> **Implementation:** `useSyncStore.syncNow` in `src/stores/sync.ts`. Builds via `buildSnapshot()` + `serializeSnapshot()` (`src/db/snapshot.ts`), PUTs via `putDataJson()` (`src/db/github.ts`). UTF-8 base64 encode is chunked (`encodeUtf8Base64`) to stay safe as snapshots grow. Dirty-bit cleared on 200; on 409/422 the latest remote is re-fetched and stashed as `pendingConflict` for S4's modal.
 
 ```
 User clicks "Sync now"

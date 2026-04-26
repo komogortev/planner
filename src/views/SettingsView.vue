@@ -3,11 +3,13 @@ import { onMounted, reactive, ref } from 'vue'
 import { clearAllData, getDbStats, seedSampleData } from '@/db/seed'
 import { useOnline } from '@/composables/useOnline'
 import { useSettingsStore } from '@/stores/settings'
+import { useSyncStore } from '@/stores/sync'
 import { GitHubError } from '@/db/github'
 import ConfirmRestoreModal from '@/components/ConfirmRestoreModal.vue'
 
 const online = useOnline()
 const settingsStore = useSettingsStore()
+const syncStore = useSyncStore()
 
 const stats = ref<{ commitments: number; payments: number; intentions: number; marketEntries: number }>(
   { commitments: 0, payments: 0, intentions: 0, marketEntries: 0 },
@@ -69,15 +71,23 @@ async function doConnect(): Promise<void> {
   }
 }
 
-// --- Restore (S2) ---
+// --- Restore (S2) — routed through useSyncStore in S3 ---
 
 async function onRestoreClick(): Promise<void> {
-  await settingsStore.fetchAndPrepareRestore()
+  await syncStore.fetchAndPrepareRestore()
 }
 
 async function onConfirmRestore(): Promise<void> {
-  await settingsStore.applyPendingRestore()
+  await syncStore.applyPendingRestore()
   // Refresh local stats panel — the entity tables just got rewritten.
+  await refreshStats()
+}
+
+// --- Sync (S3) ---
+
+async function onSyncClick(): Promise<void> {
+  await syncStore.syncNow()
+  // Defensive: refresh stats in case anything else changed during the round-trip.
   await refreshStats()
 }
 
@@ -168,26 +178,49 @@ async function doDisconnect(): Promise<void> {
         </dl>
 
         <div class="border-t border-slate-800 pt-4 space-y-3">
-          <p class="text-xs text-slate-500">
-            Restore replaces local data with the GitHub snapshot. Sync (S3) lands next.
-          </p>
+          <div class="flex items-center justify-between">
+            <p class="text-xs text-slate-500">
+              Sync writes a snapshot to GitHub. Restore replaces local data with the GitHub snapshot.
+            </p>
+            <span
+              v-if="syncStore.dirty"
+              class="text-xs text-amber-400 whitespace-nowrap"
+              title="Local changes have not been synced to GitHub yet"
+            >● Unsynced changes</span>
+          </div>
 
           <div
-            v-if="settingsStore.restoreError"
+            v-if="syncStore.syncError"
             class="rounded-md border border-rose-900/60 bg-rose-950/40 px-3 py-2 text-sm text-rose-200"
           >
-            {{ settingsStore.restoreError }}
+            {{ syncStore.syncError }}
+            <p v-if="syncStore.pendingConflict" class="text-xs text-rose-300/70 mt-1">
+              Conflict resolver UI lands in S4. Latest remote ({{ syncStore.pendingConflict.remoteSha.slice(0, 7) }}) has been fetched.
+            </p>
+          </div>
+
+          <div
+            v-if="syncStore.restoreError"
+            class="rounded-md border border-rose-900/60 bg-rose-950/40 px-3 py-2 text-sm text-rose-200"
+          >
+            {{ syncStore.restoreError }}
           </div>
 
           <div class="flex flex-wrap gap-2">
             <button
+              class="btn-primary"
+              :disabled="syncStore.inFlight"
+              @click="onSyncClick"
+            >
+              {{ syncStore.inFlight ? 'Working…' : 'Sync now' }}
+            </button>
+            <button
               class="btn-ghost"
-              :disabled="settingsStore.restoreInFlight"
+              :disabled="syncStore.inFlight"
               @click="onRestoreClick"
             >
-              {{ settingsStore.restoreInFlight && !settingsStore.pendingRestore ? 'Fetching…' : 'Restore from GitHub' }}
+              {{ syncStore.inFlight && !syncStore.pendingRestore ? 'Fetching…' : 'Restore from GitHub' }}
             </button>
-            <button class="btn-ghost" disabled title="Lands in S3">Sync now</button>
             <button class="btn-danger" @click="doDisconnect">Disconnect</button>
           </div>
         </div>
@@ -312,12 +345,12 @@ async function doDisconnect(): Promise<void> {
     </section>
 
     <ConfirmRestoreModal
-      v-if="settingsStore.pendingRestore"
-      :remote-counts="settingsStore.pendingRestore.remoteCounts"
-      :local-counts="settingsStore.pendingRestore.localCounts"
+      v-if="syncStore.pendingRestore"
+      :remote-counts="syncStore.pendingRestore.remoteCounts"
+      :local-counts="syncStore.pendingRestore.localCounts"
       :last-synced-at="settingsStore.settings?.lastSyncedAt ?? null"
-      :in-flight="settingsStore.restoreInFlight"
-      @cancel="settingsStore.cancelPendingRestore"
+      :in-flight="syncStore.inFlight"
+      @cancel="syncStore.cancelPendingRestore"
       @confirm="onConfirmRestore"
     />
   </div>

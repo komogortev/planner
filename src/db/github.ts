@@ -7,7 +7,8 @@
  *
  * S1 scope: auth validation only (`getUser`, `getRepo`).
  * S2 adds: `getDataJson`.
- * S3 will add: `putDataJson`, `getLatestDataCommit`.
+ * S3 adds: `putDataJson`.
+ * S4 will add: `getLatestDataCommit` (for the conflict modal's author/date display).
  */
 
 const GITHUB_API = 'https://api.github.com'
@@ -162,9 +163,83 @@ export async function getDataJson(
   return { rawText, sha: body.sha }
 }
 
+/**
+ * Write `data.json` to the data repo. Returns the new blob sha (used as the
+ * `lastKnownSha` for the next sync's optimistic-concurrency check).
+ *
+ * `sha` is the previous blob sha for in-place updates. Omit on first-ever PUT
+ * (file doesn't exist yet) — GitHub creates it.
+ *
+ * Throws:
+ *   - `conflict` on 409 OR 422 (sha mismatch — remote was updated since last sync)
+ *   - `unauthorized` on 401
+ *   - `rate-limited` / `network` / `unknown` per `genericHttpError`
+ */
+export async function putDataJson(
+  pat: string,
+  owner: string,
+  repo: string,
+  jsonText: string,
+  sha: string | undefined,
+  commitMessage: string,
+): Promise<{ sha: string }> {
+  const url = `${GITHUB_API}/repos/${owner}/${repo}/contents/data.json`
+  const body: Record<string, unknown> = {
+    message: commitMessage,
+    content: encodeUtf8Base64(jsonText),
+  }
+  if (sha) body.sha = sha
+  const res = await ghFetch(url, pat, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (res.status === 409 || res.status === 422) {
+    throw new GitHubError(
+      'conflict',
+      'Remote was updated since your last sync. Open the conflict resolver to pick a side.',
+    )
+  }
+  if (res.status === 401) {
+    throw new GitHubError(
+      'unauthorized',
+      'GitHub rejected your token. Reconnect in Settings.',
+    )
+  }
+  if (!res.ok) {
+    throw genericHttpError(res)
+  }
+  const out = (await res.json()) as { content?: { sha?: string } }
+  if (!out.content?.sha) {
+    throw new GitHubError(
+      'unknown',
+      'GitHub returned an unexpected response shape for PUT data.json.',
+    )
+  }
+  return { sha: out.content.sha }
+}
+
 // ---------------------------------------------------------------------------
 // internals
 // ---------------------------------------------------------------------------
+
+/**
+ * Encode a UTF-8 string as base64 — mirror of `decodeBase64Utf8`. Chunked to
+ * avoid `String.fromCharCode.apply` argument-count limits on large snapshots
+ * (snapshots can grow to 100s of KB once payment history accumulates).
+ */
+function encodeUtf8Base64(text: string): string {
+  const bytes = new TextEncoder().encode(text)
+  let binary = ''
+  const CHUNK = 0x8000
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode.apply(
+      null,
+      Array.from(bytes.subarray(i, i + CHUNK)),
+    )
+  }
+  return btoa(binary)
+}
 
 /**
  * Decode a base64 string as UTF-8. `atob` returns a binary string of code

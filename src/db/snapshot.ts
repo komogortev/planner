@@ -8,6 +8,7 @@
  * Restore (S2) and Sync (S3) call into this module.
  */
 
+import { db } from './index'
 import type {
   Commitment,
   Intention,
@@ -169,6 +170,47 @@ export function validateSnapshot(snap: Snapshot): void {
 /** Return total entity-row count across all 4 tables. */
 export function totalRecords(counts: SnapshotCounts): number {
   return counts.commitments + counts.payments + counts.intentions + counts.marketEntries
+}
+
+/**
+ * Read all 4 entity tables and assemble an in-memory `Snapshot` ready for sync.
+ * `exportedAt` is set to "now". Caller passes `deviceId` (from settings) and
+ * `appVersion` (from package.json — diagnostic field, not validated).
+ */
+export async function buildSnapshot(
+  deviceId: string,
+  appVersion: string,
+): Promise<Snapshot> {
+  const [commitments, payments, intentions, marketEntries] = await Promise.all([
+    db.commitments.toArray(),
+    db.payments.toArray(),
+    db.intentions.toArray(),
+    db.marketEntries.toArray(),
+  ])
+  return {
+    schemaVersion: CURRENT_SCHEMA_VERSION,
+    appVersion,
+    exportedAt: new Date().toISOString(),
+    deviceId,
+    recordCounts: {
+      commitments: commitments.length,
+      payments: payments.length,
+      intentions: intentions.length,
+      marketEntries: marketEntries.length,
+    },
+    commitments,
+    payments,
+    intentions,
+    marketEntries,
+  }
+}
+
+/**
+ * Pretty-print a snapshot as 2-space-indented JSON per `STORAGE-FORMAT.md`.
+ * Round-trip property: `parseSnapshot(serializeSnapshot(s))` deeply equals `s`.
+ */
+export function serializeSnapshot(snap: Snapshot): string {
+  return JSON.stringify(snap, null, 2)
 }
 
 // ---------------------------------------------------------------------------

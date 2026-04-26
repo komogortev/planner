@@ -1,10 +1,14 @@
-import { describe, it, expect } from 'vitest'
+import 'fake-indexeddb/auto'
+import { afterEach, beforeEach, describe, it, expect } from 'vitest'
 import {
   CURRENT_SCHEMA_VERSION,
   SnapshotValidationError,
+  buildSnapshot,
   parseSnapshot,
+  serializeSnapshot,
   validateSnapshot,
 } from '../snapshot'
+import { db } from '../index'
 
 function makeMinimal(): unknown {
   return {
@@ -116,6 +120,89 @@ describe('parseSnapshot', () => {
     } catch (err) {
       expect((err as SnapshotValidationError).kind).toBe('missing-derived-fields')
     }
+  })
+})
+
+describe('serializeSnapshot round-trip', () => {
+  it('parseSnapshot(serializeSnapshot(s)) deeply equals s', () => {
+    const original = parseSnapshot(JSON.stringify(makeRealistic()))
+    const round = parseSnapshot(serializeSnapshot(original))
+    expect(round).toEqual(original)
+  })
+
+  it('produces 2-space indented JSON per STORAGE-FORMAT.md', () => {
+    const snap = parseSnapshot(JSON.stringify(makeMinimal()))
+    const text = serializeSnapshot(snap)
+    expect(text.split('\n')[1]).toMatch(/^  "/) // second line indented 2 spaces
+  })
+
+  it('preserves non-ASCII characters through round-trip', () => {
+    const original = parseSnapshot(JSON.stringify(makeRealistic()))
+    const round = parseSnapshot(serializeSnapshot(original))
+    expect(round.commitments[0]!.notes).toContain('🏠')
+    expect(round.commitments[0]!.notes).toContain('café')
+  })
+})
+
+describe('buildSnapshot', () => {
+  beforeEach(async () => {
+    await db.commitments.clear()
+    await db.payments.clear()
+    await db.intentions.clear()
+    await db.marketEntries.clear()
+  })
+
+  afterEach(async () => {
+    await db.commitments.clear()
+    await db.payments.clear()
+    await db.intentions.clear()
+    await db.marketEntries.clear()
+  })
+
+  it('returns an empty snapshot from an empty DB', async () => {
+    const snap = await buildSnapshot('desktop-2026-04-26', '0.1.0')
+    expect(snap.schemaVersion).toBe(CURRENT_SCHEMA_VERSION)
+    expect(snap.deviceId).toBe('desktop-2026-04-26')
+    expect(snap.appVersion).toBe('0.1.0')
+    expect(snap.recordCounts).toEqual({ commitments: 0, payments: 0, intentions: 0, marketEntries: 0 })
+    expect(snap.commitments).toEqual([])
+    expect(snap.payments).toEqual([])
+  })
+
+  it('returns recordCounts that match array lengths after seeding', async () => {
+    await db.commitments.add({
+      id: 'c1', type: 'mortgage', label: 'House', startDate: '2025-09-01',
+      principal: 350000, annualRate: 0.0475, termMonths: 300, paymentDay: 15,
+      notes: '', createdAt: '2026-04-22T14:30:00Z', updatedAt: '2026-04-22T14:30:00Z',
+    })
+    await db.payments.add({
+      id: 'p1', commitmentId: 'c1', date: '2026-04-15', amount: 1824.5,
+      principalPortion: 824.5, interestPortion: 1000, balanceAfter: 349175.5,
+      notes: '', createdAt: '2026-04-15T18:00:00Z',
+    })
+    await db.intentions.add({
+      id: 'i1', label: 'Bike', category: 'transport', targetBudget: 2500,
+      status: 'researching', notes: '', createdAt: '2026-04-22T14:30:00Z', updatedAt: '2026-04-22T14:30:00Z',
+    })
+    const snap = await buildSnapshot('phone-2026-04-26', '0.1.0')
+    expect(snap.recordCounts).toEqual({ commitments: 1, payments: 1, intentions: 1, marketEntries: 0 })
+    expect(snap.commitments).toHaveLength(1)
+    expect(snap.payments).toHaveLength(1)
+    expect(snap.intentions).toHaveLength(1)
+    expect(snap.marketEntries).toEqual([])
+  })
+
+  it('produces a snapshot that round-trips through parse + validate', async () => {
+    await db.commitments.add({
+      id: 'c1', type: 'mortgage', label: 'House', startDate: '2025-09-01',
+      principal: 350000, annualRate: 0.0475, termMonths: 300, paymentDay: 15,
+      notes: 'café 🏠', createdAt: '2026-04-22T14:30:00Z', updatedAt: '2026-04-22T14:30:00Z',
+    })
+    const snap = await buildSnapshot('desktop-2026-04-26', '0.1.0')
+    const text = serializeSnapshot(snap)
+    const round = parseSnapshot(text)
+    expect(() => validateSnapshot(round)).not.toThrow()
+    expect(round.commitments[0]!.notes).toBe('café 🏠')
   })
 })
 
