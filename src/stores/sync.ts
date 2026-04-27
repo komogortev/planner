@@ -116,11 +116,7 @@ export const useSyncStore = defineStore('sync', () => {
       const syncedAt = nowISO()
       await db.transaction(
         'rw',
-        db.commitments,
-        db.payments,
-        db.intentions,
-        db.marketEntries,
-        db.settings,
+        [db.commitments, db.payments, db.intentions, db.marketEntries, db.settings],
         async () => {
           await db.commitments.clear()
           await db.payments.clear()
