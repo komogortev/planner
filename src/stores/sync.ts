@@ -58,7 +58,10 @@ export const useSyncStore = defineStore('sync', () => {
   // object/array in a Proxy, and structuredClone (used by IDBObjectStore.add) rejects
   // those Proxies with DataCloneError. Consumers only react to value-replacement.
   const pendingRestore = shallowRef<PendingRestore | null>(null)
-  const pendingConflict = ref<PendingConflict | null>(null)
+  // shallowRef for the same reason as pendingRestore — snapshot arrays fed to
+  // applyPendingRestore go through IDBObjectStore (structuredClone), which
+  // rejects Vue deep-reactive Proxies with DataCloneError.
+  const pendingConflict = shallowRef<PendingConflict | null>(null)
 
   // ------------------------------------------------------------------
   // Restore (moved from useSettingsStore in S3)
@@ -227,6 +230,98 @@ export const useSyncStore = defineStore('sync', () => {
   }
 
   // ------------------------------------------------------------------
+  // Conflict resolution (S4)
+  // ------------------------------------------------------------------
+
+  /**
+   * "Pull remote first" — bridge conflict → restore without an extra GET.
+   * Sets pendingRestore from the already-fetched remote snapshot and clears
+   * the conflict. ConfirmRestoreModal in SettingsView picks it up automatically.
+   */
+  async function pullFromConflict(): Promise<void> {
+    const conflict = pendingConflict.value
+    if (!conflict) return
+    const localCounts = await getDbStats()
+    pendingRestore.value = {
+      snapshot: conflict.remoteSnapshot,
+      remoteCounts: conflict.remoteSnapshot.recordCounts,
+      localCounts,
+      sha: conflict.remoteSha,
+    }
+    pendingConflict.value = null
+    syncError.value = null
+  }
+
+  /**
+   * "Overwrite remote" — re-PUT local snapshot using the freshly captured
+   * remote sha. Clears the conflict on success.
+   */
+  async function overwriteFromConflict(): Promise<void> {
+    const conflict = pendingConflict.value
+    if (!conflict) return
+    const settings = useSettingsStore().settings
+    if (!settings) return
+    inFlight.value = true
+    syncError.value = null
+    try {
+      const snap = await buildSnapshot(settings.deviceId, APP_VERSION)
+      const text = serializeSnapshot(snap)
+      const message = `sync from ${settings.deviceId} @ ${snap.exportedAt}`
+      const { sha: newSha } = await putDataJson(
+        settings.pat,
+        settings.owner,
+        settings.repo,
+        text,
+        conflict.remoteSha,
+        message,
+      )
+      await db.settings.update(SINGLETON_ID, {
+        lastKnownSha: newSha,
+        lastSyncedAt: nowISO(),
+      })
+      dirty.value = false
+      pendingConflict.value = null
+    } catch (err) {
+      if (err instanceof GitHubError && err.kind === 'conflict') {
+        // Lost the race again — re-fetch and re-open the conflict modal.
+        try {
+          const { rawText, sha } = await getDataJson(
+            settings.pat,
+            settings.owner,
+            settings.repo,
+          )
+          const remote = parseSnapshot(rawText)
+          validateSnapshot(remote)
+          pendingConflict.value = {
+            remoteSnapshot: remote,
+            remoteSha: sha,
+            fetchedAt: nowISO(),
+          }
+          syncError.value = err.userMessage
+        } catch (refetchErr) {
+          syncError.value =
+            refetchErr instanceof GitHubError || refetchErr instanceof SnapshotValidationError
+              ? `Conflict on overwrite, then refetch failed: ${(refetchErr as GitHubError | SnapshotValidationError).userMessage}`
+              : 'Conflict on overwrite; failed to fetch remote. Retry sync.'
+        }
+      } else if (err instanceof GitHubError) {
+        syncError.value = err.userMessage
+      } else if (err instanceof Error) {
+        syncError.value = err.message
+      } else {
+        syncError.value = 'Unexpected error during overwrite.'
+      }
+    } finally {
+      inFlight.value = false
+    }
+  }
+
+  function dismissConflict(): void {
+    pendingConflict.value = null
+    syncError.value = null
+  }
+
+  // ------------------------------------------------------------------
   // Dirty-bit + reset (called from db hooks and settings.disconnect)
   // ------------------------------------------------------------------
 
@@ -255,6 +350,9 @@ export const useSyncStore = defineStore('sync', () => {
     applyPendingRestore,
     cancelPendingRestore,
     syncNow,
+    pullFromConflict,
+    overwriteFromConflict,
+    dismissConflict,
     markDirty,
     reset,
   }

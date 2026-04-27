@@ -6,6 +6,7 @@ import { useSettingsStore } from '@/stores/settings'
 import { useSyncStore } from '@/stores/sync'
 import { GitHubError } from '@/db/github'
 import ConfirmRestoreModal from '@/components/ConfirmRestoreModal.vue'
+import ConflictModal from '@/components/ConflictModal.vue'
 
 const online = useOnline()
 const settingsStore = useSettingsStore()
@@ -88,6 +89,16 @@ async function onConfirmRestore(): Promise<void> {
 async function onSyncClick(): Promise<void> {
   await syncStore.syncNow()
   // Defensive: refresh stats in case anything else changed during the round-trip.
+  await refreshStats()
+}
+
+async function onPullRemote(): Promise<void> {
+  await syncStore.pullFromConflict()
+  // pendingRestore is now set — ConfirmRestoreModal will open.
+}
+
+async function onOverwriteRemote(): Promise<void> {
+  await syncStore.overwriteFromConflict()
   await refreshStats()
 }
 
@@ -190,13 +201,10 @@ async function doDisconnect(): Promise<void> {
           </div>
 
           <div
-            v-if="syncStore.syncError"
+            v-if="syncStore.syncError && !syncStore.pendingConflict"
             class="rounded-md border border-rose-900/60 bg-rose-950/40 px-3 py-2 text-sm text-rose-200"
           >
             {{ syncStore.syncError }}
-            <p v-if="syncStore.pendingConflict" class="text-xs text-rose-300/70 mt-1">
-              Conflict resolver UI lands in S4. Latest remote ({{ syncStore.pendingConflict.remoteSha.slice(0, 7) }}) has been fetched.
-            </p>
           </div>
 
           <div
@@ -352,6 +360,17 @@ async function doDisconnect(): Promise<void> {
       :in-flight="syncStore.inFlight"
       @cancel="syncStore.cancelPendingRestore"
       @confirm="onConfirmRestore"
+    />
+
+    <ConflictModal
+      v-if="syncStore.pendingConflict"
+      :conflict="syncStore.pendingConflict"
+      :local-counts="stats"
+      :last-synced-at="settingsStore.settings?.lastSyncedAt ?? null"
+      :in-flight="syncStore.inFlight"
+      @cancel="syncStore.dismissConflict"
+      @pull-remote="onPullRemote"
+      @overwrite-remote="onOverwriteRemote"
     />
   </div>
 </template>

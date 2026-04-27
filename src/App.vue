@@ -3,6 +3,7 @@ import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { computed } from 'vue'
 import InstallButton from '@/components/InstallButton.vue'
 import OnlineIndicator from '@/components/OnlineIndicator.vue'
+import SyncStatusPill from '@/components/SyncStatusPill.vue'
 import UpdateBanner from '@/components/UpdateBanner.vue'
 
 const route = useRoute()
@@ -48,6 +49,7 @@ const currentPath = computed(() => route.path)
           </nav>
         </div>
         <div class="flex items-center gap-3">
+          <SyncStatusPill />
           <InstallButton />
           <OnlineIndicator />
         </div>
