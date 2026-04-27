@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, shallowRef } from 'vue'
 import { db } from '@/db'
 import {
   GitHubError,
@@ -53,7 +53,11 @@ export const useSyncStore = defineStore('sync', () => {
   const syncError = ref<string | null>(null)
   const restoreError = ref<string | null>(null)
   const dirty = ref(false)
-  const pendingRestore = ref<PendingRestore | null>(null)
+  // shallowRef (not ref) — the snapshot is a one-shot handoff to applyPendingRestore,
+  // which writes its arrays straight to IndexedDB. Deep reactivity wraps every nested
+  // object/array in a Proxy, and structuredClone (used by IDBObjectStore.add) rejects
+  // those Proxies with DataCloneError. Consumers only react to value-replacement.
+  const pendingRestore = shallowRef<PendingRestore | null>(null)
   const pendingConflict = ref<PendingConflict | null>(null)
 
   // ------------------------------------------------------------------
