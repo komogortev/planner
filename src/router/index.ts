@@ -24,6 +24,11 @@ export const router = createRouter({
       component: () => import('@/views/MarketView.vue'),
     },
     {
+      path: '/categories',
+      name: 'categories',
+      component: () => import('@/views/CategoriesView.vue'),
+    },
+    {
       path: '/settings',
       name: 'settings',
       component: () => import('@/views/SettingsView.vue'),

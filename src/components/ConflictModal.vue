@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import type { PendingConflict } from '@/stores/sync'
 import type { SnapshotCounts } from '@/db/snapshot'
+import { CURRENT_SCHEMA_VERSION } from '@/db/snapshot'
 
 const props = defineProps<{
   conflict: PendingConflict
@@ -18,6 +19,10 @@ const emit = defineEmits<{
 
 const remoteCounts = computed(() => props.conflict.remoteSnapshot.recordCounts)
 
+const remoteIsOlderSchema = computed(
+  () => props.conflict.remoteSnapshot.schemaVersion < CURRENT_SCHEMA_VERSION,
+)
+
 const rows = computed(() =>
   (
     [
@@ -25,12 +30,16 @@ const rows = computed(() =>
       ['Payments', 'payments'],
       ['Intentions', 'intentions'],
       ['Market entries', 'marketEntries'],
+      ['Categories', 'categories'],
+      ['Themes', 'themes'],
+      ['Theme members', 'themeMembers'],
     ] as const
   ).map(([label, key]) => ({
     label,
-    local: props.localCounts[key],
-    remote: remoteCounts.value[key],
-    delta: remoteCounts.value[key] - props.localCounts[key],
+    // Older-schema remotes don't have these counts; fall back to 0 for display.
+    local: props.localCounts[key] ?? 0,
+    remote: remoteCounts.value[key] ?? 0,
+    delta: (remoteCounts.value[key] ?? 0) - (props.localCounts[key] ?? 0),
   })),
 )
 
@@ -59,6 +68,17 @@ function onBackdrop() {
           Remote was updated since your last sync.
         </p>
       </header>
+
+      <div
+        v-if="remoteIsOlderSchema"
+        class="rounded-md border border-amber-900/60 bg-amber-950/40 px-3 py-2 text-sm text-amber-200"
+      >
+        Remote snapshot is from an older app version (schemaVersion
+        {{ conflict.remoteSnapshot.schemaVersion }} &lt; {{ CURRENT_SCHEMA_VERSION }}).
+        Recommend <strong>Pull remote first</strong> to migrate it forward —
+        Overwrite will replace the older snapshot with your current data and
+        any other v1 device's data not yet pulled here will be lost.
+      </div>
 
       <dl class="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
         <div>
@@ -104,7 +124,11 @@ function onBackdrop() {
         <button class="btn-ghost" :disabled="inFlight" @click="emit('cancel')">
           Cancel
         </button>
-        <button class="btn-ghost" :disabled="inFlight" @click="emit('pull-remote')">
+        <button
+          :class="remoteIsOlderSchema ? 'btn-primary' : 'btn-ghost'"
+          :disabled="inFlight"
+          @click="emit('pull-remote')"
+        >
           {{ inFlight ? 'Working…' : 'Pull remote first' }}
         </button>
         <button class="btn-danger" :disabled="inFlight" @click="emit('overwrite-remote')">

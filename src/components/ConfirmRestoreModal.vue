@@ -30,6 +30,9 @@ const rows = computed(() =>
       ['Payments', 'payments'],
       ['Intentions', 'intentions'],
       ['Market entries', 'marketEntries'],
+      ['Categories', 'categories'],
+      ['Themes', 'themes'],
+      ['Theme members', 'themeMembers'],
     ] as const
   ).map(([label, key]) => ({
     label,
