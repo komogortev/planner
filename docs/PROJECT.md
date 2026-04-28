@@ -77,13 +77,73 @@ Runs offline on a phone. Data belongs to the user; sync is opt-in and user-contr
 5. **S4 — Conflict modal + status UI.** Modal shows remote commit message + author + date; "Overwrite" / "Pull first" actions. Header pill shows sync state (connected / unsynced / last synced X ago).
 6. **S5 — Phone validation.** End-to-end test on Chrome Android + iOS Safari: PAT entry on mobile (clipboard paste), round-trip sync between devices, conflict scenario.
 
-### L2 — Automation (parked)
+### L2 — Organization (next; was Automation, demoted to L4 on 2026-04-27)
+
+**Goal.** Entries become navigable across types under user-defined organizing concepts. Group items by *generic domain* (purchases, travel, skill development, subscriptions, …), pull cross-type collections together under common goals (e.g. "Cabin Trip" containing a travel intention + a purchase + the payments funding both), and ad-hoc-filter via free-form tags.
+
+**Three-layer model** *(rationale below)*
+
+- **Category** — single-pick, user-extensible controlled vocabulary. Each entity (commitment / intention / market entry) belongs to exactly one. Built-ins seeded; user can add. Answers: *"what generic domain is this?"*
+- **Theme** — named cross-cutting many-to-many container with own metadata (`targetDate?`, `status`, optional target amount, progression view). Pulls items together regardless of category or entity type. Answers: *"what goal does this contribute to?"*
+- **Tag** — flat, free-form, many-to-many ad-hoc folksonomy with auto-suggest from existing. Optional. Answers: *"what slice of this filter do I want right now?"*
+
+**Why three layers, not just tags.** Pure-tag systems conflate two distinct concepts the user has implicitly distinguished: *the bucket the thing IS in* (single-valued Category) versus *the goal it CONTRIBUTES to* (multi-valued, structured Theme with its own metadata and progression). They also drift on synonyms ("travel" / "vacation") and can't carry their own data (no target date on a tag). Industry pattern aligns: Things layers Areas + Projects + Tags; Notion layers Database properties (Select) + Relations (cross-DB) + Multi-select; Linear layers Teams + Projects + Cycles + Labels; Obsidian layers Folders/properties + MOCs + Tags. Tags can sit on top of the two-layer base as an ad-hoc filtering primitive without conflict.
+
+**Functional scope** *(provisional; locked during L2-S0 design)*
+
+- Dexie `version(3)` migration adding `categories`, `themes`, `themeMembers` tables; nullable `categoryId` field on `commitments` / `intentions` / `marketEntries`; tags TBD (normalized join table vs. denormalized `tags: string[]` field — open question for design phase based on expected cardinality)
+- Categories CRUD page; soft-disable on delete-when-in-use
+- Theme list view + theme detail view (members across types, progression tile)
+- Category picker on entity forms; tag input with auto-suggest; theme attach/detach UX
+- Filter chips (category, theme, tag) on existing list views
+- Dashboard surfacing: Active Themes tile, category breakdown
+- Snapshot format change: `data.json` `schemaVersion` bump to 2; new arrays for `categories`, `themes`, `themeMembers`, `tags` (or denorm); `recordCounts` extended; backwards-compat for v1 snapshots
+- Sync round-trip validation with new arrays; intentional 409 to exercise `ConflictModal` under real concurrent edit (the scenario S5 originally captured)
+
+**Out of scope at L2**
+
+- Automated category inference from entity text (defer; user-driven taxonomy)
+- Theme templates / recipes (defer; ship empty themes first)
+- Hierarchical categories (parent/child) — start flat; revisit if real lived use surfaces the need
+- Per-tag color / metadata — tags stay primitive
+
+**Acceptance.** User adds a "Cabin Trip" theme with target date, attaches a travel intention and a purchase; theme detail shows both as members and progression toward target date. Filter Intentions list by category "travel" — only travel intentions show. Sync the snapshot to GitHub; restore on another device — categories, themes, and members come back intact. Edit `data.json` directly via GitHub web UI to a stale state; trigger a Sync from the app — `ConflictModal` opens with correct counts.
+
+**Implementation slices** *(planned during L2-S0; provisional order)*
+
+1. **L2-S0 — Design.** Draft `docs/L2-ORGANIZATION.md` covering three-layer rationale, Dexie v3 schema, snapshot v2 format, migration plan, UI surface preview, open questions list. Resolve open questions before S1.
+2. **L2-S1 — Categories.** Schema v3, CRUD page, picker on three forms, filter chip, snapshot extension.
+3. **L2-S2 — Tags.** Schema, inline tag input with auto-suggest from existing, tag chip on entities, tag filter.
+4. **L2-S3 — Themes.** Theme entity, theme list, theme detail with progression tile, member-attach UX.
+5. **L2-S4 — Dashboard surfacing.** Active Themes tile, category breakdown.
+6. **L2-S5 — Sync round-trip validation.** Full snapshot exchange with new fields; intentional 409 under real concurrent edit (closes the original S5 scenario gap).
+
+Slice scope is provisional; locked during L2-S0 design.
+
+### L3 — Mobile UX & insight (planned, after L2-S4)
+
+**Goal.** Mobile experience matches industry-standard PWA ergonomics; captured data starts informing decisions, not just sitting in tables.
+
+**Why deferred until after L2-S4.** Themes change what the dashboard renders and what list views need to surface. Designing density / card behavior / dashboard rollups before the organization layer lands would be premature.
+
+**Provisional scope** *(do not commit until L2 is stable)*
+
+- **Install button mount-timing race fix** — move `beforeinstallprompt` capture from `useInstallPrompt.ts:onMounted` to `main.ts` *before* `app.mount()`, surface via Pinia or module-scoped ref. The event can fire before the Vue tree mounts; the spec doesn't replay it.
+- **Install dismissal escape hatch** — wire existing `useInstallPrompt.reset()` to a Settings → "Show install button again" link.
+- **Tappable card primary action** — cards on mobile become primary action surface (tap-card-to-open-detail), not labels with micro-link actions.
+- **FAB quick-add** — sticky floating action button per list view; defaults pre-fill from last entry.
+- **Swipe gestures** on list rows (delete / archive / log payment).
+- **Mobile information-architecture pass** — collapsible sections, denser card design, sticky filter chips, mobile-only summary headers, reduced visual hierarchy depth.
+- **Storage → insight surfacing** — net-worth / total-debt / monthly-obligation roll-ups on Dashboard; cash-flow report from payments; intention-impact preview ("if I move this to *committed*, here's the cash-flow change"); intention price-trend callouts.
+- **PAT-expiry warning UX** — persist `connectedAt` on settings row when `connect` succeeds; soft warning at 75 / 85 days. Manual re-paste is the worst case.
+
+### L4 — Automation (parked; was old L2 before 2026-04-27 restructure)
 
 - Automated price monitoring for tracked intentions
 - Web Push reminders for commitment due dates
 - JSON export / import as a format-agnostic backup alongside Sheets
 
-Do not pull L2 items forward without explicit trigger — L1 must be validated in daily use first.
+Do not pull L4 items forward without explicit trigger after L3 lands.
 
 ## Architecture constraints
 
@@ -110,6 +170,10 @@ Do not pull L2 items forward without explicit trigger — L1 must be validated i
 | 2026-04-26 | PAT chosen over GitHub OAuth Device Flow at L1 | Single-user personal app; PAT scoped to single repo with `Contents: read+write` and 90-day expiry has acceptable blast radius (data only, instantly revocable). Device Flow requires registering an OAuth App for marginal security uplift. Revisit if PAT rotation friction becomes painful |
 | 2026-04-26 | PAT stored in IndexedDB (not in-memory) | Reverses the "in-memory only" decision from 2026-04-22 (which assumed short-lived OAuth tokens). PATs are long-lived by nature and re-pasting on every reload is hostile UX. Storage is on the same device as the data; threat model is "device compromise" which already loses everything |
 | 2026-04-26 | Single `data.json` (not per-table files) | One commit = one consistent snapshot, no partial-write states, atomic `sha` concurrency token applies to the whole snapshot |
+| 2026-04-27 | **L1 declared closed in real-use after cross-device round-trip validation; intentional 409 deferred to L2-S5** | User validated bidirectional sync (force-push from one device, pull-with-overwrite on others — both directions confirmed). The trust S5 was meant to establish (sync is reliable cross-device with deterministic override semantics) is established. Formal phone-Chrome / iOS-Safari checklist is symbolic at this point. Intentional 409 conflict scenario remains untested — folded into L2-S5 sync round-trip validation, where snapshot shape changes anyway and new arrays make the conflict scenario more meaningful to exercise |
+| 2026-04-27 | **Roadmap restructured: L2 redefined as Organization (was Automation); old L2 demoted to L4** | Real next-theme direction emerged from lived use: user feels the lack of organization across entries (cross-cutting linking under common goals) more acutely than the lack of automation. Strategic abstraction work in 2026-04-27 planning session surfaced this. Automation (Web Push, price monitoring, JSON export/import) remains valuable but is now a follow-tier, gated on L3 mobile-UX validation |
+| 2026-04-27 | **L2 model: three layers (Category single-pick + Theme cross-cutting many-to-many + Tag free folksonomy), not tags-only** | User mental model implicitly distinguishes *the bucket the thing IS in* (Category, single-valued) from *the goal it CONTRIBUTES to* (Theme, multi-valued, with own metadata + progression). Tag-only systems conflate these and drift on synonyms. Industry pattern (Things, Notion, Linear, Obsidian) consistently layers all three. Tags sit on top as ad-hoc filter primitive, additive not replacing |
+| 2026-04-27 | **L3 mobile UX deferred until after L2-S4 lands** | Themes change what the dashboard renders and what list-views need to surface. Designing density / card behavior / dashboard rollups before the organization layer is in place is premature. Two specific pain points captured for L3 in the meantime: install button mount-timing race in `useInstallPrompt.ts:93` (`beforeinstallprompt` can fire before Vue mounts; spec doesn't replay), and dismissal escape hatch (`useInstallPrompt.reset()` exists but no UI wires it) |
 
 ## Glossary
 
