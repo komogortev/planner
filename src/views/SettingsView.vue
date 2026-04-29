@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
+import { RouterLink } from 'vue-router'
 import { clearAllData, getDbStats, seedSampleData } from '@/db/seed'
 import { useOnline } from '@/composables/useOnline'
 import { useSettingsStore } from '@/stores/settings'
 import { useSyncStore } from '@/stores/sync'
 import { GitHubError } from '@/db/github'
+import type { SnapshotCounts } from '@/db/snapshot'
 import ConfirmRestoreModal from '@/components/ConfirmRestoreModal.vue'
 import ConflictModal from '@/components/ConflictModal.vue'
 
@@ -12,9 +14,15 @@ const online = useOnline()
 const settingsStore = useSettingsStore()
 const syncStore = useSyncStore()
 
-const stats = ref<{ commitments: number; payments: number; intentions: number; marketEntries: number }>(
-  { commitments: 0, payments: 0, intentions: 0, marketEntries: 0 },
-)
+const stats = ref<SnapshotCounts>({
+  commitments: 0,
+  payments: 0,
+  intentions: 0,
+  marketEntries: 0,
+  categories: 0,
+  themes: 0,
+  themeMembers: 0,
+})
 
 async function refreshStats(): Promise<void> {
   stats.value = await getDbStats()
@@ -295,6 +303,21 @@ async function doDisconnect(): Promise<void> {
           </button>
         </div>
       </form>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- Organization (L2)                                             -->
+    <!-- ============================================================ -->
+    <section class="card">
+      <h3 class="font-semibold mb-1">Organization</h3>
+      <p class="text-xs text-slate-500 mb-4">
+        Categorize and group your records.
+      </p>
+      <div class="flex flex-wrap gap-2">
+        <RouterLink to="/categories" class="btn-ghost">
+          Categories
+        </RouterLink>
+      </div>
     </section>
 
     <!-- ============================================================ -->

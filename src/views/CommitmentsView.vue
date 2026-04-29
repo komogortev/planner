@@ -1,13 +1,32 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useCommitmentsStore, type CommitmentInput, type PaymentInput } from '@/stores/commitments'
+import { useCategoriesStore } from '@/stores/categories'
 import type { Commitment, CommitmentType, Payment } from '@/db/schema'
 import EmptyState from '@/components/EmptyState.vue'
+import CategoryPicker from '@/components/CategoryPicker.vue'
+import FilterChip from '@/components/FilterChip.vue'
 import { formatDate, todayISO } from '@/utils/dates'
 import { formatMoney } from '@/utils/money'
 import { computeAmortization, monthlyPayment } from '@/utils/amortization'
 
 const store = useCommitmentsStore()
+const categoriesStore = useCategoriesStore()
+
+const categoryFilter = ref<string | null>(null)
+
+const categoryFilterOptions = computed(() => [
+  { value: '__none__', label: '— Uncategorized —' },
+  ...categoriesStore.categories.map((c) => ({ value: c.id, label: c.label })),
+])
+
+const filteredCommitments = computed(() => {
+  if (categoryFilter.value === null) return store.commitments
+  if (categoryFilter.value === '__none__') {
+    return store.commitments.filter((c) => c.categoryId === null)
+  }
+  return store.commitments.filter((c) => c.categoryId === categoryFilter.value)
+})
 
 const selectedId = ref<string | null>(null)
 const selected = computed(() =>
@@ -47,6 +66,8 @@ function emptyForm(): CommitmentInput {
     termMonths: 360,
     paymentDay: 1,
     notes: '',
+    categoryId: null,
+    tags: [],
   }
 }
 
@@ -67,6 +88,8 @@ function openEdit(c: Commitment): void {
     termMonths: c.termMonths,
     paymentDay: c.paymentDay,
     notes: c.notes,
+    categoryId: c.categoryId,
+    tags: c.tags,
   }
   formOpen.value = true
 }
@@ -152,14 +175,22 @@ function ratePercent(r: number): string {
 
 <template>
   <div class="max-w-5xl mx-auto w-full px-6 py-8">
-    <div class="flex items-center justify-between mb-6">
+    <div class="flex items-center justify-between mb-6 flex-wrap gap-3">
       <div>
         <h2 class="text-2xl font-bold">Commitments</h2>
         <p class="text-sm text-slate-500 mt-1">
           Fixed-schedule obligations. Log actual payments to track balance.
         </p>
       </div>
-      <button class="btn-primary" @click="openCreate">+ New</button>
+      <div class="flex items-center gap-2">
+        <FilterChip
+          v-model="categoryFilter"
+          :options="categoryFilterOptions"
+          all-label="All categories"
+          title="Filter by category"
+        />
+        <button class="btn-primary" @click="openCreate">+ New</button>
+      </div>
     </div>
 
     <EmptyState
@@ -170,10 +201,18 @@ function ratePercent(r: number): string {
       <button class="btn-primary" @click="openCreate">Add first commitment</button>
     </EmptyState>
 
+    <EmptyState
+      v-else-if="filteredCommitments.length === 0"
+      title="No commitments match this filter"
+      description="Try a different category or clear the filter."
+    >
+      <button class="btn-ghost" @click="categoryFilter = null">Clear filter</button>
+    </EmptyState>
+
     <div v-else class="grid md:grid-cols-[320px_1fr] gap-6">
       <aside class="space-y-2">
         <button
-          v-for="c in store.commitments"
+          v-for="c in filteredCommitments"
           :key="c.id"
           class="w-full text-left card hover:border-indigo-500/50 transition-colors"
           :class="{
@@ -191,6 +230,13 @@ function ratePercent(r: number): string {
           <div class="mt-1 text-sm text-slate-400">
             {{ formatMoney(c.principal) }} · {{ ratePercent(c.annualRate) }} · {{ c.termMonths }}mo
           </div>
+          <div v-if="c.categoryId" class="mt-1.5">
+            <span
+              class="text-[10px] uppercase tracking-wider text-indigo-300 border border-indigo-500/40 rounded px-1.5 py-0.5"
+            >
+              {{ categoriesStore.labelFor(c.categoryId) }}
+            </span>
+          </div>
         </button>
       </aside>
 
@@ -198,8 +244,16 @@ function ratePercent(r: number): string {
         <div class="card">
           <div class="flex items-start justify-between gap-4">
             <div>
-              <div class="text-xs uppercase tracking-wider text-slate-500">
-                {{ selected.type }}
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-xs uppercase tracking-wider text-slate-500">
+                  {{ selected.type }}
+                </span>
+                <span
+                  v-if="selected.categoryId"
+                  class="text-[10px] uppercase tracking-wider text-indigo-300 border border-indigo-500/40 rounded px-1.5 py-0.5"
+                >
+                  {{ categoriesStore.labelFor(selected.categoryId) }}
+                </span>
               </div>
               <h3 class="text-xl font-bold mt-1">{{ selected.label }}</h3>
             </div>
@@ -376,6 +430,10 @@ function ratePercent(r: number): string {
               placeholder="e.g. Primary residence mortgage"
               required
             />
+          </div>
+          <div>
+            <label class="label">Category</label>
+            <CategoryPicker v-model="form.categoryId" />
           </div>
           <div class="grid grid-cols-2 gap-3">
             <div>

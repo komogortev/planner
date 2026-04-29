@@ -1,16 +1,23 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useIntentionsStore, type IntentionInput } from '@/stores/intentions'
 import { useMarketStore } from '@/stores/market'
+import { useCategoriesStore } from '@/stores/categories'
 import type { Intention, IntentionStatus, MarketEntry } from '@/db/schema'
 import EmptyState from '@/components/EmptyState.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import TrendSparkline from '@/components/TrendSparkline.vue'
+import CategoryPicker from '@/components/CategoryPicker.vue'
+import FilterChip from '@/components/FilterChip.vue'
 import { formatDate } from '@/utils/dates'
 import { formatMoney } from '@/utils/money'
 
 const store = useIntentionsStore()
 const market = useMarketStore()
+const categoriesStore = useCategoriesStore()
+const route = useRoute()
+const router = useRouter()
 
 const formOpen = ref(false)
 const editingId = ref<string | null>(null)
@@ -24,6 +31,39 @@ const STATUS_OPTIONS: IntentionStatus[] = [
   'dropped',
 ]
 
+/**
+ * Category filter — driven by `?category=<id>` route query so links from
+ * elsewhere (e.g. CategoriesView usage count) can deep-link into a filtered
+ * view. Two-way bound: changing the chip updates the URL, navigating to a
+ * URL with a different value updates the chip.
+ */
+const categoryFilter = computed<string | null>({
+  get: () => {
+    const q = route.query.category
+    return typeof q === 'string' && q !== '' ? q : null
+  },
+  set: (v) => {
+    router.replace({
+      query: {
+        ...route.query,
+        category: v ?? undefined,
+      },
+    })
+  },
+})
+
+const categoryFilterOptions = computed(() => [
+  { value: '__none__', label: '— Uncategorized —' },
+  ...categoriesStore.categories.map((c) => ({ value: c.id, label: c.label })),
+])
+
+const filteredIntentions = computed(() => {
+  const f = categoryFilter.value
+  if (f === null) return store.intentions
+  if (f === '__none__') return store.intentions.filter((i) => i.categoryId === null)
+  return store.intentions.filter((i) => i.categoryId === f)
+})
+
 const grouped = computed(() => {
   const groups: Record<IntentionStatus, Intention[]> = {
     considering: [],
@@ -32,7 +72,7 @@ const grouped = computed(() => {
     acquired: [],
     dropped: [],
   }
-  for (const i of store.intentions) groups[i.status].push(i)
+  for (const i of filteredIntentions.value) groups[i.status].push(i)
   return groups
 })
 
@@ -55,7 +95,8 @@ function lastPriceFor(id: string): number | null {
 function emptyForm(): IntentionInput {
   return {
     label: '',
-    category: '',
+    categoryId: null,
+    tags: [],
     targetBudget: null,
     status: 'considering',
     notes: '',
@@ -72,7 +113,8 @@ function openEdit(i: Intention): void {
   editingId.value = i.id
   form.value = {
     label: i.label,
-    category: i.category,
+    categoryId: i.categoryId,
+    tags: i.tags,
     targetBudget: i.targetBudget,
     status: i.status,
     notes: i.notes,
@@ -101,18 +143,38 @@ async function deleteIntention(id: string): Promise<void> {
   if (!confirm('Delete this intention and all its market log entries?')) return
   await store.remove(id)
 }
+
+// If the deep-link arrives with a non-existent category id, clear it once
+// categories load — avoids confusing "(no matches)" with no clear cause.
+watch(
+  [() => categoriesStore.categories, categoryFilter],
+  ([cats, filter]) => {
+    if (filter !== null && filter !== '__none__' && cats.length > 0) {
+      if (!cats.some((c) => c.id === filter)) categoryFilter.value = null
+    }
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
   <div class="max-w-5xl mx-auto w-full px-6 py-8">
-    <div class="flex items-center justify-between mb-6">
+    <div class="flex items-center justify-between mb-6 flex-wrap gap-3">
       <div>
         <h2 class="text-2xl font-bold">Intentions</h2>
         <p class="text-sm text-slate-500 mt-1">
           Mid-horizon plans. Progress through lifecycle as you decide.
         </p>
       </div>
-      <button class="btn-primary" @click="openCreate">+ New</button>
+      <div class="flex items-center gap-2">
+        <FilterChip
+          v-model="categoryFilter"
+          :options="categoryFilterOptions"
+          all-label="All categories"
+          title="Filter by category"
+        />
+        <button class="btn-primary" @click="openCreate">+ New</button>
+      </div>
     </div>
 
     <EmptyState
@@ -121,6 +183,14 @@ async function deleteIntention(id: string): Promise<void> {
       description="Track things you're considering, researching, or committing to."
     >
       <button class="btn-primary" @click="openCreate">Add first intention</button>
+    </EmptyState>
+
+    <EmptyState
+      v-else-if="filteredIntentions.length === 0"
+      title="No intentions match this filter"
+      description="Try a different category or clear the filter."
+    >
+      <button class="btn-ghost" @click="categoryFilter = null">Clear filter</button>
     </EmptyState>
 
     <div v-else class="space-y-8">
@@ -143,10 +213,14 @@ async function deleteIntention(id: string): Promise<void> {
           >
             <div class="flex items-start justify-between gap-3">
               <div class="min-w-0">
-                <div class="flex items-center gap-2 mb-1">
+                <div class="flex items-center gap-2 mb-1 flex-wrap">
                   <StatusPill :status="i.status" />
-                  <span v-if="i.category" class="text-xs text-slate-500">
-                    {{ i.category }}
+                  <span
+                    v-if="i.categoryId"
+                    class="text-[10px] uppercase tracking-wider text-indigo-300 border border-indigo-500/40 rounded px-1.5 py-0.5"
+                    :title="`Category: ${categoriesStore.labelFor(i.categoryId)}`"
+                  >
+                    {{ categoriesStore.labelFor(i.categoryId) }}
                   </span>
                 </div>
                 <h4 class="font-semibold truncate">{{ i.label }}</h4>
@@ -208,12 +282,7 @@ async function deleteIntention(id: string): Promise<void> {
           <div class="grid grid-cols-2 gap-3">
             <div>
               <label class="label">Category</label>
-              <input
-                v-model="form.category"
-                type="text"
-                class="input"
-                placeholder="home, vehicle, hobby…"
-              />
+              <CategoryPicker v-model="form.categoryId" />
             </div>
             <div>
               <label class="label">Status</label>

@@ -1,11 +1,15 @@
 /**
- * Wire Dexie creating/updating/deleting hooks on the 4 entity tables to flip
- * `useSyncStore.dirty = true` on any local write. One-shot registration.
+ * Wire Dexie creating/updating/deleting hooks on every snapshot-bearing entity
+ * table to flip `useSyncStore.dirty = true` on any local write. One-shot
+ * registration.
  *
  * Catches every write — user actions through Pinia stores AND programmatic
  * paths like `seed.ts:seedSampleData` and `seed.ts:clearAllData`. Restore
  * (which clears + bulkAdds) deliberately clears the dirty bit at the end of
  * `applyPendingRestore` because post-restore local state matches the remote sha.
+ *
+ * L2 (2026-04-28): added categories, themes, themeMembers — all three ride
+ * in the snapshot, so writes there must also flip dirty.
  *
  * Settings table writes do NOT flip dirty — settings (PAT, sha, lastSyncedAt)
  * are not part of the sync payload.
@@ -29,6 +33,9 @@ export function setupSyncDirtyTracking(
     db.payments,
     db.intentions,
     db.marketEntries,
+    db.categories,
+    db.themes,
+    db.themeMembers,
   ] as const
 
   for (const table of tables) {

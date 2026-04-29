@@ -119,16 +119,31 @@ export const useSyncStore = defineStore('sync', () => {
       const syncedAt = nowISO()
       await db.transaction(
         'rw',
-        [db.commitments, db.payments, db.intentions, db.marketEntries, db.settings],
+        [
+          db.commitments,
+          db.payments,
+          db.intentions,
+          db.marketEntries,
+          db.categories,
+          db.themes,
+          db.themeMembers,
+          db.settings,
+        ],
         async () => {
           await db.commitments.clear()
           await db.payments.clear()
           await db.intentions.clear()
           await db.marketEntries.clear()
+          await db.categories.clear()
+          await db.themes.clear()
+          await db.themeMembers.clear()
           if (snapshot.commitments.length) await db.commitments.bulkAdd(snapshot.commitments)
           if (snapshot.payments.length) await db.payments.bulkAdd(snapshot.payments)
           if (snapshot.intentions.length) await db.intentions.bulkAdd(snapshot.intentions)
           if (snapshot.marketEntries.length) await db.marketEntries.bulkAdd(snapshot.marketEntries)
+          if (snapshot.categories.length) await db.categories.bulkAdd(snapshot.categories)
+          if (snapshot.themes.length) await db.themes.bulkAdd(snapshot.themes)
+          if (snapshot.themeMembers.length) await db.themeMembers.bulkAdd(snapshot.themeMembers)
           await db.settings.update(SINGLETON_ID, {
             lastKnownSha: sha,
             lastSyncedAt: syncedAt,

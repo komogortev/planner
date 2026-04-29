@@ -1,28 +1,48 @@
 /**
  * On-disk snapshot contract for L1 GitHub sync.
  *
- * Pure module — no Dexie, no fetch. Build / parse / validate the `data.json`
- * shape defined in `docs/STORAGE-FORMAT.md`. Easy to unit-test.
+ * Pure module — no Dexie writes; reads only via `buildSnapshot` from `db`.
+ * Build / parse / validate the `data.json` shape defined in
+ * `docs/STORAGE-FORMAT.md`. Easy to unit-test.
+ *
+ * v2 (2026-04-28) extends v1 with the L2 organization layer:
+ *   - new top-level entity arrays: `categories`, `themes`, `themeMembers`
+ *   - extended `recordCounts` with the 3 new entity counts
+ *   - entity rows (commitment / intention / marketEntry) carry `categoryId` + `tags`
+ *   - `intention.category` free-text is REMOVED (mapped to `categoryId` on migration)
+ *
+ * Forward migration: a v1 snapshot fetched on Restore is transformed via
+ * `migrateSnapshotV1ToV2` (shared with the Dexie v2→v3 upgrade) before
+ * validation + apply.
  *
  * Failure modes surface as `SnapshotValidationError` with user-facing copy.
- * Restore (S2) and Sync (S3) call into this module.
  */
 
 import { db } from './index'
 import type {
+  Category,
   Commitment,
   Intention,
   MarketEntry,
   Payment,
+  Theme,
+  ThemeMember,
 } from './schema'
+import {
+  migrateSnapshotV1ToV2,
+  type SnapshotV1Loose,
+} from './migrations'
 
-export const CURRENT_SCHEMA_VERSION = 1
+export const CURRENT_SCHEMA_VERSION = 2
 
 export interface SnapshotCounts {
   commitments: number
   payments: number
   intentions: number
   marketEntries: number
+  categories: number
+  themes: number
+  themeMembers: number
 }
 
 export interface Snapshot {
@@ -35,6 +55,9 @@ export interface Snapshot {
   payments: Payment[]
   intentions: Intention[]
   marketEntries: MarketEntry[]
+  categories: Category[]
+  themes: Theme[]
+  themeMembers: ThemeMember[]
 }
 
 export type SnapshotValidationKind =
@@ -58,10 +81,13 @@ export class SnapshotValidationError extends Error {
 }
 
 /**
- * Parse raw JSON text into a Snapshot. Validates the top-level shape and the
- * presence of required payment-derived fields. Does NOT validate per-entity
- * field types beyond what's needed for safe handling — entity rows are trusted
- * (Q2 resolution: do not recompute derived fields).
+ * Parse raw JSON text into a v2 Snapshot. v1 input is forward-migrated via
+ * `migrateSnapshotV1ToV2` (same code path as the Dexie v2→v3 upgrade).
+ *
+ * Validates the top-level shape and the presence of required payment-derived
+ * fields. Does NOT validate per-entity field types beyond what's needed for
+ * safe handling — entity rows are trusted (Q2 resolution: do not recompute
+ * derived fields).
  *
  * Throws `SnapshotValidationError`.
  */
@@ -94,26 +120,48 @@ export function parseSnapshot(rawText: string): Snapshot {
     throw shapeError('deviceId must be a string')
   }
 
-  // recordCounts shape
-  const rc = parsed.recordCounts
+  // v1 → forward-migrate. After this branch, `parsed` is a v2-shaped object.
+  if (parsed.schemaVersion === 1) {
+    parsed = migrateSnapshotV1ToV2(parsed as unknown as SnapshotV1Loose)
+  }
+
+  // recordCounts shape — v2 keys (entity arrays present below validate against this).
+  const rc = (parsed as Record<string, unknown>).recordCounts
   if (!isObject(rc)) {
     throw shapeError('recordCounts must be an object')
   }
-  for (const key of ['commitments', 'payments', 'intentions', 'marketEntries'] as const) {
+  for (const key of [
+    'commitments',
+    'payments',
+    'intentions',
+    'marketEntries',
+    'categories',
+    'themes',
+    'themeMembers',
+  ] as const) {
     if (typeof rc[key] !== 'number' || !Number.isInteger(rc[key])) {
       throw shapeError(`recordCounts.${key} must be an integer`)
     }
   }
 
   // Entity arrays present
-  for (const key of ['commitments', 'payments', 'intentions', 'marketEntries'] as const) {
-    if (!Array.isArray(parsed[key])) {
+  const obj = parsed as Record<string, unknown>
+  for (const key of [
+    'commitments',
+    'payments',
+    'intentions',
+    'marketEntries',
+    'categories',
+    'themes',
+    'themeMembers',
+  ] as const) {
+    if (!Array.isArray(obj[key])) {
       throw shapeError(`${key} must be an array`)
     }
   }
 
-  // Payments must have derived fields (STORAGE-FORMAT.md spec)
-  const payments = parsed.payments as unknown[]
+  // Payments must have derived fields (STORAGE-FORMAT.md spec).
+  const payments = obj.payments as unknown[]
   for (let i = 0; i < payments.length; i++) {
     const p = payments[i]
     if (!isObject(p)) {
@@ -148,13 +196,16 @@ export function validateSnapshot(snap: Snapshot): void {
         `Please update the app.`,
     )
   }
-  // schemaVersion < current would trigger forward migrations — none yet at v1.
+  // schemaVersion < current would have already been forward-migrated by parseSnapshot.
 
   const checks: Array<[keyof SnapshotCounts, number, number]> = [
     ['commitments', snap.recordCounts.commitments, snap.commitments.length],
     ['payments', snap.recordCounts.payments, snap.payments.length],
     ['intentions', snap.recordCounts.intentions, snap.intentions.length],
     ['marketEntries', snap.recordCounts.marketEntries, snap.marketEntries.length],
+    ['categories', snap.recordCounts.categories, snap.categories.length],
+    ['themes', snap.recordCounts.themes, snap.themes.length],
+    ['themeMembers', snap.recordCounts.themeMembers, snap.themeMembers.length],
   ]
   for (const [key, expected, actual] of checks) {
     if (expected !== actual) {
@@ -167,13 +218,21 @@ export function validateSnapshot(snap: Snapshot): void {
   }
 }
 
-/** Return total entity-row count across all 4 tables. */
+/** Return total entity-row count across all 7 tables. */
 export function totalRecords(counts: SnapshotCounts): number {
-  return counts.commitments + counts.payments + counts.intentions + counts.marketEntries
+  return (
+    counts.commitments +
+    counts.payments +
+    counts.intentions +
+    counts.marketEntries +
+    counts.categories +
+    counts.themes +
+    counts.themeMembers
+  )
 }
 
 /**
- * Read all 4 entity tables and assemble an in-memory `Snapshot` ready for sync.
+ * Read all 7 entity tables and assemble an in-memory `Snapshot` ready for sync.
  * `exportedAt` is set to "now". Caller passes `deviceId` (from settings) and
  * `appVersion` (from package.json — diagnostic field, not validated).
  */
@@ -181,11 +240,22 @@ export async function buildSnapshot(
   deviceId: string,
   appVersion: string,
 ): Promise<Snapshot> {
-  const [commitments, payments, intentions, marketEntries] = await Promise.all([
+  const [
+    commitments,
+    payments,
+    intentions,
+    marketEntries,
+    categories,
+    themes,
+    themeMembers,
+  ] = await Promise.all([
     db.commitments.toArray(),
     db.payments.toArray(),
     db.intentions.toArray(),
     db.marketEntries.toArray(),
+    db.categories.toArray(),
+    db.themes.toArray(),
+    db.themeMembers.toArray(),
   ])
   return {
     schemaVersion: CURRENT_SCHEMA_VERSION,
@@ -197,11 +267,17 @@ export async function buildSnapshot(
       payments: payments.length,
       intentions: intentions.length,
       marketEntries: marketEntries.length,
+      categories: categories.length,
+      themes: themes.length,
+      themeMembers: themeMembers.length,
     },
     commitments,
     payments,
     intentions,
     marketEntries,
+    categories,
+    themes,
+    themeMembers,
   }
 }
 

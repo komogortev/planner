@@ -4,6 +4,7 @@ import { RouterLink } from 'vue-router'
 import { useCommitmentsStore } from '@/stores/commitments'
 import { useIntentionsStore } from '@/stores/intentions'
 import { useMarketStore } from '@/stores/market'
+import { useCategoriesStore } from '@/stores/categories'
 import StatusPill from '@/components/StatusPill.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import { formatDate } from '@/utils/dates'
@@ -13,6 +14,7 @@ import { monthlyPayment } from '@/utils/amortization'
 const commitments = useCommitmentsStore()
 const intentions = useIntentionsStore()
 const market = useMarketStore()
+const categories = useCategoriesStore()
 
 const totalMonthlyCommitted = computed(() =>
   commitments.commitments.reduce(
@@ -121,7 +123,7 @@ const hasAny = computed(
             </div>
             <div class="text-xs text-slate-500 mt-1">
               Budget: {{ formatMoney(i.targetBudget) }}
-              <span v-if="i.category"> · {{ i.category }}</span>
+              <span v-if="i.categoryId"> · {{ categories.labelFor(i.categoryId) }}</span>
             </div>
           </div>
         </li>

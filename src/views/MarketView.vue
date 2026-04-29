@@ -2,14 +2,40 @@
 import { computed, ref, watch } from 'vue'
 import { useIntentionsStore } from '@/stores/intentions'
 import { useMarketStore, type MarketEntryInput } from '@/stores/market'
+import { useCategoriesStore } from '@/stores/categories'
 import type { MarketAvailability, MarketEntry } from '@/db/schema'
 import EmptyState from '@/components/EmptyState.vue'
 import TrendSparkline from '@/components/TrendSparkline.vue'
+import CategoryPicker from '@/components/CategoryPicker.vue'
+import FilterChip from '@/components/FilterChip.vue'
 import { formatDate, todayISO } from '@/utils/dates'
 import { formatMoney } from '@/utils/money'
 
 const intentionsStore = useIntentionsStore()
 const marketStore = useMarketStore()
+const categoriesStore = useCategoriesStore()
+
+/**
+ * Intention selector filter — narrows the intentions dropdown by category.
+ * Keeps the selected intention even if it falls outside the filter; lets the
+ * user re-select once they apply the filter.
+ */
+const intentionCategoryFilter = ref<string | null>(null)
+
+const intentionCategoryFilterOptions = computed(() => [
+  { value: '__none__', label: '— Uncategorized —' },
+  ...categoriesStore.categories.map((c) => ({ value: c.id, label: c.label })),
+])
+
+const filteredIntentions = computed(() => {
+  if (intentionCategoryFilter.value === null) return intentionsStore.intentions
+  if (intentionCategoryFilter.value === '__none__') {
+    return intentionsStore.intentions.filter((i) => i.categoryId === null)
+  }
+  return intentionsStore.intentions.filter(
+    (i) => i.categoryId === intentionCategoryFilter.value,
+  )
+})
 
 const selectedIntentionId = ref<string | null>(null)
 const entries = ref<MarketEntry[]>([])
@@ -20,6 +46,8 @@ const form = ref<Omit<MarketEntryInput, 'intentionId'>>({
   source: '',
   availability: 'in-stock',
   notes: '',
+  categoryId: null,
+  tags: [],
 })
 
 const selectedIntention = computed(() =>
@@ -72,6 +100,12 @@ async function append(): Promise<void> {
     source: form.value.source,
     availability: form.value.availability,
     notes: form.value.notes,
+    // Default to inheriting parent intention's category — user can override in form before submit.
+    categoryId:
+      form.value.categoryId
+      ?? selectedIntention.value?.categoryId
+      ?? null,
+    tags: form.value.tags,
   })
   form.value = {
     observedAt: todayISO(),
@@ -79,6 +113,8 @@ async function append(): Promise<void> {
     source: form.value.source, // keep last source for rapid entry
     availability: 'in-stock',
     notes: '',
+    categoryId: null,
+    tags: [],
   }
 }
 
@@ -97,11 +133,19 @@ const availabilityOptions: { value: MarketAvailability; label: string }[] = [
 
 <template>
   <div class="max-w-5xl mx-auto w-full px-6 py-8">
-    <div class="mb-6">
-      <h2 class="text-2xl font-bold">Market Log</h2>
-      <p class="text-sm text-slate-500 mt-1">
-        Append-only price + availability observations per intention. Build a trend over time.
-      </p>
+    <div class="flex items-center justify-between mb-6 flex-wrap gap-3">
+      <div>
+        <h2 class="text-2xl font-bold">Market Log</h2>
+        <p class="text-sm text-slate-500 mt-1">
+          Append-only price + availability observations per intention. Build a trend over time.
+        </p>
+      </div>
+      <FilterChip
+        v-model="intentionCategoryFilter"
+        :options="intentionCategoryFilterOptions"
+        all-label="All categories"
+        title="Filter intentions by category"
+      />
     </div>
 
     <EmptyState
@@ -115,13 +159,20 @@ const availabilityOptions: { value: MarketAvailability; label: string }[] = [
         <label class="label">Intention</label>
         <select v-model="selectedIntentionId" class="input max-w-md">
           <option
-            v-for="i in intentionsStore.intentions"
+            v-for="i in filteredIntentions"
             :key="i.id"
             :value="i.id"
           >
             {{ i.label }} ({{ i.status }})
+            <template v-if="i.categoryId"> · {{ categoriesStore.labelFor(i.categoryId) }}</template>
           </option>
         </select>
+        <p
+          v-if="filteredIntentions.length === 0 && intentionCategoryFilter !== null"
+          class="text-xs text-slate-500 mt-2"
+        >
+          No intentions match this category filter.
+        </p>
       </div>
 
       <div v-if="selectedIntention" class="card">
@@ -189,7 +240,17 @@ const availabilityOptions: { value: MarketAvailability; label: string }[] = [
               </option>
             </select>
           </div>
-          <div class="sm:col-span-3">
+          <div>
+            <label class="label">Category</label>
+            <CategoryPicker v-model="form.categoryId" />
+            <p
+              v-if="form.categoryId === null && selectedIntention?.categoryId"
+              class="text-xs text-slate-500 mt-1"
+            >
+              Will inherit from intention: {{ categoriesStore.labelFor(selectedIntention.categoryId) }}
+            </p>
+          </div>
+          <div class="sm:col-span-2">
             <label class="label">Notes</label>
             <input v-model="form.notes" type="text" class="input" placeholder="Optional" />
           </div>
