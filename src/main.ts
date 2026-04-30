@@ -4,7 +4,9 @@ import App from './App.vue'
 import { router } from './router'
 import { useSyncStore } from './stores/sync'
 import { useCategoriesStore } from './stores/categories'
+import { useCleanupStore } from './stores/cleanup'
 import { setupSyncDirtyTracking } from './db/syncTracking'
+import { dedupeCategoriesInDb } from './db/cleanup'
 import './style.css'
 
 const app = createApp(App)
@@ -25,9 +27,20 @@ setupSyncDirtyTracking(useSyncStore())
 // the user can re-seed via Settings → "Load sample data".
 useCategoriesStore()
   .ensureBuiltIns()
+  .then(() => dedupeCategoriesInDb())
+  .then((result) => {
+    if (result.mergedGroups > 0) {
+      // eslint-disable-next-line no-console
+      console.info(
+        `[main] dedupeCategoriesInDb merged ${result.mergedGroups} label group(s), removed ${result.removedRows} row(s):`,
+        result.mergedLabels,
+      )
+      useCleanupStore().record(result)
+    }
+  })
   .catch((err) => {
     // eslint-disable-next-line no-console
-    console.error('[main] failed to ensure built-in categories:', err)
+    console.error('[main] category init / dedupe failed:', err)
   })
 
 app.mount('#app')

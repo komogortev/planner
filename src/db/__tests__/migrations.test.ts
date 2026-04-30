@@ -183,6 +183,61 @@ describe('migrateSnapshotV1ToV2', () => {
     expect(out.exportedAt).toBe('2026-04-22T14:30:00Z')
   })
 
+  // Regression for the duplicate-categories bug (2026-04-29). Earlier
+  // versions of `migrateSnapshotV1ToV2` called `createUserCategory` once per
+  // intention row without deduping by lowercased label, so 5 intentions
+  // tagged "home" produced 5 separate `home` rows.
+  it('dedupes user categories by lowercased label across intentions', () => {
+    const v1: SnapshotV1Loose = {
+      schemaVersion: 1,
+      appVersion: '0.1.0',
+      exportedAt: '2026-04-29T00:00:00Z',
+      deviceId: 'desktop-2026-04-29',
+      recordCounts: { commitments: 0, payments: 0, intentions: 5, marketEntries: 0 },
+      commitments: [], payments: [], marketEntries: [],
+      intentions: [
+        { id: 'i1', label: 'A', category: 'home', targetBudget: null,
+          status: 'considering', notes: '', createdAt: 'a', updatedAt: 'b' },
+        { id: 'i2', label: 'B', category: 'Home', targetBudget: null,
+          status: 'considering', notes: '', createdAt: 'a', updatedAt: 'b' },
+        { id: 'i3', label: 'C', category: 'HOME', targetBudget: null,
+          status: 'considering', notes: '', createdAt: 'a', updatedAt: 'b' },
+        { id: 'i4', label: 'D', category: 'hobby', targetBudget: null,
+          status: 'considering', notes: '', createdAt: 'a', updatedAt: 'b' },
+        { id: 'i5', label: 'E', category: 'hobby', targetBudget: null,
+          status: 'considering', notes: '', createdAt: 'a', updatedAt: 'b' },
+      ],
+    }
+    const out = migrateSnapshotV1ToV2(v1, () => '2026-04-29T00:00:00Z')
+
+    // 4 built-ins + 1 "home" + 1 "hobby" = 6 categories total
+    expect(out.categories.length).toBe(6)
+    const userCats = out.categories.filter(
+      (c) => c.id !== 'cat-purchases'
+        && c.id !== 'cat-travel'
+        && c.id !== 'cat-skill-development'
+        && c.id !== 'cat-subscriptions',
+    )
+    expect(userCats.length).toBe(2)
+    const homeRows = userCats.filter((c) => c.label.toLowerCase() === 'home')
+    const hobbyRows = userCats.filter((c) => c.label.toLowerCase() === 'hobby')
+    expect(homeRows.length).toBe(1)
+    expect(hobbyRows.length).toBe(1)
+
+    // First-seen label spelling wins (label preserved as-is from first occurrence)
+    expect(homeRows[0]!.label).toBe('home')
+
+    // All three "home"-flavoured intentions point to the same id
+    const homeId = homeRows[0]!.id
+    expect(out.intentions[0]!.categoryId).toBe(homeId)
+    expect(out.intentions[1]!.categoryId).toBe(homeId)
+    expect(out.intentions[2]!.categoryId).toBe(homeId)
+    // Both "hobby" intentions share an id
+    const hobbyId = hobbyRows[0]!.id
+    expect(out.intentions[3]!.categoryId).toBe(hobbyId)
+    expect(out.intentions[4]!.categoryId).toBe(hobbyId)
+  })
+
   it('seeds built-ins even when there are no intentions', () => {
     const v1: SnapshotV1Loose = {
       schemaVersion: 1,

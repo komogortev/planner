@@ -99,6 +99,12 @@ export class PlannerDb extends Dexie {
         //    after iteration (we cannot write to another table from within a
         //    `.modify()` callback in Dexie). `.modify` mutates rows in place
         //    inside the upgrade transaction.
+        //
+        //    Dedupe by lowercased label so 5 intentions tagged "home" produce
+        //    ONE category, not 5. (Bug fix 2026-04-29 — earlier devices that
+        //    ran the v3 upgrade before this fix have stale dupes; cleaned up
+        //    on app boot via `dedupeCategoriesInDb`.)
+        const seenUserCategories = new Map<string, string>()
         await trans
           .table<IntentionV1>('intentions')
           .toCollection()
@@ -106,7 +112,11 @@ export class PlannerDb extends Dexie {
             const migrated = migrateIntentionRow(row, {
               builtIns: BUILT_IN_CATEGORIES,
               createUserCategory: (label) => {
+                const key = label.toLowerCase()
+                const existing = seenUserCategories.get(key)
+                if (existing) return existing
                 const id = uuid()
+                seenUserCategories.set(key, id)
                 pendingNewCategories.push({
                   id,
                   label,
