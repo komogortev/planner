@@ -224,11 +224,18 @@ export function migrateSnapshotV1ToV2(
   }))
 
   // 2. Map free-text → categoryId for intentions, accumulating new user categories.
+  //    Dedupe by lowercased label so multiple v1 intentions tagged "home" / "Home"
+  //    collapse into ONE user category, not N copies. (Bug fix 2026-04-29.)
+  const seenUserCategories = new Map<string, string>()
   const intentions = v1.intentions.map((row) =>
     migrateIntentionRow(row, {
       builtIns: BUILT_IN_CATEGORIES,
       createUserCategory: (label) => {
+        const key = label.toLowerCase()
+        const existing = seenUserCategories.get(key)
+        if (existing) return existing
         const id = uuid()
+        seenUserCategories.set(key, id)
         categories.push({
           id,
           label,
