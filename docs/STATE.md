@@ -1,9 +1,9 @@
 # Personal Planner — STATE
 
-**Phase:** **L2-S1 Categories shipped + dupe-cleanup hotfix in flight** — schema v3 (categories/themes/themeMembers tables + categoryId/tags FKs) + CategoriesView admin + CategoryPicker live on PR #5 branch (`feat/l2-s1-categories`, commit `1112c64`). Real-use surfaced duplicate-categories bug (5×"home" rows visible in dropdown) — root-caused to `migrateIntentionRow` callbacks not deduping by lowercased label across the v3 Dexie upgrade AND snapshot v1→v2 paths. **Next phase after S1 closure: L2-S2 Tags.** See `## Roadmap` below.
-**Last updated:** 2026-04-30 (cleanup session — fixed dupe-bug at both migration entry points; added `dedupeCategoriesInDb` boot-time idempotent merger + `CleanupBanner` toast + Pinia store; new vitest cases: 1 migration regression + 5 cleanup test cases against fake-indexeddb. 54/54 tests + vue-tsc clean.)
-**Working tree:** modified on `feat/l2-s1-categories` (5 modified, 4 untracked — see commit step)
-**Last commit:** `1112c64` — feat(personal-planner): L2-S1 — Categories (schema v3 + admin + picker)
+**Phase:** **L2-S1 CLOSED — next: L2-S2 Tags.** All L2-S1 PRs merged: PR #5 (Categories schema v3 + admin + picker), PR #6 (dupe-cleanup hotfix — `dedupeCategoriesInDb` + `CleanupBanner`), PR #4 (L2-S0 design doc `docs/L2-ORGANIZATION.md`). 54/54 vitest, vue-tsc clean. **Next: L2-S2 Tags** — `TagInput.vue` with auto-suggest, tag chip on entity rows, tag filter. No new schema bump needed (tags: string[] already in v3).
+**Last updated:** 2026-06-01 (PR hygiene session — PRs #4/5/6 all confirmed merged to main; L2-S0 design doc was still missing from main, rebased + merged 2026-06-01.)
+**Working tree:** clean on `feat/l2-s1-categories`
+**Last commit:** `c0a419b` — docs(L2-S0): Organization design — Category + Theme + Tag
 **Remote:** `origin` → `https://github.com/komogortev/planner.git` (public)
 **Live URL:** https://komogortev.github.io/planner/
 **Dev server:** `pnpm --dir E:/Projects/apps/personal-planner dev` on `:5173` (wired into workspace `.claude/launch.json` as `personal-planner`; production preview as `personal-planner-preview` on `:4173`)
