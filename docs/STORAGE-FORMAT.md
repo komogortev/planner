@@ -4,6 +4,11 @@ L1 sync target. Single canonical file in the user's private GitHub data repo. On
 
 This doc is the contract between the app and the file. Changing the file shape requires bumping `schemaVersion` and shipping a migration in the Restore code path.
 
+> **Version note (2026-10-08).** The shape below is `schemaVersion` **1**. Version **2** (categories, themes,
+> themeMembers, `categoryId` + `tags` on entities) is specified in `L2-ORGANIZATION.md` → "Snapshot v2" and is what
+> ships today. Version **3** (`entries`, `Category.rule`) is drafted in `H1-ENTRIES.md`. Fold all three into this
+> file when H1-S1 lands, so the contract lives in one place again.
+>
 > **Active backend.** GitHub Contents API. See `L1-GITHUB.md` for transport / auth / sync flow. The Sheets-backed alternative (`SHEETS-STRUCTURE.md`) is deferred.
 
 ## File location
