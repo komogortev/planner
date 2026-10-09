@@ -5,6 +5,10 @@ Three-layer organization model on top of the L0/L1 entity base — **Category** 
 This doc is the design baseline for slices S1–S5. The on-disk format change is captured here too (no separate `STORAGE-FORMAT.md` revision — bumping `schemaVersion` to `2` and inlining the diff is enough at this scale).
 
 > **Status:** S0 design complete. Open questions Q1–Q5 resolved 2026-04-28 — see "Open question resolutions" at bottom.
+>
+> **Closed by the 2026-10-08 pivot.** S1 Categories shipped and stands. S2 Tags → H1, S3 Themes → H4, S5 sync
+> validation → H1, S4 Dashboard dropped (PROJECT.md → "Retired by the pivot"). The model and the Q1–Q5 resolutions
+> remain binding.
 
 ## Why three layers, not just tags
 
