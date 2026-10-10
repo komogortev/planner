@@ -33,7 +33,8 @@
     --glass-edge: rgb(255 225 180 / 0.2);
     --glass-lit: rgb(255 235 200 / 0.22);
     --glass-dark: rgb(0 0 0 / 0.3);
-    --glass-blur: blur(2px) saturate(1.1); /* light blur: the weave and fold shading stay recognisable through the glass */
+    --glass-pool: rgb(0 0 0 / 0.22);
+    --glass-blur: blur(2px) saturate(1.1) brightness(0.88); /* light blur keeps the weave readable; brightness = the card's shadow showing through its own glass (an outer box-shadow is never drawn under the box) */
     --float-1: 0 28px 34px rgb(0 0 0 / 0.3);
     --float-2: 0 7px 12px rgb(0 0 0 / 0.2);
     --grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240' viewBox='0 0 240 240'><filter id='n' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .62  0 0 0 0 .44  0 0 0 0 .26  0 0 0 .6 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
@@ -51,8 +52,10 @@
     --fold-light: rgb(255 255 255 / 0.28);
     --glass-bg: rgb(250 246 238 / 0.35);
     --glass-edge: rgb(255 255 255 / 0.55);
+    --glass-blur: blur(2px) saturate(1.1) brightness(0.93);
     --glass-lit: rgb(255 255 255 / 0.7);
     --glass-dark: rgb(70 40 10 / 0.16);
+    --glass-pool: rgb(70 40 10 / 0.14);
     --float-1: 0 28px 34px rgb(60 35 10 / 0.24);
     --float-2: 0 7px 12px rgb(60 35 10 / 0.15);
     --grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240' viewBox='0 0 240 240'><filter id='n' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .36  0 0 0 0 .24  0 0 0 0 .12  0 0 0 .5 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
@@ -116,7 +119,8 @@
     -webkit-backdrop-filter: var(--glass-blur);
     backdrop-filter: var(--glass-blur);
     /* hovers over the textured backdrop; a lit top edge and a darker bottom edge give the glass its thickness */
-    box-shadow: var(--float-1), var(--float-2), inset 0 1px 0 var(--glass-lit), inset 0 -1px 0 var(--glass-dark);
+    box-shadow: var(--float-1), var(--float-2), inset 0 1px 0 var(--glass-lit), inset 0 -1px 0 var(--glass-dark),
+      inset 0 -18px 20px -14px var(--glass-pool);
   }
 
   .input {
