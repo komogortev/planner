@@ -320,6 +320,15 @@ async function doDisconnect(): Promise<void> {
       </div>
     </section>
 
+    <!-- H1-S1 spike: the only way into the sign-in test screen. Removed by S3. -->
+    <section class="card">
+      <h3 class="font-semibold mb-1">Account (preview)</h3>
+      <p class="text-xs text-slate-500 mb-4">
+        Tests sign-in to the new backend. Nothing here touches your data.
+      </p>
+      <RouterLink to="/spike-auth" class="btn-ghost">Sign-in test</RouterLink>
+    </section>
+
     <!-- ============================================================ -->
     <!-- App info                                                      -->
     <!-- ============================================================ -->

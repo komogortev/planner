@@ -5,7 +5,7 @@
 - **Working:** `api/` Worker deployed (`planner-api.komogortev.workers.dev`): GitHub + Google sign-in → one linked account, bearer token, `/me`. App unchanged: L1 sync, L2-S1, frozen financial domain.
 - **Broken:** sync's "unsynced" flag is memory-only (`src/stores/sync.ts:55`), fixed by the H1 outbox.
 - **Blocker:** none. Merges and deploys of code are the owner's (the classifier denies both to Claude).
-- **Next:** S1 session 2 — step 6 test screen (fix :5176 vs :5173 dev port; add sign-in nonce), step 7 iPhone, step 8 cleanup. Then S2.
+- **Next:** S1 session 2 (2026-10-10): step 6 test screen + sign-in nonce + step 8 code in one PR. Owner: deploy Worker + remote migration `0003`, merge (Pages deploys) → desktop sign-in (first positive) → step 7 iPhone. Then close S1 → S2.
 ---
 
 ## Context
@@ -13,7 +13,7 @@
 - **Repo:** own git, `origin` → `https://github.com/komogortev/planner.git` (**public** — no personal data in code,
   fixtures or docs). Data: private `komogortev/planner-data`, single `data.json` (8.4 KB, 2026-10-08) — after H1 it holds the frozen
   financial tables and the nightly entries export; entries themselves live on the backend.
-- **Dev:** `pnpm --dir E:/Projects/apps/personal-planner dev` on `:5173` (launch config `personal-planner`); production
+- **Dev:** launch config `personal-planner` on `:5176` (app at `/planner/`) + `planner-api` on `:8787`; production
   preview `personal-planner-preview` on `:4173` (build first) at `/planner/`.
 - **Schema:** Dexie v3, snapshot `schemaVersion` 2. Next: Dexie v4 (`entries`, `outbox`, `syncMeta`) + D1 schema in H1.
 - **PAT gotcha:** fine-grained tokens take 30–60 s to propagate; a 404 right after creating one is not "no access".

@@ -34,6 +34,12 @@ export const router = createRouter({
       component: () => import('@/views/SettingsView.vue'),
     },
     {
+      // H1-S1 spike test screen — linked only from Settings, removed by S3.
+      path: '/spike-auth',
+      name: 'spike-auth',
+      component: () => import('@/views/SpikeAuthView.vue'),
+    },
+    {
       path: '/:pathMatch(.*)*',
       redirect: '/',
     },

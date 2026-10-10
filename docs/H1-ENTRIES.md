@@ -196,7 +196,7 @@ Runs on the client before the outbox write (fast feedback) and again on the serv
 - **Token transport: `Authorization: Bearer`, not cookies.** The client (`*.github.io`) and the Worker (`*.workers.dev`)
   are different sites, and Safari blocks cross-site cookies. Bearer tokens make injected script the main threat, hence
   plain-text bodies (§7) and a CSP that allows only the Worker origin for `connect-src`.
-- **CORS:** the Worker allows exactly the Pages origin (plus `localhost:5173` in dev).
+- **CORS:** the Worker allows exactly the Pages origin (plus `localhost:5176` in dev).
 - **Isolation:** every query is built by one data-access helper that takes `userId` as a required argument; a test
   asserts that account B reading account A's entry id gets 404 (negative control, §10).
 - **Offline:** a valid session lasts 30 days, renewed on each successful sync. An expired session never blocks capture —

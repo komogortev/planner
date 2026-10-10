@@ -30,19 +30,4 @@ app.get('/me', async (c) => {
   return user ? c.json(user) : c.json({ error: 'signed out' }, 401)
 })
 
-// Spike: where sign-in lands while the app has no test screen yet. Reads the token from the fragment, calls /me.
-// Removed at spike step 8 together with the `spikeLanding` exception in auth.ts.
-app.get('/spike/landing', (c) =>
-  c.html(`<!doctype html><meta charset="utf-8"><title>Sign-in result</title>
-<pre id="out">checking…</pre>
-<script>
-  const token = new URLSearchParams(location.hash.slice(1)).get('token')
-  history.replaceState(null, '', location.pathname)
-  const out = document.getElementById('out')
-  if (!token) out.textContent = 'no token in the URL — sign-in did not complete'
-  else fetch('/me', { headers: { Authorization: 'Bearer ' + token } })
-    .then(async (r) => { out.textContent = r.status + ' ' + JSON.stringify(await r.json(), null, 2) })
-</script>`),
-)
-
 export default app

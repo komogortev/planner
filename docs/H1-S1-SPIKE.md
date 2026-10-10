@@ -64,12 +64,12 @@ every commit, and never creates or reads `api/.env*`.
 |---|---|---|
 | 0 | `dependency-audit` on the candidates: auth (Better Auth vs Arctic + own `sessions` table) and router (Hono vs plain `fetch` handler). Pick the smallest that does the job | the picks, bundle sizes |
 | 1 | Scaffold `api/` (own `package.json`, `wrangler.toml`), `wrangler d1 create planner`, one table, `GET /health` + `POST /spike/note` writing and reading a row | local round trip |
-| 2 | Deploy the Worker; CORS allows exactly `https://komogortev.github.io` and `http://localhost:5173` | request from the Pages origin succeeds; one from another origin is refused (negative control) |
+| 2 | Deploy the Worker; CORS allows exactly `https://komogortev.github.io` and the local app (`http://localhost:5176` since session 2) | request from the Pages origin succeeds; one from another origin is refused (negative control) |
 | 3 | GitHub + Google sign-in → bearer session token → `GET /me` | signed in locally with both providers |
 | 4 | **Known positive for the CPU check:** a throwaway `/spike/burn` route that loops ~20 ms of CPU. It must show > 10 ms in the measurement, or fail with error 1102 (exceeded resource limits). Only then trust the next step's numbers | the burn route's reading |
 | 5 | Measure CPU: 20 calls each to the callback, `/me`, `/spike/note`. Read p50/p99 from the dashboard (Workers → Metrics → CPU time) or `wrangler tail --format json`, whichever this account shows | table in §6 |
 | 6 | Hidden test screen in the app: route `/spike-auth`, reachable only from a link in Settings → "Sign-in test". Merged to `main` so the installed PWA has it | deployed |
-| 7 | **iPhone protocol (owner, ~15 min):** delete any old home-screen icon → open the site in Safari → Share → Add to Home Screen → open from the icon → Settings → Sign-in test → sign in with GitHub, then Google. Record: did it return to the installed app? Signed in? Close the app fully, reopen: still signed in? Open the same page in a Safari tab: signed **out** (separate storage — expected) | outcome per provider |
+| 7 | **iPhone protocol (owner, ~15 min):** delete any old home-screen icon → open the site in Safari → Share → Add to Home Screen → open from the icon → Settings → Sign-in test → sign in with GitHub, then Google. Record: did it return to the installed app (*Running as*)? Signed in? If not, what does *Last sign-in return* say? (Landing in a Safari context instead shows "rejected: no sign-in was started from this app" — that is the C-fail signal.) Close the app fully, reopen: still signed in? Open the same page in a Safari tab: signed **out** (separate storage — expected) | outcome per provider |
 | 8 | Close: record results, decide by §4, update H1 §12 Q1–Q2. Remove: `/spike/landing` + the `spikeLanding` exception in `auth.ts`; a `0003` migration dropping `spike_notes` (`/spike/burn` + `/spike/note` already went in session 1). The `/spike-auth` test screen stays until S3 | H1 doc + STATE |
 
 ## 4. Decision rules
@@ -92,8 +92,18 @@ step 8; the test screen by S3.
 
 **Carried to S2 from the session-1 review** (low risk while a token only reads `/me`; Blocking once it guards entries):
 
-- **Login CSRF on the last hop.** The app accepts any `#token=`. Step 6 adds a nonce: the app keeps it in
-  `sessionStorage`, passes it through `/auth/start`, the Worker echoes it in the fragment, a mismatch is rejected.
+- ~~**Login CSRF on the last hop.**~~ Done in session 2 (step 6): the app keeps a nonce in `localStorage` (not
+  `sessionStorage` — an iOS home-screen app may return in a new browsing context, which would fail C for the wrong
+  reason), passes it through `/auth/start`, the Worker echoes it in the fragment; a mismatch, a missing pending
+  sign-in or one older than 10 minutes is rejected.
+- **Shared origin (session-2 review).** `komogortev.github.io` hosts every Pages site the owner has; localStorage
+  and CORS are per origin, so any of those sites can read the bearer token and call the API with it. Fine while the
+  token reads only `/me`; **before entries, the app needs its own origin** (custom domain or a dedicated Pages host) —
+  an owner call.
+- **Token in browser history / Worker logs (unverified).** The 302 lands on `/planner/#token=…`; global history
+  (Safari/iCloud, Chrome Sync) may record it before `replaceState` runs, and Workers observability may log the
+  `Location` header. Check both after the first prod sign-in; if either holds, return a short-lived single-use code in
+  the fragment and exchange it by POST.
 - **Google email linking.** `email_verified` on a non-Gmail Google account was checked once, at creation. Auto-link
   only `@gmail.com` or tokens with `hd`; otherwise the already-linked provider confirms.
 - **Revoking an invite** must delete that user's sessions (the allowlist is checked only at sign-in); add logout and an
@@ -115,7 +125,9 @@ Session 1, 2026-10-09 — steps 0–5. Steps 6–8 next session. Production figu
 | CPU p50 / p99 — callback | GitHub 5 / **9** ms (n=7: one 9, six at 5) · Google 3 / 6 ms (n=5) · start routes ≤ 1 ms (n=17). 12 callbacks = 12 session rows, so tail missed none. Short of the planned 20 per route |
 | CORS negative control | Pages origin: `/health`, JSON POST, `Authorization` request all succeed. `example.com`: all three blocked, and **0 rows written** (preflight refused). Local: `localhost:5173` allowed, `evil.example` + `localhost:5176` refused |
 | Sign-in | GitHub + Google, local and production: both resolve to **one account** (verified-email link); only SHA-256 token hashes stored. Allowlist (`ALLOWED_EMAILS` secret) stands in for S2 invites |
-| iPhone — GitHub · Google · after reopen · Safari tab separate | *next session* |
+| Test screen + nonce (session 2, step 6) | `/spike-auth`, linked only from Settings → Account (preview). Shows *Running as* (installed app vs browser tab), *Status* (from `/me`), *Last sign-in return* (accepted, or why rejected). Controls, local: Worker 400 on missing / short nonce and on `:5173`; 302 to GitHub with a valid one; a forged `#token=` link is rejected, not stored, fragment scrubbed. A mutation dropping the nonce comparison fails 2 of 6 unit tests. **Positive end to end not yet run** — GitHub's password page is the owner's; the first desktop sign-in after deploy is it |
+| Step 8 code (session 2) | `/spike/landing` + its `return_to` exception removed; `0003` drops `spike_notes` (applied locally) |
+| iPhone — GitHub · Google · after reopen · Safari tab separate | *owner, after deploy* |
 | Decision | **A ✅. B ✅ on steady state** (owner, 2026-10-09): every route p50 1–5 ms; the one 9 ms GitHub callback is an open outlier, under the limit and against a limit not enforced at 246 ms. **Re-entry:** when S2's real auth flow is deployed, read production CPU over ≥ 50 callbacks; p99 > 7 ms → find what in the route costs it before S2 continues. §4's "switch to the other candidate" does not apply to this kind of result (Better Auth cannot be cheaper). **C:** next session, steps 6–7 |
 
 **Environment notes found on the way**
@@ -125,7 +137,12 @@ Session 1, 2026-10-09 — steps 0–5. Steps 6–8 next session. Production figu
 - Local secrets live in **`api/.env`**, not `.dev.vars`: a file Claude wrote is echoed back to it on every save.
   Production secrets go in via `wrangler secret bulk <file>` — the interactive `secret put` prompt stored a 3-char value
   twice on this machine. `SESSION_SECRET` is not used (tokens are random, stored hashed; nothing is signed).
-- The `personal-planner` launch config serves the app on **:5176**, which CORS refuses. Step 6 picks one port.
+- The `personal-planner` launch config serves the app on **:5176**, which CORS refused. Session 2 picked **:5176**
+  (`:5173` is three-dreams' pinned port in the workspace launch config); the local app URL is
+  `http://localhost:5176/planner/`. The OAuth apps need no change — their callbacks are on `:8787`.
+- `createWebHistory()` captures the URL when `router/index.ts` is evaluated, and imports are hoisted: a sign-in
+  return handled in `main.ts`'s body was written back over by the router. It runs as the first import instead
+  (`src/auth/consumeReturn.ts`).
 - `wrangler tail` drops events in bursts — pace measurement calls.
 - The planner's `typecheck` now also runs `api`'s (the Stop-hook gate mapped `api/*.ts` to `vue-tsc -b`, which never saw
   them). Known positive: a planted TS2322 in `api/` fails it.
