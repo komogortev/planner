@@ -29,7 +29,7 @@
     /* Two soft layers, offset down: the object hovers a few cm above the weave. Used as drop-shadow() and box-shadow. */
     /* Frosted glass, shared by the Settings cards and the sign-in dialog. Only the BACKGROUND is see-through (alpha in
        --glass-bg); text and buttons on it stay fully opaque. */
-    --glass-bg: rgb(32 22 14 / 0.32);
+    --glass-bg: rgb(32 22 14 / 0.27);
     --glass-edge: rgb(255 225 180 / 0.2);
     --glass-blur: blur(14px) saturate(1.1);
     --float-1: 0 28px 34px rgb(0 0 0 / 0.3);
@@ -47,7 +47,7 @@
     --sheet-edge: rgb(90 60 30 / 0.14);
     --fold-shadow: rgb(70 40 10 / 0.16);
     --fold-light: rgb(255 255 255 / 0.28);
-    --glass-bg: rgb(250 246 238 / 0.35);
+    --glass-bg: rgb(250 246 238 / 0.30);
     --glass-edge: rgb(255 255 255 / 0.55);
     --float-1: 0 28px 34px rgb(60 35 10 / 0.24);
     --float-2: 0 7px 12px rgb(60 35 10 / 0.15);
