@@ -64,8 +64,7 @@ onBeforeUnmount(() => window.clearTimeout(timer))
   z-index: 40;
   display: flex;
   justify-content: center;
-  align-items: flex-end;
-  padding-bottom: 30px; /* dots ride above the system gesture bar and the version badge */
+  align-items: center;
 }
 .dots {
   display: flex;
