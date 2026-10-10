@@ -6,7 +6,6 @@ import { appOrigins } from './config'
 export interface Env {
   DB: D1Database
   ALLOWED_APP_URLS: string
-  ALLOWED_EMAILS: string
   GITHUB_CLIENT_ID: string
   GITHUB_CLIENT_SECRET: string
   GOOGLE_CLIENT_ID: string

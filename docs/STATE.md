@@ -1,11 +1,11 @@
 # Personal Planner — STATE
 
 ## SNAPSHOT
-- **Phase/Last:** H1 **S2 Backend started** 2026-10-10 (`H1-S2-BACKEND.md`): step 0 test harness ✅. **S1 closed** 2026-10-10: A ✅ B ✅, C (iPhone) deferred — owner's phone is Android. Vibe-code mode: Claude owns architecture + deploys (owner). Planner has workspace priority.
+- **Phase/Last:** H1 **S2 Backend** 2026-10-10 (`H1-S2-BACKEND.md`): steps 0–3 ✅ — harness, shared `src/domain/clean.ts` (full-entry payloads), `0004` schema, invites replace the allowlist (`api/scripts/invite.mjs`). **S1 closed** 2026-10-10: A ✅ B ✅, C (iPhone) deferred — owner's phone is Android. Vibe-code mode: Claude owns architecture + deploys (owner). Planner has workspace priority.
 - **Working:** Worker `3f95dae2` (`planner-api.komogortev.workers.dev`): GitHub + Google sign-in with nonce → one account, bearer token, `/me`; app test screen `/spike-auth`. Worker tests: `pnpm test:api` (workerd + D1). App unchanged otherwise: L1 sync, L2-S1, frozen financial domain.
 - **Broken:** sync's "unsynced" flag is memory-only (`src/stores/sync.ts:55`), fixed by the H1 outbox.
 - **Blocker:** none. Planner-only merge rule added 2026-10-10 (`PowerShell(gh pr merge --repo komogortev/planner *)`); unproven until the first merge under it.
-- **Next:** S2 steps 1–4: shared `domain/clean.ts` → migration `0004` → invites → sync push/pull/query. Owner (optional, 5 min): one desktop sign-in through Settings → Sign-in test — still no full positive run.
+- **Next:** S2 step 4 — sync push/pull/query (§6, §10 idempotency · isolation · stale-base · no resurrection), then 5 rate limit, 6 auth carry-overs, 7 deploy + CPU read. Owner (optional, 5 min): one desktop sign-in through Settings → Sign-in test — still no full positive run.
 ---
 
 ## Context
@@ -25,7 +25,7 @@
 |---|---|---|
 | L0 · Base · L1 · L2-S1 | ✅ shipped | PROJECT.md §Tiers |
 | H0 Pivot design | ✅ closed 2026-10-09 | VOCABULARY.md, ARCHITECTURE.md |
-| H1 Core loop | S0 ✅ · S1 ✅ (C deferred) · S2 step 0 ✅ | H1-ENTRIES.md · H1-S1-SPIKE.md · H1-S2-BACKEND.md |
+| H1 Core loop | S0 ✅ · S1 ✅ (C deferred) · S2 steps 0–3 ✅ | H1-ENTRIES.md · H1-S1-SPIKE.md · H1-S2-BACKEND.md |
 | H1b Organise | planned (categories/tags sync, Inbox, rules) | PROJECT.md §Tiers |
 | H2 Lenses | S0 draft, Q1–Q7 open; starts after H1 exits | H2-LENSES.md |
 | H3 Agent surface · H4 Curation & tasks · H5 In-app AI | planned | PROJECT.md §Tiers |
