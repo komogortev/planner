@@ -17,8 +17,9 @@ Decided at runtime from the host (`src/env/appEnv.ts`), so the exact build that 
 | What | How | Link |
 |---|---|---|
 | App (dev, hot reload) | launch config `personal-planner` | http://localhost:5176/planner/ |
-| Sign-in test screen | Settings → Account (preview) → Sign-in test | http://localhost:5176/planner/spike-auth |
-| API (Worker, local D1) | launch config `planner-api` | http://localhost:8787/health |
+| Sign-in gate | signed out → tap the orange ring over the pocket button (needs the API row below running, and an invite in the local D1) | http://localhost:5176/planner/signin |
+| Skip sign-in while iterating on screens | `VITE_SKIP_AUTH=1 pnpm dev` (dev builds only) | — |
+| API (Worker, local D1) — **must be running for local sign-in** | launch config `planner-api` | http://localhost:8787/health |
 | App as built for production | `pnpm build`, then launch config `personal-planner-preview` | http://localhost:4173/planner/ |
 
 | Check | Command | What it covers |
@@ -39,7 +40,7 @@ Local sign-in needs an invite in the **local** D1 (the `.wrangler/` state):
 | What | Link |
 |---|---|
 | App | https://komogortev.github.io/planner/ |
-| Sign-in test screen | https://komogortev.github.io/planner/spike-auth |
+| Sign-in gate | https://komogortev.github.io/planner/signin |
 | API health | https://planner-api.komogortev.workers.dev/health |
 | App deploys (GitHub Actions → Pages) | https://github.com/komogortev/planner/actions |
 | Worker, logs, D1 | https://dash.cloudflare.com → Workers & Pages → `planner-api`; D1 → `planner` |

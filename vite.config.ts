@@ -28,7 +28,9 @@ export default defineConfig({
     __APP_BUILD__: JSON.stringify(BUILD),
   },
   // The Worker's local ALLOWED_APP_URLS (api/package.json `dev`) names this port; any other is refused.
-  server: { port: 5176, strictPort: true },
+  // `sources/` holds design drops (large images, often mid-download/locked on Windows): a watcher EBUSY there kills the
+  // dev server, so it is not watched. Nothing in the app imports from it (assets are copied into src/assets).
+  server: { port: 5176, strictPort: true, watch: { ignored: ['**/sources/**'] } },
   plugins: [
     vue(),
     {

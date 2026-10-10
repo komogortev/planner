@@ -8,7 +8,10 @@ import type {
   Payment,
   Theme,
   ThemeMember,
+  OutboxRow,
+  SyncMeta,
 } from './schema'
+import type { Entry } from '@/domain/entry'
 import { BUILT_IN_CATEGORIES, USER_CATEGORY_SORT_ORDER } from './categorySeed'
 import {
   backfillCommitmentRow,
@@ -29,6 +32,8 @@ import { nowISO } from '@/utils/dates'
  *               - new fields on entity tables: `categoryId`, `tags` (multi-entry index)
  *               - `intentions.category` free-text → `categoryId` foreign key
  *
+ * Version 4 — H1 entries: `entries`, `outbox`, `syncMeta` (2026-10-10). Additive; the financial tables are untouched.
+ *
  * Once shipped, a version is FROZEN. Schema changes go via a NEW version+upgrade.
  */
 export class PlannerDb extends Dexie {
@@ -40,6 +45,9 @@ export class PlannerDb extends Dexie {
   categories!: Table<Category, string>
   themes!: Table<Theme, string>
   themeMembers!: Table<ThemeMember, string>
+  entries!: Table<Entry, string>
+  outbox!: Table<OutboxRow, number>
+  syncMeta!: Table<SyncMeta, string>
 
   constructor() {
     super('personal-planner')
@@ -164,6 +172,13 @@ export class PlannerDb extends Dexie {
 
         // themes / themeMembers tables come online empty — populated when S3 ships.
       })
+
+    // v4 — H1 entries. New tables only, so no upgrade callback; existing data is untouched.
+    this.version(4).stores({
+      entries: 'id, createdAt, occurredAt, categoryId, *tags, updatedAt, serverVersion',
+      outbox: '++seq, entityId',
+      syncMeta: 'userId',
+    })
 
     // ---------------------------------------------------------------------
     // Migration template — DO NOT REMOVE
