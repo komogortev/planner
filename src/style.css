@@ -77,8 +77,9 @@
 
   /* Warm wool backdrop: tinted fractal-noise grain over a base colour, plus a faint twill and a vignette. Pages hover
      over it as sheets. The grain is a data-URI SVG, so there is no image to load. */
+  /* The whole textile as one stack: the page behind everything (body, fixed). The pager's backdrop rebuilds the same
+     thing from separate layers (.t-folds / .t-accents / .t-weave below) so the folds can be pulled on their own. */
   body {
-    @apply text-slate-100 antialiased;
     background-color: var(--backdrop);
     background-image:
       radial-gradient(120% 90% at 50% 30%, transparent 40%, var(--vignette) 100%),
@@ -93,8 +94,12 @@
     background-blend-mode: normal, normal, normal, normal, normal, var(--fold-blend);
     background-repeat: repeat, repeat, repeat, no-repeat, no-repeat, no-repeat;
     background-position: 0 0, 0 0, 0 0, 0 0, 0 0, center;
+  }
+  body {
+    @apply text-slate-100 antialiased;
     background-attachment: fixed;
   }
+
 
   * {
     @apply box-border;
@@ -146,5 +151,34 @@
 
   .nav-link-active {
     @apply bg-slate-800 text-slate-100;
+  }
+}
+
+@layer components {
+  /* The pager's backdrop, layer by layer (same look as the body stack): colour, then the folds (overlay), the two accent
+     folds, and on top the weave (vignette, twill, grain). The folds + accents are one pulled-cloth group (Pager.vue). */
+  .t-base {
+    background-color: var(--backdrop);
+  }
+  .t-folds {
+    position: absolute;
+    inset: -4% -16%; /* spare room, so a stretched, tilted or twisted layer never shows its edge */
+    background: var(--folds) center / cover no-repeat;
+    mix-blend-mode: var(--fold-blend);
+  }
+  .t-accents {
+    position: absolute;
+    inset: -4% -16%;
+    background:
+      linear-gradient(150deg, transparent 73%, var(--fold-shadow) 80%, var(--fold-light) 87%, transparent 94%),
+      linear-gradient(150deg, transparent 20%, var(--fold-shadow) 28%, var(--fold-light) 35%, transparent 43%);
+  }
+  .t-weave {
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(120% 90% at 50% 30%, transparent 40%, var(--vignette) 100%),
+      repeating-linear-gradient(45deg, var(--twill) 0 calc(var(--twill-step) / 3), transparent calc(var(--twill-step) / 3) var(--twill-step)),
+      var(--grain) 0 0 / var(--grain-size) var(--grain-size);
   }
 }

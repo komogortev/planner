@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import HomeView from '@/views/HomeView.vue'
 import DashboardView from '@/views/DashboardView.vue'
 import SettingsView from '@/views/SettingsView.vue'
-import { PAGES, dragOffset, pageIndex, settle } from './pages'
+import { PAGES, PARALLAX, backdropShift, backdropWidth, dragOffset, pageIndex, pullCss, pullTransform, settle } from './pages'
 
 // The three main pages sit side by side on one track. The track follows the finger while dragging and eases to the
 // settled page on release, so the next page pushes the current one away (native page-swap feel). The route is the
@@ -14,6 +14,7 @@ const router = useRouter()
 const index = computed(() => Math.max(0, pageIndex(route.path)))
 
 const dragPx = ref(0)
+const pull = ref(0) // the drag as a fraction of the page width, for the cloth-pull effect
 const dragging = ref(false)
 let start: { x: number; y: number; t: number; axis: 'x' | 'y' | null } | null = null
 let width = 1
@@ -40,7 +41,10 @@ function onTouchMove(e: TouchEvent): void {
     start.axis = Math.abs(dx) > Math.abs(dy) * 1.2 ? 'x' : 'y'
     dragging.value = start.axis === 'x'
   }
-  if (start.axis === 'x') dragPx.value = dragOffset(index.value, dx)
+  if (start.axis === 'x') {
+    dragPx.value = dragOffset(index.value, dx)
+    pull.value = dragPx.value / width
+  }
 }
 
 function onTouchEnd(e: TouchEvent): void {
@@ -56,8 +60,23 @@ function onTouchEnd(e: TouchEvent): void {
   const target = settle(index.value, dx, vx, width)
   dragging.value = false // re-enables the easing; the transform now animates to the settled position
   dragPx.value = 0
+  pull.value = 0 // the cloth relaxes back (elastic ease, see .pulled)
   if (target !== index.value) void router.push(PAGES[target]!.to)
 }
+
+// The backdrop rides along at PARALLAX of the pages' distance (same easing, so it stays locked to the drag).
+const backdropStyle = computed(() => {
+  const { screens, px } = backdropShift(index.value, dragPx.value)
+  return {
+    width: `${backdropWidth() * 100}%`,
+    transform: `translate3d(calc(${screens * 100}cqw + ${px}px), 0, 0)`,
+  }
+})
+
+// The folds and the accent folds are pulled with the finger (shifted, stretched, squeezed, sheared, twisted, tilted —
+// the accents on their own schedule, so the folds change shape relative to each other) and spring back on release.
+const foldsStyle = computed(() => ({ transform: pullCss(pullTransform(pull.value, 'folds')) }))
+const accentsStyle = computed(() => ({ transform: pullCss(pullTransform(pull.value, 'accents')) }))
 
 const trackStyle = computed(() => ({
   transform: `translate3d(calc(${-index.value * 100}% + ${dragPx.value}px), 0, 0)`,
@@ -72,6 +91,11 @@ const trackStyle = computed(() => ({
     @touchend.passive="onTouchEnd"
     @touchcancel.passive="onTouchEnd"
   >
+    <div class="backdrop t-base" :class="{ 'track-dragging': dragging }" :style="backdropStyle" aria-hidden="true">
+      <div class="t-folds pulled" :class="{ 'pulled-live': dragging }" :style="foldsStyle" />
+      <div class="t-accents pulled" :class="{ 'pulled-live': dragging }" :style="accentsStyle" />
+      <div class="t-weave" />
+    </div>
     <div class="track" :class="{ 'track-dragging': dragging }" :style="trackStyle">
       <!-- inert: an off-screen page is neither focusable nor read by a screen reader. -->
       <section class="slot" :inert="index !== 0"><div class="sheet"><HomeView /></div></section>
@@ -83,11 +107,31 @@ const trackStyle = computed(() => ({
 
 <style scoped>
 .pager {
+  position: relative;
+  container-type: inline-size; /* cqw = the pager's width, for the backdrop's parallax offset */
   height: 100%;
   overflow: hidden;
   touch-action: pan-y; /* the browser keeps vertical scroll; horizontal drags are ours */
 }
+.backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  transition: transform 320ms cubic-bezier(0.22, 0.85, 0.28, 1);
+  will-change: transform;
+  pointer-events: none;
+}
+.pulled {
+  /* Springy: overshoots a touch on release, like cloth settling back into its folds. */
+  transition: transform 560ms cubic-bezier(0.3, 1.45, 0.5, 1);
+  will-change: transform;
+}
+.pulled-live {
+  transition: transform 80ms linear; /* follows the finger, lightly smoothed */
+}
 .track {
+  position: relative; /* above the backdrop */
   display: flex;
   height: 100%;
   transition: transform 320ms cubic-bezier(0.22, 0.85, 0.28, 1);
@@ -118,7 +162,9 @@ const trackStyle = computed(() => ({
   padding: 24px 56px 56px;
 }
 @media (prefers-reduced-motion: reduce) {
-  .track {
+  .track,
+  .backdrop,
+  .pulled {
     transition-duration: 1ms;
   }
 }
