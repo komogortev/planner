@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { backdropShift, backdropWidth, dragOffset, pageIndex, pullTransform, settle } from '../pages'
+import { backdropShift, backdropWidth, dragOffset, pageIndex, pullCss, pullTransform, settle } from '../pages'
 
 describe('settle', () => {
   it('changes page past 22% of the width, in the drag direction', () => {
@@ -64,18 +64,40 @@ describe('parallax backdrop', () => {
 })
 
 describe('pullTransform (cloth being pulled)', () => {
-  it('is the identity at rest', () => {
-    expect(pullTransform(0)).toEqual({ shift: 0, stretch: 1, skewDeg: -0 })
+  it('is the identity at rest, for both layers', () => {
+    for (const layer of ['folds', 'accents'] as const) {
+      const t = pullTransform(0, layer)
+      expect(t.shift).toBeCloseTo(0)
+      expect(t.scaleX).toBe(1)
+      expect(t.scaleY).toBe(1)
+      expect(t.skewDeg).toBeCloseTo(0)
+      expect(t.rotateDeg).toBeCloseTo(0)
+      expect(t.tiltDeg).toBeCloseTo(0)
+    }
   })
-  it('follows the drag direction, stretches either way, and is bounded', () => {
-    const l = pullTransform(-0.5)
-    const r = pullTransform(0.5)
+  it('mirrors left/right, stretches while squeezing, and saturates at full strength', () => {
+    const l = pullTransform(-0.3)
+    const r = pullTransform(0.3)
     expect(l.shift).toBeCloseTo(-r.shift)
     expect(l.skewDeg).toBeCloseTo(-r.skewDeg)
-    expect(l.stretch).toBeCloseTo(r.stretch)
-    expect(l.stretch).toBeGreaterThan(1)
-    const big = pullTransform(5) // a drag beyond a full page width is clamped
-    expect(big.stretch).toBeCloseTo(1.07)
-    expect(Math.abs(big.shift)).toBeCloseTo(0.06)
+    expect(l.rotateDeg).toBeCloseTo(-r.rotateDeg)
+    expect(l.scaleX).toBeCloseTo(r.scaleX)
+    expect(l.scaleX).toBeGreaterThan(1)
+    expect(l.scaleY).toBeLessThan(1)
+    const half = pullTransform(0.5) // gain 2: half a page is already full strength
+    const full = pullTransform(5)
+    expect(half.scaleX).toBeCloseTo(full.scaleX)
+    expect(full.scaleX).toBeCloseTo(1.2)
+    expect(full.scaleY).toBeCloseTo(0.93)
+  })
+  it('the accent folds move further and twist the other way (shape changes, not just position)', () => {
+    const f = pullTransform(0.4, 'folds')
+    const a = pullTransform(0.4, 'accents')
+    expect(Math.abs(a.shift)).toBeGreaterThan(Math.abs(f.shift))
+    expect(Math.sign(a.rotateDeg)).toBe(-Math.sign(f.rotateDeg))
+  })
+  it('the CSS string carries every part, and the rest state is neutral', () => {
+    const css = pullCss(pullTransform(0.25))
+    for (const part of ['translate3d', 'perspective', 'rotateY', 'rotate(', 'skewX', 'scale(']) expect(css).toContain(part)
   })
 })

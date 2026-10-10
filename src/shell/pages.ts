@@ -59,13 +59,53 @@ export function backdropShift(
 }
 
 /**
- * "Cloth being pulled" (owner's test): while a page is dragged, the folds are shifted, stretched and sheared a little
- * in the drag direction, then ease back — strong enough cloth to keep its folds. `p` is the drag as a fraction of the
- * page width (clamped to ±1). At rest (p = 0) everything is the identity, so the folds sit exactly as designed.
+ * "Cloth being pulled" (owner's test): while a page is dragged, the folds are shifted, stretched, squeezed, sheared,
+ * twisted and tilted in the drag direction, then ease back — strong enough cloth to keep its folds. `p` is the drag as
+ * a fraction of the page width; the effect reaches full strength at `1 / GAIN` of a page (so an ordinary swipe is
+ * clearly visible) and is clamped there. At rest (p = 0) everything is the identity.
+ *
+ * The folds and the two accent folds use different multipliers (accents shift further and twist the other way), so
+ * their positions relative to each other change too — the shape changes, not only the position.
  */
-export const PULL = { shift: 0.06, stretch: 0.07, skewDeg: 2.5 } as const
+export const PULL = {
+  gain: 2, // full strength at half a page of drag
+  shift: 0.16, // × page width
+  stretch: 0.2, // extra width along the pull
+  squeeze: 0.07, // height lost as it stretches (cloth keeps its area, roughly)
+  skewDeg: 6,
+  rotateDeg: 2.2,
+  tiltDeg: 9, // perspective tilt: the far side of a fold foreshortens
+} as const
 
-export function pullTransform(p: number): { shift: number; stretch: number; skewDeg: number } {
-  const c = Math.max(-1, Math.min(1, p))
-  return { shift: c * PULL.shift, stretch: 1 + Math.abs(c) * PULL.stretch, skewDeg: -c * PULL.skewDeg }
+export type PullLayer = 'folds' | 'accents'
+const LAYER = { folds: { shift: 1, rotate: 1 }, accents: { shift: 1.6, rotate: -1.3 } } as const
+
+export interface Pull {
+  shift: number
+  scaleX: number
+  scaleY: number
+  skewDeg: number
+  rotateDeg: number
+  tiltDeg: number
+}
+
+export function pullTransform(p: number, layer: PullLayer = 'folds'): Pull {
+  const c = Math.max(-1, Math.min(1, p * PULL.gain))
+  const k = LAYER[layer]
+  return {
+    shift: c * PULL.shift * k.shift,
+    scaleX: 1 + Math.abs(c) * PULL.stretch,
+    scaleY: 1 - Math.abs(c) * PULL.squeeze,
+    skewDeg: -c * PULL.skewDeg,
+    rotateDeg: c * PULL.rotateDeg * k.rotate,
+    tiltDeg: -c * PULL.tiltDeg,
+  }
+}
+
+/** The CSS transform for a Pull (`cqw` = the pager's width). */
+export function pullCss(t: Pull): string {
+  return (
+    `translate3d(${t.shift * 100}cqw, 0, 0) perspective(900px) rotateY(${t.tiltDeg}deg) rotate(${t.rotateDeg}deg) ` +
+    `skewX(${t.skewDeg}deg) scale(${t.scaleX}, ${t.scaleY})`
+  )
 }

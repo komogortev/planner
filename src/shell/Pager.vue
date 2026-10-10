@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import HomeView from '@/views/HomeView.vue'
 import DashboardView from '@/views/DashboardView.vue'
 import SettingsView from '@/views/SettingsView.vue'
-import { PAGES, PARALLAX, backdropShift, backdropWidth, dragOffset, pageIndex, pullTransform, settle } from './pages'
+import { PAGES, PARALLAX, backdropShift, backdropWidth, dragOffset, pageIndex, pullCss, pullTransform, settle } from './pages'
 
 // The three main pages sit side by side on one track. The track follows the finger while dragging and eases to the
 // settled page on release, so the next page pushes the current one away (native page-swap feel). The route is the
@@ -73,11 +73,10 @@ const backdropStyle = computed(() => {
   }
 })
 
-// The folds + accents are pulled a little with the finger (shifted, stretched, sheared), and spring back on release.
-const pulledStyle = computed(() => {
-  const t = pullTransform(pull.value)
-  return { transform: `translate3d(${t.shift * 100}cqw, 0, 0) scaleX(${t.stretch}) skewX(${t.skewDeg}deg)` }
-})
+// The folds and the accent folds are pulled with the finger (shifted, stretched, squeezed, sheared, twisted, tilted —
+// the accents on their own schedule, so the folds change shape relative to each other) and spring back on release.
+const foldsStyle = computed(() => ({ transform: pullCss(pullTransform(pull.value, 'folds')) }))
+const accentsStyle = computed(() => ({ transform: pullCss(pullTransform(pull.value, 'accents')) }))
 
 const trackStyle = computed(() => ({
   transform: `translate3d(calc(${-index.value * 100}% + ${dragPx.value}px), 0, 0)`,
@@ -93,8 +92,8 @@ const trackStyle = computed(() => ({
     @touchcancel.passive="onTouchEnd"
   >
     <div class="backdrop t-base" :class="{ 'track-dragging': dragging }" :style="backdropStyle" aria-hidden="true">
-      <div class="t-folds pulled" :class="{ 'pulled-live': dragging }" :style="pulledStyle" />
-      <div class="t-accents pulled" :class="{ 'pulled-live': dragging }" :style="pulledStyle" />
+      <div class="t-folds pulled" :class="{ 'pulled-live': dragging }" :style="foldsStyle" />
+      <div class="t-accents pulled" :class="{ 'pulled-live': dragging }" :style="accentsStyle" />
       <div class="t-weave" />
     </div>
     <div class="track" :class="{ 'track-dragging': dragging }" :style="trackStyle">

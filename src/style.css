@@ -144,13 +144,13 @@
   }
   .t-folds {
     position: absolute;
-    inset: 0 -8%; /* spare width, so a stretched or sheared layer never shows its edge */
+    inset: -4% -16%; /* spare room, so a stretched, tilted or twisted layer never shows its edge */
     background: var(--folds) center / cover no-repeat;
     mix-blend-mode: var(--fold-blend);
   }
   .t-accents {
     position: absolute;
-    inset: 0 -8%;
+    inset: -4% -16%;
     background:
       linear-gradient(150deg, transparent 73%, var(--fold-shadow) 80%, var(--fold-light) 87%, transparent 94%),
       linear-gradient(150deg, transparent 20%, var(--fold-shadow) 28%, var(--fold-light) 35%, transparent 43%);
