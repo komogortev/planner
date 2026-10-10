@@ -3,6 +3,8 @@
 //
 //   node api/scripts/smoke.mjs            production (Pages + workers.dev)
 //   node api/scripts/smoke.mjs --local    local dev (app :5176, api :8787 — start both launch configs first)
+//   node api/scripts/smoke.mjs --rate-limit   also trip the /auth/* limit on purpose (known positive for the deployed
+//                                         limiter; this address is refused on /auth for ~1 minute afterwards). Production only.
 //
 // Every check has an expected outcome; the negative controls (refusals) matter as much as the passes.
 
@@ -58,6 +60,15 @@ const checks = [
     return r.headers.get('access-control-allow-origin') === null
   }],
   ['logout without a session → 204 (idempotent)', async () => (await fetch(`${API}/auth/logout`, { method: 'POST' })).status === 204],
+  ...(process.argv.includes('--rate-limit') && !local ? [['rate limit: /auth/* answers 429 + Retry-After once this address is over', async () => {
+    // Limit is 20/min per address (wrangler.toml). A no-session logout is a harmless no-op. Without a 429 the binding is
+    // either not enforcing (plan or config) or the address header is missing — both are a failed deploy, not a pass.
+    for (let i = 0; i < 40; i++) {
+      const r = await fetch(`${API}/auth/logout`, { method: 'POST' })
+      if (r.status === 429) return r.headers.get('retry-after') === '60'
+    }
+    throw new Error('40 requests, no 429')
+  }]] : []),
 ]
 
 console.log(`smoke: ${local ? 'LOCAL' : 'PRODUCTION'}\n  app ${APP}\n  api ${API}\n`)
