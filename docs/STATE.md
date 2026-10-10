@@ -1,11 +1,11 @@
 # Personal Planner — STATE
 
 ## SNAPSHOT
-- **Phase/Last:** H1 **S2 Backend** steps 0–3 ✅; client quiet base + gate deployed 2026-10-10 (#24–#26, prod app `48e7c0d`, Worker unchanged `e87b1e4e`). Home capture (Dexie v4 `entries`/`outbox`/`syncMeta`; dictophone prop: cassette window = the text area itself (tap = focus, no overlay), record key = Capture, LED flashes on capture) in PR #27. Vibe-code mode (owner).
-- **Working:** (in PR) finger-following pager, warm textile theme, Settings → Appearance light/dark, glass sign-in dialog. prod: 3 swipe pages + page dots + hidden menu + coat-pocket gate; `pnpm smoke` 12/12. Local: Home captures an entry + outbox row in one transaction; "N not synced yet" = persisted outbox size (survives reload). `pnpm check` app 103 · worker 18.
-- **Broken:** captured entries do not leave the device yet — no flush until S2 step 4 + the client `sync/` loop. The old `sync.ts` "unsynced" flag is the GitHub-legacy one. Not verified: a real prod sign-in through the gate (owner's action); swipe vs Android gesture bar.
-- **Blocker:** none.
-- **Next:** S2 step 4 sync push/pull/query (§6; §10 idempotency · isolation · stale-base · no resurrection) → client flush/pull loop (S3 rest: entries list, storage usage, persist()) → steps 5–7.
+- **Phase/Last:** H1 **S2 Backend** steps 0–3 ✅; client quiet base + gate + Home capture deployed (#24–#27, prod app `6244468`, Worker unchanged `e87b1e4e`). PR #28 (pager · textile theme · light/dark · glass) open, not merged. Vibe-code mode (owner).
+- **Working:** prod: 3 swipe pages, page dots + hidden menu, coat-pocket gate, dictophone Home capture (entry + outbox in one Dexie v4 transaction; "N not synced yet" = persisted outbox). In #28 (preview-verified only): finger-following pager, warm textile backdrop with folds, Settings → Appearance light/dark, frosted-glass cards + sign-in dialog. `pnpm check` app 108 · worker 18.
+- **Broken:** captured entries do not leave the device — no flush until S2 step 4 + the client `sync/` loop. Not verified on a real Android phone: pager drag vs the browser's own scroll (fixed in #28 by `touch-action`), keyboard over the dictophone window, blur cost during swipes, a real provider sign-in through the gate.
+- **Blocker:** none. Local dev quirks: Tailwind reads its config at server start (restart after editing it); `planner-api` must be running for local sign-in, and it rejects a fake token (401 → signed out).
+- **Next:** merge + deploy #28 · S2 step 4 sync push/pull/query (§6; §10 idempotency · isolation · stale-base · no resurrection) → client flush/pull loop (entries list, storage usage, persist()) → steps 5–7. Test in flight: backdrop parallax (1/3 of the page movement).
 ---
 
 ## Context
@@ -46,6 +46,7 @@
 
 Full log: PROJECT.md → Decisions log. Latest:
 
+- 2026-10-10 — Pager + textile + light/dark + glass (owner asks, iterated live; PR #28): see PROJECT.md. Tuning notes worth keeping: opacity belongs on the background only (a whole-element 80% faded text and buttons); a 3x larger weave lost the cloth feel while a separate large-fold layer gave it back; folds read as 'sand dunes' at slope 3 / elevation 34 and are calm at slope 1.5 plus two placed accents; `touch-action` does not inherit past a scroll container.
 - 2026-10-10 — Home capture (owner asks, Claude built): quickdraw = one textarea + Capture; `captureEntry` cleans through the shared `domain/clean.ts` and writes entry + outbox row in one Dexie transaction (empty/over-limit write nothing; a failing outbox write rolls the entry back — tested). Dexie v4 is additive. Leading whitespace is kept (cleaning trims trailing only — owner text is never rewritten). Client deployed with #26; the Worker needed no deploy (no `api/` change since prod).
 - 2026-10-10 — Quiet base (owner asks, Claude built): financial screens off-nav and reachable by URL only (`/legacy`, `/commitments`…), GitHub sync folded into a collapsed "Legacy export"; nothing deleted — deletion stays on the owner's explicit go after a final export. Phone shell per his notes: swipe Home/Dashboard/Settings (no wrap), bottom zone 12% of screen height shows page dots (active = indigo accent), touch raises the menu. Sign-in gate: coat-pocket photo, orange ring over its button opens the provider dialog; route guard on the stored token; `VITE_SKIP_AUTH=1` bypasses in dev only.
 - 2026-10-10 — Dev pipeline (owner asks, Claude built): production only runs `main` — the Worker deploys through a
