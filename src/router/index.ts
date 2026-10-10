@@ -8,6 +8,11 @@ export const router = createRouter({
       name: 'home',
       component: () => import('@/views/HomeView.vue'),
     },
+    {
+      path: '/dashboard',
+      name: 'dashboard',
+      component: () => import('@/views/DashboardView.vue'),
+    },
     // Financial screens: out of the nav (quiet base), reachable by URL only until the financial domain is deleted.
     {
       path: '/legacy',
