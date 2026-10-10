@@ -9,3 +9,8 @@ coverage
 dev-dist
 sources
 sources/*/**
+
+# Cloudflare Worker (api/): local secrets and state — never commit
+.dev.vars
+.dev.vars.*
+.wrangler
