@@ -4,7 +4,7 @@
 - **Phase/Last:** H1 S0 closed (2026-10-09) — spec v2 merged (#8, #10), §12 defaults confirmed. **Planner has workspace priority until further notice (owner).** Core loop: invite-only accounts (Google/GitHub), capture page as home, outbox sync to a Cloudflare Worker + D1 backend. Docs only.
 - **Working:** deployed app (https://komogortev.github.io/planner/) — L1 sync, L2-S1 categories, frozen financial domain. 54/54 vitest at last run (2026-06-01, not re-run).
 - **Broken:** sync's "unsynced" flag lives only in memory (`src/stores/sync.ts:55`) — offline write, close, reopen → status no longer says unsynced. Fixed by the H1 outbox.
-- **Blocker:** none for S1. Owner setup first: Cloudflare account, GitHub + Google OAuth apps (H1-S1-SPIKE §2).
+- **Blocker:** none. Owner setup done 2026-10-09: Cloudflare account (2FA), API host `planner-api.komogortev.workers.dev`, GitHub OAuth apps (dev + prod; secrets generated in-session), Google client (Testing).
 - **Next:** S1 spike per `docs/H1-S1-SPIKE.md` — free-tier CPU (10 ms), iPhone home-screen sign-in, CORS; 1–2 sessions.
 ---
 
