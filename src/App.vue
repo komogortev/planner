@@ -3,6 +3,7 @@ import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { computed } from 'vue'
 import CleanupBanner from '@/components/CleanupBanner.vue'
 import EnvBanner from '@/components/EnvBanner.vue'
+import VersionBadge from '@/components/VersionBadge.vue'
 import InstallButton from '@/components/InstallButton.vue'
 import OnlineIndicator from '@/components/OnlineIndicator.vue'
 import SyncStatusPill from '@/components/SyncStatusPill.vue'
@@ -63,5 +64,7 @@ const currentPath = computed(() => route.path)
     <main class="flex-1">
       <RouterView />
     </main>
+
+    <VersionBadge />
   </div>
 </template>
