@@ -124,6 +124,7 @@ Order is strict through H3 (H1b sits between H1 and H2). H4 and H5 may swap on o
 | 2026-10-09 | **Accounts invite-only and multi-tenant; Google/GitHub sign-in; backend may read content; $0 now, $5 later** (owner) | Multi-tenant schema costs little now and avoids a rewrite; invite-only defers abuse handling and public terms. Server-readable content is what cleaning, query, server lenses and the remote MCP endpoint need |
 | 2026-10-09 | **H1 narrowed to the core loop; organising moves to a new H1b** | The first loop is capture → sync → serve; organising needs the backend to exist. `Entry.categoryId` and `tags` ship in H1 so H1b needs no entry migration |
 | 2026-10-09 | **Frozen financial data stays frozen and is a deletion candidate** (owner) | Not scheduled; it never moves to the backend. Deleting is irreversible, so it needs the owner's explicit go, and a final export of the frozen tables comes first: dropping tables in a Dexie version wipes them on every device, and the data repo's history would be the only other copy |
+| 2026-10-09 | **Local eviction cut from H1; the device keeps a full copy** (owner) | Text grows ~4 MB a year, so the budget would not bind for years, and the exit week could not exercise the code path. Saves ~0.5 session. Re-enters when local usage passes 50 MB or attachments are scoped |
 
 ## Glossary
 
