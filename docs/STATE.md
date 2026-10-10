@@ -1,11 +1,11 @@
 # Personal Planner — STATE
 
 ## SNAPSHOT
-- **Phase/Last:** H1 **S2 Backend** steps 0–3 ✅; client **quiet base** 2026-10-10 (#24 nav + Settings cut · #25 phone shell · #26 sign-in gate). S1 closed (iPhone C deferred, owner on Android). Vibe-code mode (owner).
-- **Working:** prod `349515f` (Worker `e87b1e4e`) — #24–#26 are NOT deployed yet. Local: shell of 3 swipe pages (Home stub · Dashboard stub · Settings), bottom zone = page dots, touch → 12% menu; signed-out → coat-pocket gate (fixed 100px ring at screen centre, 58% down; the photo scales to put its button under it → provider dialog). `pnpm check` (app 99 · worker 18) green; `pnpm smoke` 12/12.
-- **Broken:** sync's "unsynced" flag is memory-only (`src/stores/sync.ts:55`), fixed by the H1 outbox. Not verified: a real provider round-trip through the new gate; real-Android swipe vs gesture bar.
-- **Blocker:** none. Ruleset proof: #24 read BLOCKED while CI ran.
-- **Next:** deploy the client (then one real sign-in on prod) · Home = quickdraw capture + Dexie v4 outbox (S3) · S2 step 4 sync push/pull/query (§6; §10 tests), then 5 rate limit, 6 auth carry-overs, 7 CPU read.
+- **Phase/Last:** H1 **S2 Backend** steps 0–3 ✅; client quiet base + gate deployed 2026-10-10 (#24–#26, prod app `48e7c0d`, Worker unchanged `e87b1e4e`). Home capture (Dexie v4 `entries`/`outbox`/`syncMeta`, quickdraw input) in PR. Vibe-code mode (owner).
+- **Working:** prod: 3 swipe pages + page dots + hidden menu + coat-pocket gate; `pnpm smoke` 12/12. Local: Home captures an entry + outbox row in one transaction; "N not synced yet" = persisted outbox size (survives reload). `pnpm check` app 103 · worker 18.
+- **Broken:** captured entries do not leave the device yet — no flush until S2 step 4 + the client `sync/` loop. The old `sync.ts` "unsynced" flag is the GitHub-legacy one. Not verified: a real prod sign-in through the gate (owner's action); swipe vs Android gesture bar.
+- **Blocker:** none.
+- **Next:** S2 step 4 sync push/pull/query (§6; §10 idempotency · isolation · stale-base · no resurrection) → client flush/pull loop (S3 rest: entries list, storage usage, persist()) → steps 5–7.
 ---
 
 ## Context
@@ -46,6 +46,7 @@
 
 Full log: PROJECT.md → Decisions log. Latest:
 
+- 2026-10-10 — Home capture (owner asks, Claude built): quickdraw = one textarea + Capture; `captureEntry` cleans through the shared `domain/clean.ts` and writes entry + outbox row in one Dexie transaction (empty/over-limit write nothing; a failing outbox write rolls the entry back — tested). Dexie v4 is additive. Leading whitespace is kept (cleaning trims trailing only — owner text is never rewritten). Client deployed with #26; the Worker needed no deploy (no `api/` change since prod).
 - 2026-10-10 — Quiet base (owner asks, Claude built): financial screens off-nav and reachable by URL only (`/legacy`, `/commitments`…), GitHub sync folded into a collapsed "Legacy export"; nothing deleted — deletion stays on the owner's explicit go after a final export. Phone shell per his notes: swipe Home/Dashboard/Settings (no wrap), bottom zone 12% of screen height shows page dots (active = indigo accent), touch raises the menu. Sign-in gate: coat-pocket photo, orange ring over its button opens the provider dialog; route guard on the stored token; `VITE_SKIP_AUTH=1` bypasses in dev only.
 - 2026-10-10 — Dev pipeline (owner asks, Claude built): production only runs `main` — the Worker deploys through a
   guard (clean tree, on `main`, equal to origin; version tagged with the sha) because Cloudflare recorded no source for

@@ -180,3 +180,25 @@ export interface AppSettings {
   /** ISO timestamp of last successful sync. null until first sync. */
   lastSyncedAt: string | null
 }
+
+// --- H1 entries (Dexie v4, H1-ENTRIES.md section 5.1) ---
+
+/** One queued change to ship to the backend. `payload` is the FULL entry at queue time (never a partial edit). */
+export interface OutboxRow {
+  seq?: number // auto-increment: flush order
+  entityId: string
+  op: 'upsert' | 'delete'
+  baseVersion: number | null // serverVersion the edit was made against
+  payload: import('@/domain/entry').EntryInput
+  attempts: number
+  lastError: string | null
+  queuedAt: string
+}
+
+/** One row per signed-in account: where the pull left off. */
+export interface SyncMeta {
+  userId: string
+  cursor: number // highest server_version pulled
+  lastPushAt: string | null
+  lastPullAt: string | null
+}
