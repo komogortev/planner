@@ -106,8 +106,12 @@ const trackStyle = computed(() => ({
 .sheet {
   position: relative;
   height: calc(100% + 80px); /* the page's own 100% plus the 24px above and 56px below it */
+  overflow-x: hidden; /* never a horizontal scroller: horizontal drags are the pager's */
   overflow-y: auto; /* a scroll box clips on both axes, so it is made wider/taller than the page: */
-  overscroll-behavior: contain;
+  overscroll-behavior: none; /* no edge glow / scroll chaining from the page */
+  /* touch-action does not inherit past a scroll container, so the pager's pan-y has to be restated here; without it
+     the browser treats a horizontal drag on the page as its own scroll and fights the pager for the gesture. */
+  touch-action: pan-y;
   /* ...the page keeps its layout (negative margin = padding), but shadows get 56px of room on every side, spilling
      into the neighbouring page when they fall that way. Only the screen edge itself (.pager) cuts them. */
   margin: -24px -56px -56px;
