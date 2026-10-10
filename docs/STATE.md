@@ -1,7 +1,7 @@
 # Personal Planner — STATE
 
 ## SNAPSHOT
-- **Phase/Last:** H1 **S2 Backend** steps 0–3 ✅; client quiet base + gate deployed 2026-10-10 (#24–#26, prod app `48e7c0d`, Worker unchanged `e87b1e4e`). Home capture (Dexie v4 `entries`/`outbox`/`syncMeta`; dictophone prop: cassette window = input via a full-screen writing sheet, record key = Capture, LED flashes on capture) in PR #27. Vibe-code mode (owner).
+- **Phase/Last:** H1 **S2 Backend** steps 0–3 ✅; client quiet base + gate deployed 2026-10-10 (#24–#26, prod app `48e7c0d`, Worker unchanged `e87b1e4e`). Home capture (Dexie v4 `entries`/`outbox`/`syncMeta`; dictophone prop: cassette window = the text area itself (tap = focus, no overlay), record key = Capture, LED flashes on capture) in PR #27. Vibe-code mode (owner).
 - **Working:** prod: 3 swipe pages + page dots + hidden menu + coat-pocket gate; `pnpm smoke` 12/12. Local: Home captures an entry + outbox row in one transaction; "N not synced yet" = persisted outbox size (survives reload). `pnpm check` app 103 · worker 18.
 - **Broken:** captured entries do not leave the device yet — no flush until S2 step 4 + the client `sync/` loop. The old `sync.ts` "unsynced" flag is the GitHub-legacy one. Not verified: a real prod sign-in through the gate (owner's action); swipe vs Android gesture bar.
 - **Blocker:** none.
