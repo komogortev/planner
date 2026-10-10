@@ -127,6 +127,9 @@ Order is strict through H3 (H1b sits between H1 and H2). H4 and H5 may swap on o
 | 2026-10-09 | **Frozen financial data stays frozen and is a deletion candidate** (owner) | Not scheduled; it never moves to the backend. Deleting is irreversible, so it needs the owner's explicit go, and a final export of the frozen tables comes first: dropping tables in a Dexie version wipes them on every device, and the data repo's history would be the only other copy |
 | 2026-10-09 | **Local eviction cut from H1; the device keeps a full copy** (owner) | Text grows ~4 MB a year, so the budget would not bind for years, and the exit week could not exercise the code path. Saves ~0.5 session. Re-enters when local usage passes 50 MB or attachments are scoped |
 | 2026-10-09 | **H1 §12 Q3–Q9 defaults confirmed; the planner takes workspace priority until further notice** (owner) | Closes S0. engine-dev's Release 1 tracks pause in place; nothing there is abandoned |
+| 2026-10-09 | **Auth = own OAuth code + Hono + own `sessions` table** (S1, closes H1 Q1) | Arctic was deprecated by its maintainer 2026-07; Better Auth is 210 KB gz and cannot be cheaper on CPU. Measured p50 1–5 ms per route on the free plan |
+| 2026-10-10 | **Vibe-code mode: Claude owns code structure, architecture and the deploy chain** (owner) | Owner: "attempt to fully rely on you for code structure and architecture". Claude decides and records; money, publishing and irreversible deletes still go to the owner. Merges of planner PRs by Claude via a repo-scoped permission rule |
+| 2026-10-10 | **S1 spike closed: A ✅ B ✅, C (iPhone) deferred** (owner: his phone is Android) | The exit week runs on Android, whose installed-app sign-in return behaves like desktop Chromium. C re-enters before the first invitee with an iPhone/iPad; the handoff-by-polling fallback is additive to the backend, so S2 does not wait on it |
 
 ## Glossary
 

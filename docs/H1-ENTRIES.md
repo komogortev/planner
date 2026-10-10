@@ -1,7 +1,7 @@
 # H1 — Core loop: accounts, capture, sync (Spec)
 
-**Status: S0 closed, 2026-10-09** — §12 Q3–Q9 confirmed by the owner; Q1–Q2 are settled by the S1 spike
-([H1-S1-SPIKE.md](H1-S1-SPIKE.md)). Supersedes the 2026-10-08 draft (whole-snapshot merge over the GitHub data repo). Terms per [VOCABULARY.md](VOCABULARY.md); invariants per
+**Status: S1 closed, 2026-10-10; S2 next** — §12 Q3–Q9 confirmed by the owner; Q1 settled and Q2 deferred by the
+S1 spike ([H1-S1-SPIKE.md](H1-S1-SPIKE.md)). Supersedes the 2026-10-08 draft (whole-snapshot merge over the GitHub data repo). Terms per [VOCABULARY.md](VOCABULARY.md); invariants per
 [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## 1. Goal
@@ -14,7 +14,7 @@ The first full loop of the helper, nothing more:
 4. The app syncs with the **backend** whenever it can.
 5. The backend authenticates the caller, cleans and stores the entry, and serves entries back on query.
 
-**Acceptance (exit).** One week of daily capture on the phone (installed PWA) and the desktop (browser), both signed in
+**Acceptance (exit).** One week of daily capture on the phone (installed PWA — the owner's is Android) and the desktop (browser), both signed in
 to the same account:
 
 - every entry written on either device is present on both and on the backend;
@@ -120,10 +120,12 @@ syncMeta: 'userId'
 ### 5.2 Backend (D1)
 
 ```sql
-users           (id TEXT PK, email TEXT UNIQUE, provider TEXT, provider_sub TEXT, created_at TEXT,
+users           (id TEXT PK, email TEXT UNIQUE, name TEXT, created_at INTEGER,
                  version_seq INTEGER NOT NULL DEFAULT 0)          -- per-user change counter
+identities      (provider TEXT, provider_user_id TEXT, user_id TEXT, PK (provider, provider_user_id))
+                                                                  -- S1: one user, many providers
 invites         (code TEXT PK, email TEXT, created_by TEXT, used_by TEXT, expires_at TEXT)
-sessions        (owned by the auth library; token hash, user_id, expires_at)
+sessions        (token_hash TEXT PK, user_id, created_at, expires_at)   -- S1: own table, SHA-256 of the token
 entries         (user_id TEXT, id TEXT, body TEXT, created_at TEXT, occurred_at TEXT, category_id TEXT,
                  tags TEXT /* JSON array */, updated_at TEXT, deleted_at TEXT,
                  server_version INTEGER NOT NULL, received_at TEXT,
@@ -255,14 +257,14 @@ Q3–Q9: **defaults confirmed by the owner 2026-10-09** and binding. Q1–Q2: se
 
 | # | Question | Default |
 |---|---|---|
-| Q1 | Auth library | **Decided in the S1 spike after `dependency-audit`**: Better Auth (social providers; reaches D1 through Kysely/Drizzle; bearer plugin needed for cross-site) vs a minimal OAuth client (Arctic) + our own `sessions` table. Pick the one under 10 ms CPU and the smaller bundle |
-| Q2 | **iPhone home-screen sign-in round trip** — whether the OAuth redirect returns into the installed app or strands the session in Safari's storage | **Test on the device in the S1 spike (step 0).** Known fallback: handoff by polling — the app opens sign-in, then polls `/auth/handoff/<id>` until the Worker has the result |
+| Q1 | Auth library | **Settled (S1): own OAuth code (fetch + Web Crypto) + Hono + our own `sessions` table.** Arctic was deprecated by its maintainer 2026-07; Better Auth is 210 KB gz. p50 1–5 ms CPU per route |
+| Q2 | **iPhone home-screen sign-in round trip** — whether the OAuth redirect returns into the installed app or strands the session in Safari's storage | **Deferred (owner, 2026-10-10): the owner's phone is Android.** Re-entry: before the first invitee with an iPhone/iPad, or if the owner moves to one. Known fallback: handoff by polling — the app opens sign-in, then polls `/auth/handoff/<id>` until the Worker has the result |
 | Q3 | Conflict policy | **Apply + keep the replaced body in `entry_revisions` (Recommended)** (§6.3) |
 | Q4 | Owner may delete an entry | **Yes, soft delete with confirm (Recommended)**; purge after 30 days is a later decision |
 | Q5 | Home route | **Capture page is `/` (Recommended)**; Dashboard retires with the financial screens |
 | Q6 | Invitee data rights (export, delete account) | **Required before the first invitee beyond the owner (Recommended)**; not in H1 if H1 runs owner-only |
 | Q7 | Text query in `/entries` | **`LIKE` in H1; D1 FTS5 when search becomes a feature (Recommended)** |
-| Q8 | Custom domain (client + API same site → cookies possible) | **No, stay on `github.io` + `workers.dev` (Recommended)**; revisit if bearer tokens prove a problem |
+| Q8 | Custom domain (client + API same site → cookies possible) | **No custom domain; bearer tokens (Recommended).** *Amended 2026-10-10 (Claude, delegated): the client moves from the shared `komogortev.github.io` to its own free `*.pages.dev` origin at S4* — see [H1-S2-BACKEND.md](H1-S2-BACKEND.md) Decisions |
 | Q9 | Existing GitHub sync after H1 | **Kept for the frozen financial tables only (Recommended)**; entries never enter `data.json` |
 
 ## 13. Slices of work
@@ -270,8 +272,8 @@ Q3–Q9: **defaults confirmed by the owner 2026-10-09** and binding. Q1–Q2: se
 | Slice | Content | Done when |
 |---|---|---|
 | S0 ✅ | This spec; §12 closed | owner sign-off (2026-10-09) |
-| S1 **Spike** (step 0) — [H1-S1-SPIKE.md](H1-S1-SPIKE.md) | Worker + D1 hello on the free plan; OAuth with GitHub and Google from the deployed Pages origin; **iPhone home-screen sign-in**; CPU per request measured | all three work, or the fallback is chosen with evidence |
-| S2 Backend | D1 schema + migrations, invite script, push/pull/query, cleaning, rate limit, worker tests (§10) | worker tests green incl. negative controls |
+| S1 ✅ **Spike** (closed 2026-10-10; iPhone deferred) — [H1-S1-SPIKE.md](H1-S1-SPIKE.md) | Worker + D1 hello on the free plan; OAuth with GitHub and Google from the deployed Pages origin; **iPhone home-screen sign-in**; CPU per request measured | all three work, or the fallback is chosen with evidence |
+| S2 Backend — [H1-S2-BACKEND.md](H1-S2-BACKEND.md) | D1 schema + migrations, invite script, push/pull/query, cleaning, rate limit, worker tests (§10) | worker tests green incl. negative controls |
 | S3 Client | Dexie v4, capture page as home, sign-in screens, `sync/` loop, outbox status, `persist()`, storage usage in Settings | capture → sync → second device shows it, in dev |
 | S4 Cut-over | financial screens out of nav, deploy Worker + Pages, nightly export cron, owner account seeded | owner signed in on phone + desktop in production |
 | S5 Exit week | daily real use; acceptance §1 checked item by item | §1 all true |

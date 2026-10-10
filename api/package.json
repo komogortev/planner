@@ -6,6 +6,7 @@
     "dev": "wrangler dev --port 8787 --var ALLOWED_APP_URLS:http://localhost:5176/planner/",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit -p .",
+    "test": "vitest run",
     "db:migrate:local": "wrangler d1 migrations apply planner --local",
     "db:migrate:remote": "wrangler d1 migrations apply planner --remote"
   },
@@ -13,8 +14,13 @@
     "hono": "^4.13.13"
   },
   "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.4.0",
     "@cloudflare/workers-types": "^5.20261010.1",
     "typescript": "~5.7.3",
+    "vitest": "^4.1.11",
     "wrangler": "^4.149.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild", "workerd", "sharp"]
   }
 }

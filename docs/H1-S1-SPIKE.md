@@ -1,6 +1,6 @@
 # H1-S1 — Spike kickoff
 
-**Status: ready, 2026-10-09.** Step 0 of H1 ([H1-ENTRIES.md](H1-ENTRIES.md) §13). Budget: **1–2 sessions**, +1 per
+**Status: closed 2026-10-10 — A ✅ B ✅, C deferred** (the owner's phone is Android; §6 Decision). Step 0 of H1 ([H1-ENTRIES.md](H1-ENTRIES.md) §13). Budget: **1–2 sessions**, +1 per
 fallback taken. Cost: $0 — no billing account is needed anywhere in this spike.
 
 ## 1. What the spike must answer
@@ -98,8 +98,8 @@ step 8; the test screen by S3.
   sign-in or one older than 10 minutes is rejected.
 - **Shared origin (session-2 review).** `komogortev.github.io` hosts every Pages site the owner has; localStorage
   and CORS are per origin, so any of those sites can read the bearer token and call the API with it. Fine while the
-  token reads only `/me`; **before entries, the app needs its own origin** (custom domain or a dedicated Pages host) —
-  an owner call.
+  token reads only `/me`; **before entries, the app needs its own origin** — decided 2026-10-10: Cloudflare Pages
+  (`*.pages.dev`, free) at S4 ([H1-S2-BACKEND.md](H1-S2-BACKEND.md) Decisions).
 - **Token in browser history / Worker logs (unverified).** The 302 lands on `/planner/#token=…`; global history
   (Safari/iCloud, Chrome Sync) may record it before `replaceState` runs, and Workers observability may log the
   `Location` header. Check both after the first prod sign-in; if either holds, return a short-lived single-use code in
@@ -127,8 +127,9 @@ Session 1, 2026-10-09 — steps 0–5. Steps 6–8 next session. Production figu
 | Sign-in | GitHub + Google, local and production: both resolve to **one account** (verified-email link); only SHA-256 token hashes stored. Allowlist (`ALLOWED_EMAILS` secret) stands in for S2 invites |
 | Test screen + nonce (session 2, step 6) | `/spike-auth`, linked only from Settings → Account (preview). Shows *Running as* (installed app vs browser tab), *Status* (from `/me`), *Last sign-in return* (accepted, or why rejected). Controls, local: Worker 400 on missing / short nonce and on `:5173`; 302 to GitHub with a valid one; a forged `#token=` link is rejected, not stored, fragment scrubbed. A mutation dropping the nonce comparison fails 2 of 6 unit tests. **Positive end to end not yet run** — GitHub's password page is the owner's; the first desktop sign-in after deploy is it |
 | Step 8 code (session 2) | `/spike/landing` + its `return_to` exception removed; `0003` drops `spike_notes` (applied locally) |
-| iPhone — GitHub · Google · after reopen · Safari tab separate | *owner, after deploy* |
-| Decision | **A ✅. B ✅ on steady state** (owner, 2026-10-09): every route p50 1–5 ms; the one 9 ms GitHub callback is an open outlier, under the limit and against a limit not enforced at 246 ms. **Re-entry:** when S2's real auth flow is deployed, read production CPU over ≥ 50 callbacks; p99 > 7 ms → find what in the route costs it before S2 continues. §4's "switch to the other candidate" does not apply to this kind of result (Better Auth cannot be cheaper). **C:** next session, steps 6–7 |
+| Deploy (session 2) | Worker `3f95dae2` + remote `0003` (Claude, owner-requested); #15 merged → Pages. Prod controls: missing nonce 400, another Pages path as `return_to` 400, valid → 302 to the provider |
+| iPhone — GitHub · Google · after reopen · Safari tab separate | **Not run — deferred** (owner, 2026-10-10: his phone is Android; no iPhone at hand) |
+| Decision | **A ✅. B ✅ on steady state** (owner, 2026-10-09): every route p50 1–5 ms; the one 9 ms GitHub callback is an open outlier, under the limit and against a limit not enforced at 246 ms. **Re-entry:** when S2's real auth flow is deployed, read production CPU over ≥ 50 callbacks; p99 > 7 ms → find what in the route costs it before S2 continues. §4's "switch to the other candidate" does not apply to this kind of result (Better Auth cannot be cheaper). **C deferred** (owner, 2026-10-10): the exit week runs on Android, whose installed-app return behaves like desktop Chromium. **Re-entry:** before the first invitee with an iPhone or iPad, or if the owner moves to one — run step 7 then; §4's handoff-by-polling is the known fallback and is additive to S2's backend. **S1 closed; S2 starts on the picks** |
 
 **Environment notes found on the way**
 
