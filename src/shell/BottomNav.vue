@@ -79,8 +79,9 @@ onBeforeUnmount(() => window.clearTimeout(timer))
   transition: background-color 120ms, border-color 120ms;
 }
 .dot-active {
-  background: rgb(99 102 241); /* indigo-500, the app accent (btn-primary) */
-  border-color: rgb(99 102 241);
+  background: rgb(var(--s-100)); /* the theme's ink: cream on dark, deep navy-teal on light */
+  border-color: rgb(var(--s-100));
+  box-shadow: 0 0 6px rgb(var(--s-100) / 0.35);
 }
 .bottom-nav {
   position: fixed;
