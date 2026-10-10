@@ -100,19 +100,14 @@ const trackStyle = computed(() => ({
   flex: 0 0 100%;
   min-width: 0;
   height: 100%;
-  padding: 10px 10px 0;
 }
-/* The page itself: a sheet of darker wool hovering over the backdrop. */
+/* No panel: page content floats straight on the textured backdrop and casts its own shadow (the dictophone's
+   drop-shadow, the cards' box-shadow in style.css). The sheet is only the page's own scroll container. */
 .sheet {
   position: relative;
   height: 100%;
   overflow-y: auto;
   overscroll-behavior: contain;
-  border-radius: 22px 22px 0 0;
-  background-color: var(--sheet-bg);
-  background-image: repeating-linear-gradient(45deg, var(--twill) 0 1px, transparent 1px 3px);
-  border: 1px solid var(--sheet-edge);
-  box-shadow: var(--sheet-shadow), inset 0 1px 0 var(--sheet-edge);
 }
 @media (prefers-reduced-motion: reduce) {
   .track {
