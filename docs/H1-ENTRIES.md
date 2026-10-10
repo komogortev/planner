@@ -41,9 +41,10 @@ to the same account:
 | In (H1) | Out (where) |
 |---|---|
 | Worker + D1: auth, invites, push / pull / query, cleaning, rate limit | Categories, tags UI, Inbox view, category rules → **H1b Organise** |
-| Client: sign-in screens, capture page as home, outbox sync, sync status, storage budget | Lenses, slices, reports → H2 |
+| Client: sign-in screens, capture page as home, outbox sync, sync status, storage usage display | Lenses, slices, reports → H2 |
 | Dexie v4: `entries`, `outbox`, `syncMeta` | Remote MCP endpoint → H3 |
-| Financial screens out of the nav (routes kept, L1 GitHub sync kept for them only) | Attachments (photo, voice) → later; the storage budget exists for them |
+| Financial screens out of the nav (routes kept, L1 GitHub sync kept for them only) | Attachments (photo, voice) → later |
+| | Local eviction of old synced entries → later; re-entry in §9 |
 | Nightly export of the owner's entries to the private data repo (§9) | Public sign-up, account deletion UI → before any invitee beyond the owner (§12 Q6) |
 | Install-prompt mount race fix + "show install button again" (carried) | Push notifications → H5 |
 
@@ -60,7 +61,7 @@ CLIENT  (static PWA, GitHub Pages, $0)                    BACKEND  (Cloudflare W
 │ db/     Dexie v4: entries, outbox,       │   push      │ /sync/push   clean · validate ·     │
 │         syncMeta (persisted)             │────────────▶│              stamp server_version   │
 │ sync/   flush outbox · pull since cursor │   pull      │ /sync/pull   changes > cursor       │
-│         · evict over budget · persist()  │◀────────────│ /entries     query (date, text)     │
+│         · usage display · persist()      │◀────────────│ /entries     query (date, text)     │
 │ domain/ Entry type + cleaning rules ─────┼── shared ──▶│ clean/  imports the same rules      │
 └──────────────────────────────────────────┘             │ D1: users, invites, sessions,       │
                                                           │     entries, entry_revisions        │
@@ -202,12 +203,14 @@ Runs on the client before the outbox write (fast feedback) and again on the serv
   entries queue; sync shows "sign in again"; the outbox flushes after sign-in.
 - **Rate limit:** per user and per IP on `/auth/*` and `/sync/push`.
 
-## 9. Storage budget and backup
+## 9. Local storage and backup
 
-- **Budget:** setting `localBudgetMB`, default 50. Usage from `navigator.storage.estimate()` is shown in Settings. Text
-  at ~10 entries/day is ~4 MB/year, so the budget does not bind for years; it exists for attachments. Over budget, the
-  oldest **synced** entries are evicted locally and fetched back through `/entries` on demand. Outbox rows are never
-  evicted.
+- **Full copy on the device in H1.** Text at ~10 entries/day is ~4 MB/year, far below browser quotas, so H1 builds
+  no eviction (cut by the owner 2026-10-09). Settings shows usage from `navigator.storage.estimate()` — that display is
+  the trigger for the later work. `/entries` (query) is still built in S2: the backend serves it for H2 and the export.
+- **Eviction re-enters when** local usage passes **50 MB** (the display shows it) **or** attachments are scoped,
+  whichever comes first. Its rules are already fixed: only **synced** entries are evicted, oldest first, fetched back
+  through `/entries` on demand; outbox rows are never evicted.
 - **`navigator.storage.persist()`** is requested after sign-in. It is not called anywhere today, so browsers may evict
   the database under storage pressure. Safari does not fully honour it; the real protection is frequent sync.
 - **Backup (the recovery path):** D1 Time Travel (point-in-time restore) plus a **nightly Worker cron export** of the
@@ -269,7 +272,7 @@ Each carries the default S1 proceeds under.
 | S0 | This spec; §12 closed | owner sign-off |
 | S1 **Spike** (step 0) | Worker + D1 hello on the free plan; OAuth with GitHub and Google from the deployed Pages origin; **iPhone home-screen sign-in**; CPU per request measured | all three work, or the fallback is chosen with evidence |
 | S2 Backend | D1 schema + migrations, invite script, push/pull/query, cleaning, rate limit, worker tests (§10) | worker tests green incl. negative controls |
-| S3 Client | Dexie v4, capture page as home, sign-in screens, `sync/` loop, outbox status, `persist()`, budget setting | capture → sync → second device shows it, in dev |
+| S3 Client | Dexie v4, capture page as home, sign-in screens, `sync/` loop, outbox status, `persist()`, storage usage in Settings | capture → sync → second device shows it, in dev |
 | S4 Cut-over | financial screens out of nav, deploy Worker + Pages, nightly export cron, owner account seeded | owner signed in on phone + desktop in production |
 | S5 Exit week | daily real use; acceptance §1 checked item by item | §1 all true |
 

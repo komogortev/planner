@@ -102,7 +102,7 @@ Rules mean, lenses do: on apparent conflict the lens wins on the task, the rule 
 |---|---|---|
 | Q1 | Where trial lens files and trial reports live | **Lens files and reports in the private data repo under `trial/`, next to the nightly export (Recommended)**: private, versioned. Trial reports are files written by the agent, which the provenance invariant forbids for records; acceptable because they are not records and are discarded or imported at S3 |
 | Q2 | Window semantics: which date, which time zone | **Event date when set, else capture date; device time zone stored in settings (Recommended)** |
-| Q3 | ~~Report storage vs the 1 MB read ceiling~~ | **Resolved 2026-10-09:** reports are backend D1 rows; the `data.json` ceiling no longer applies to them. Open part: whether old reports are evicted from the device cache like entries (H1 §9) |
+| Q3 | ~~Report storage vs the 1 MB read ceiling~~ | **Resolved 2026-10-09:** reports are backend D1 rows; the `data.json` ceiling no longer applies to them. Open part: whether old reports join entry eviction once it exists (deferred, H1 §9) |
 | Q4 | Editing a lens | **`version` +1 on every save of slice/instruction/output (Recommended)**; reports keep the version they ran |
 | Q5 | Output shapes in V1 | **markdown · checklist · table (Recommended)** |
 | Q6 | Lens name | **Lens — confirmed by the owner 2026-10-09** |

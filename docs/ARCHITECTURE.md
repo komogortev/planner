@@ -44,7 +44,7 @@ Target:
 | `src/domain/` (H1) | Record types, cleaning/validation rules (H1); `resolveSlice()`, `composeRun()`, report/citation validation (H2) | nothing but TS | Dexie, Vue, Pinia, DOM, `fetch` |
 | `src/db/` | Dexie tables, migrations; snapshot build/parse + GitHub client (frozen financial domain only after H1) | `domain` | Vue |
 | `src/auth/` (H1) | Session token, sign-in flow, token renewal | `db` | — |
-| `src/sync/` (H1) | Outbox flush, pull since cursor, backoff, storage budget, `persist()` | `db`, `domain`, `auth` | Vue |
+| `src/sync/` (H1) | Outbox flush, pull since cursor, backoff, storage usage, `persist()` | `db`, `domain`, `auth` | Vue |
 | `src/stores/` | Pinia stores, the only writers of Dexie from the UI | `db`, `domain`, `sync` | — |
 | `src/views/`, `src/components/` | UI | `stores`, `domain` | `db` directly (except existing L1 settings code) |
 | `api/` (H1, Cloudflare Worker) | Auth, invites, `/sync/push`, `/sync/pull`, `/entries`, cleaning, D1 schema and migrations; H3 adds the tool registry and a remote MCP endpoint | `domain` | Dexie, Vue |
@@ -57,7 +57,8 @@ in the repo.
 
 Changed 2026-10-09 (owner): entries live on a hosted backend, not in `data.json`. Detail: [H1-ENTRIES.md](H1-ENTRIES.md) §5–§6.
 
-- **On device:** Dexie (IndexedDB), a cache with a storage budget, not necessarily a full copy. Current schema **v3**;
+- **On device:** Dexie (IndexedDB), a full copy of the account's entries in H1; eviction of old synced entries is
+  deferred until usage passes 50 MB or attachments are scoped (H1 §9). Current schema **v3**;
   H1 introduces **v4** (`entries`, `outbox`, `syncMeta`). Later tiers add their tables in their own version. One
   version per tier, never edited once shipped. *Version numbers are planned, not reserved.*
 - **Backend:** Cloudflare Worker + D1 (SQLite). Every row keyed `(user_id, id)`. Per-record sync: the client pushes
