@@ -72,7 +72,7 @@
 
   .card {
     @apply rounded-2xl border border-slate-800 p-6;
-    background-color: rgb(var(--s-900) / var(--card-alpha, 0.9)); /* ~10% see-through: the weave shows faintly */
+    background-color: rgb(var(--s-900) / var(--card-alpha, 0.85)); /* ~15% see-through: the weave shows through (owner: 0.9 was still too opaque) */
     box-shadow: var(--float-1), var(--float-2); /* hovers over the textured backdrop */
   }
 
