@@ -13,8 +13,26 @@ const ORIGIN = new URL(APP).origin
 const NONCE = 'smoketestnonce-0123456789'
 const enc = encodeURIComponent
 
+// Production only: is the deployed app the latest main? (Pages lags a merge by ~1 min; a stale tab or the installed
+// app may lag further — that is the service worker, not the deploy.)
+let mainCommit = ''
+if (!local) {
+  try {
+    const { execFileSync } = await import('node:child_process')
+    execFileSync('git', ['fetch', '--quiet', 'origin', 'main'])
+    mainCommit = execFileSync('git', ['rev-parse', '--short', 'origin/main'], { encoding: 'utf8' }).trim()
+  } catch { /* no git here: the check reports it */ }
+}
+
 const checks = [
   ['app loads', async () => (await fetch(APP)).status === 200],
+  ...(local ? [] : [[`deployed app is origin/main (${mainCommit || 'unknown'})`, async () => {
+    const res = await fetch(`${APP}version.json`, { cache: 'no-store' })
+    if (!res.ok) throw new Error('no version.json — deployed before the version badge')
+    const v = await res.json()
+    if (v.commit !== mainCommit) throw new Error(`app is at ${v.commit} — Pages still deploying, or the merge did not deploy`)
+    return true
+  }]]),
   ['app deep link loads the app (SPA fallback)', async () => {
     const r = await fetch(`${APP}spike-auth`)
     return (await r.text()).includes('<div id="app">')
@@ -47,8 +65,7 @@ let failed = 0
 for (const [name, run] of checks) {
   let ok = false
   let note = ''
-  try { ok = await run() } catch (e) { note = ` (${e.cause?.code ?? e.message})` }
-  if (!ok) failed++
+  try { ok = await run() } catch (e) { note = ` (${e.cause?.code ?? e.message})` }  if (!ok) failed++
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${note}`)
 }
 console.log(`\n${checks.length - failed}/${checks.length} passed`)

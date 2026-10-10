@@ -9,6 +9,8 @@ import { GitHubError } from '@/db/github'
 import type { SnapshotCounts } from '@/db/snapshot'
 import ConfirmRestoreModal from '@/components/ConfirmRestoreModal.vue'
 import ConflictModal from '@/components/ConflictModal.vue'
+import { APP_ENV } from '@/env/applyEnvCue'
+import { BUILD, versionLabel } from '@/env/version'
 
 const online = useOnline()
 const settingsStore = useSettingsStore()
@@ -337,7 +339,7 @@ async function doDisconnect(): Promise<void> {
       <dl class="grid grid-cols-2 gap-4 text-sm">
         <div>
           <dt class="text-xs text-slate-500 uppercase tracking-wider">Version</dt>
-          <dd class="mt-1">0.1.0</dd>
+          <dd class="mt-1">{{ versionLabel(BUILD, APP_ENV) }}</dd>
         </div>
         <div>
           <dt class="text-xs text-slate-500 uppercase tracking-wider">Storage</dt>

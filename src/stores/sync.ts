@@ -18,9 +18,10 @@ import {
 import { getDbStats } from '@/db/seed'
 import { nowISO } from '@/utils/dates'
 import { useSettingsStore } from './settings'
+import { BUILD } from '@/env/version'
 
 const SINGLETON_ID = 'singleton' as const
-const APP_VERSION = '0.1.0' // diagnostic field in snapshot — not validated. Bump alongside package.json.
+const APP_VERSION = BUILD.version // diagnostic field in snapshot — not validated. From package.json at build.
 
 export interface PendingRestore {
   snapshot: Snapshot

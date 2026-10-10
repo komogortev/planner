@@ -26,11 +26,16 @@ app.get('/health', (c) => c.json({ ok: true }))
 
 // The tab icon for API pages (/health, …). Prod: the app's own favicon, unchanged. Local: the env-coloured `API` icon,
 // so a local API tab differs from both the local app tab and anything in prod.
-app.get('/favicon.ico', (c) => {
-  // icon.svg: the artwork the app's own tab shows (index.html), so prod app and API tabs match. ALLOWED_APP_URLS ends
-  // in `/` (the sign-in prefix check relies on that too). Anything but APP_ENV=local takes this, the prod default.
-  if (c.env.APP_ENV !== 'local') return c.redirect(`${appUrls(c.env)[0]}icon.svg`, 302)
-  return c.body(envIcon('local', 'api'), 200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'no-store' })
+app.get('/favicon.ico', async (c) => {
+  if (c.env.APP_ENV === 'local') {
+    return c.body(envIcon('local', 'api'), 200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'no-store' })
+  }
+  // Prod (and anything not `local`): the app's own icon.svg — the artwork its tab shows (index.html) — served as bytes.
+  // Not a redirect: browsers did not follow a redirected /favicon.ico (prod tab showed a globe; the directly served
+  // local icon showed). Edge-cached a day. ALLOWED_APP_URLS ends in `/` (the sign-in prefix check relies on it too).
+  const res = await fetch(`${appUrls(c.env)[0]}icon.svg`, { cf: { cacheTtl: 86_400, cacheEverything: true } })
+  if (!res.ok) return c.body(null, 404)
+  return c.body(await res.arrayBuffer(), 200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=86400' })
 })
 
 app.route('/auth', auth)
