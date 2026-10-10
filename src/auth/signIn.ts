@@ -54,6 +54,7 @@ function readJson<T>(key: string): T | null {
 export function startSignIn(provider: Provider): void {
   const pending: Pending = { nonce: randomNonce(), provider, at: Date.now() }
   localStorage.setItem(PENDING_KEY, JSON.stringify(pending))
+  localStorage.removeItem(RESULT_KEY) // a fresh attempt starts without the last attempt's verdict
   const returnTo = new URL(import.meta.env.BASE_URL, location.origin).href
   const url = new URL(`${API_URL}/auth/start/${provider}`)
   url.searchParams.set('return_to', returnTo)
@@ -63,14 +64,14 @@ export function startSignIn(provider: Provider): void {
 
 /**
  * Run before the router module loads (consumeReturn.ts): if the URL carries a sign-in return, check it, keep the token when it passes,
- * record the outcome for the test screen, and rewrite the URL to that screen (the token leaves the address bar).
+ * record the outcome for the test screen, and rewrite the URL to the app root (the token leaves the address bar).
  */
 export function consumeSignInReturn(): void {
   const pending = readJson<Pending>(PENDING_KEY)
   const result = checkReturn(location.hash, pending, Date.now())
   if (!result) return
   // Token out of the address bar first: if storage throws below, the app must not be left holding it in the URL.
-  history.replaceState(null, '', `${import.meta.env.BASE_URL}spike-auth`)
+  history.replaceState(null, '', import.meta.env.BASE_URL)
   try {
     localStorage.removeItem(PENDING_KEY) // single use, pass or fail
     if (result.ok) localStorage.setItem(TOKEN_KEY, result.token)

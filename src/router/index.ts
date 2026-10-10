@@ -1,4 +1,10 @@
+import { storedToken } from '@/auth/signIn'
 import { createRouter, createWebHistory } from 'vue-router'
+
+// Signed-out visitors see only the sign-in screen. The check is "is there a token" (works offline); a token the
+// server rejects is cleared where /me is called (Settings), which sends the user back here.
+// VITE_SKIP_AUTH=1 lets `pnpm dev` iterate on screens without the API (dev builds only).
+const skipAuth = import.meta.env.DEV && import.meta.env.VITE_SKIP_AUTH === '1'
 
 export const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -45,14 +51,19 @@ export const router = createRouter({
       component: () => import('@/views/SettingsView.vue'),
     },
     {
-      // H1-S1 spike test screen — linked only from Settings, removed by S3.
-      path: '/spike-auth',
-      name: 'spike-auth',
-      component: () => import('@/views/SpikeAuthView.vue'),
+      path: '/signin',
+      name: 'signin',
+      meta: { public: true },
+      component: () => import('@/views/SignInView.vue'),
     },
     {
       path: '/:pathMatch(.*)*',
       redirect: '/',
     },
   ],
+})
+
+router.beforeEach((to) => {
+  if (skipAuth || to.meta.public) return true
+  return storedToken() ? true : { name: 'signin' }
 })

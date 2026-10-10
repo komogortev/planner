@@ -40,7 +40,7 @@ function onTouchEnd(e: TouchEvent): void {
     >
       <RouterView />
     </main>
-    <BottomNav />
+    <BottomNav v-if="!route.meta.public" />
     <VersionBadge />
   </div>
 </template>
