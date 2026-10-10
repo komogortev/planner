@@ -40,7 +40,7 @@ function onKey(e: KeyboardEvent): void {
 
 <template>
   <div class="h-full flex flex-col items-center pt-3" style="padding-bottom: 12dvh">
-    <!-- Device area: the largest dictophone (520x876 photo, 0.5936) that fits, centred. -->
+    <!-- Device area: the largest dictophone (521x875 photo, 0.5954) that fits, centred. -->
     <div class="device-area flex-1 min-h-0 w-full">
       <div class="device" :style="{ backgroundImage: `url(${dictophone})` }">
         <!-- Cassette window = the input: a paper label laid on the tape, a real text area. -->
@@ -76,22 +76,22 @@ function onKey(e: KeyboardEvent): void {
   justify-content: center;
 }
 .device {
-  /* Largest 520:876 box inside the area. */
-  --w: min(94cqw, calc(100cqh * 0.5936));
+  /* Largest 521:875 box inside the area. */
+  --w: min(94cqw, calc(100cqh * 0.5954));
   position: relative;
   width: var(--w);
-  aspect-ratio: 520 / 876;
+  aspect-ratio: 521 / 875;
   background-size: 100% 100%;
   background-repeat: no-repeat;
-  filter: drop-shadow(0 10px 24px rgb(0 0 0 / 0.55));
+  filter: drop-shadow(var(--float-1)) drop-shadow(var(--float-2));
 }
 /* Hotspots are placed in the photo's own proportions (measured on the cutout). */
 .window {
   position: absolute;
-  left: 23.2%;
-  top: 36.5%;
-  width: 52.1%;
-  height: 15.3%;
+  left: 23.8%;
+  top: 36.8%;
+  width: 51.6%;
+  height: 16.9%;
   padding: 4% 5%;
   border: 0;
   border-radius: 4px;
@@ -111,10 +111,10 @@ function onKey(e: KeyboardEvent): void {
 }
 .key {
   position: absolute;
-  left: 64.2%;
-  top: 79.5%;
-  width: 25.4%;
-  height: 12.2%;
+  left: 63.9%;
+  top: 79.4%;
+  width: 25%;
+  height: 12.3%;
   border-radius: 6px;
   background: transparent;
   cursor: pointer;
@@ -126,8 +126,8 @@ function onKey(e: KeyboardEvent): void {
 .led {
   position: absolute;
   left: 81.2%;
-  top: 25.9%;
-  width: 5.3%;
+  top: 26.1%;
+  width: 4.6%;
   aspect-ratio: 1;
   border-radius: 50%;
   pointer-events: none;
