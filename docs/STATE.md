@@ -1,11 +1,11 @@
 # Personal Planner — STATE
 
 ## SNAPSHOT
-- **Phase/Last:** H1 **S2 Backend** 2026-10-10 (`H1-S2-BACKEND.md`): steps 0–3 ✅ — harness, shared `src/domain/clean.ts` (full-entry payloads), `0004` schema, invites replace the allowlist (`api/scripts/invite.mjs`). **S1 closed** 2026-10-10: A ✅ B ✅, C (iPhone) deferred — owner's phone is Android. Vibe-code mode: Claude owns architecture + deploys (owner). Planner has workspace priority.
-- **Working:** Worker `3f95dae2` (`planner-api.komogortev.workers.dev`): GitHub + Google sign-in with nonce → one account, bearer token, `/me`; app test screen `/spike-auth`. Worker tests: `pnpm test:api` (workerd + D1). App unchanged otherwise: L1 sync, L2-S1, frozen financial domain.
-- **Broken:** sync's "unsynced" flag is memory-only (`src/stores/sync.ts:55`), fixed by the H1 outbox.
-- **Blocker:** none. Planner-only merge rule added 2026-10-10 (`PowerShell(gh pr merge --repo komogortev/planner *)`); unproven until the first merge under it.
-- **Next:** S2 step 4 — sync push/pull/query (§6, §10 idempotency · isolation · stale-base · no resurrection), then 5 rate limit, 6 auth carry-overs, 7 deploy + CPU read. Owner (optional, 5 min): one desktop sign-in through Settings → Sign-in test — still no full positive run.
+- **Phase/Last:** H1 **S2 Backend** 2026-10-10 (`H1-S2-BACKEND.md`): steps 0–3 ✅ (harness, shared `src/domain/clean.ts`, `0004`, invites). S1 closed (iPhone C deferred, owner on Android). Same day: dev pipeline — CI on PRs, merge-on-green ruleset, guarded deploy, env cue, version badge, one-screen layout. Vibe-code mode (owner).
+- **Working:** prod `349515f` (app + Worker `e87b1e4e`): sign-in with nonce + invites — owner's prod sign-in and version badge confirmed 2026-10-10. `pnpm check` (app 95 · worker 18) runs locally and in CI; `pnpm smoke` 12/12. Runbook: `RUNBOOK.md`.
+- **Broken:** sync's "unsynced" flag is memory-only (`src/stores/sync.ts:55`), fixed by the H1 outbox. Pages answers app routes with HTTP 404 + the SPA (console noise; gone with Cloudflare Pages at S4).
+- **Blocker:** none. The `main` ruleset (CI must pass) has not yet held back a PR — first auto-merge PR is its proof (should read BLOCKED while CI runs).
+- **Next:** S2 step 4 — sync push/pull/query (§6; §10 idempotency · isolation · stale-base · no resurrection), then 5 rate limit, 6 auth carry-overs, 7 CPU read (≥ 50 callbacks).
 ---
 
 ## Context
@@ -13,8 +13,10 @@
 - **Repo:** own git, `origin` → `https://github.com/komogortev/planner.git` (**public** — no personal data in code,
   fixtures or docs). Data: private `komogortev/planner-data`, single `data.json` (8.4 KB, 2026-10-08) — after H1 it holds the frozen
   financial tables and the nightly entries export; entries themselves live on the backend.
-- **Run / test / deploy:** [RUNBOOK.md](RUNBOOK.md) — `pnpm check`, `pnpm smoke[:local]`, links. Dev: launch config `personal-planner` on `:5176` (app at `/planner/`) + `planner-api` on `:8787`; production
-  preview `personal-planner-preview` on `:4173` (build first) at `/planner/`.
+- **Run / test / deploy:** [RUNBOOK.md](RUNBOOK.md) — `pnpm check`, `pnpm smoke[:local]`, links, deploy order. Dev: launch
+  configs `personal-planner` (:5176, amber cue) + `planner-api` (:8787); `personal-planner-preview` (:4173, fuchsia; build
+  first; cannot sign in — prod API refuses localhost). Merge: PR → CI `check` required → auto-merge → guarded
+  `pnpm --dir api run deploy` → `pnpm smoke`.
 - **Schema:** Dexie v3, snapshot `schemaVersion` 2. Next: Dexie v4 (`entries`, `outbox`, `syncMeta`) + D1 schema in H1.
 - **PAT gotcha:** fine-grained tokens take 30–60 s to propagate; a 404 right after creating one is not "no access".
   Never paste a PAT into chat.
@@ -43,6 +45,12 @@
 ## Decision log
 
 Full log: PROJECT.md → Decisions log. Latest:
+
+- 2026-10-10 — Dev pipeline (owner asks, Claude built): production only runs `main` — the Worker deploys through a
+  guard (clean tree, on `main`, equal to origin; version tagged with the sha) because Cloudflare recorded no source for
+  hand deploys; CI `pnpm check` on every PR, required by a `main` ruleset, merge on green (repo auto-merge on) because
+  tests had only ever run locally. Env cue + version badge (on every page, prod included, until the S4 cut-over) so a
+  glance tells which build is under test — the service-worker cache had shown a stale build as "deployed".
 
 - 2026-10-10 — S1 closed (C deferred: owner on Android); S2 started. Vibe-code mode (owner). Client moves to its own
   `*.pages.dev` origin at S4 (Claude, delegated; amends H1 Q8). Worker tests on `@cloudflare/vitest-plugin` — its
