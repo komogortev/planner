@@ -1,0 +1,44 @@
+name: CI
+
+# The same gate as `pnpm check` locally: typecheck (app + api), app unit tests, Worker tests in workerd.
+# Runs on every PR and on main, so a merge is never checked only on one machine.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      # 24, not 20: wrangler (used by the Worker tests) needs Node >= 22.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            api/pnpm-lock.yaml
+
+      - name: Install (app)
+        run: pnpm install --frozen-lockfile
+
+      - name: Install (api)
+        run: pnpm --dir api install --frozen-lockfile
+
+      - name: Check — typecheck, app tests, Worker tests
+        run: pnpm check

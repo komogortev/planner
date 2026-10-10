@@ -18,6 +18,9 @@ Commands run from `E:/Projects/apps/personal-planner`. There is no staging envir
 | Worker tests only | `pnpm test:api` | `api/test/**` |
 | Smoke the running local stack | `pnpm smoke:local` | both launch configs running; same 11 checks as production |
 
+**CI:** `.github/workflows/ci.yml` runs `pnpm check` on every PR and every push to `main` — the PR shows a green or red
+**CI / check**. Red is a stop: never merge over it.
+
 Local sign-in needs an invite in the **local** D1 (the `.wrangler/` state):
 `node api/scripts/invite.mjs create <email>` · `list` · `revoke <email>`.
 
