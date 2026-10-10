@@ -4,8 +4,8 @@
 - **Phase/Last:** H1 S1 spike session 1 (2026-10-09) — steps 0–5 done, merged as #13 and deployed 2026-10-10 (version `ff7ba61b`, 10/10 prod checks pass). **A ✅** (Worker + D1 from the Pages origin, CORS clean). **B ✅ on steady state** (owner): p50 1–5 ms; one 9 ms GitHub callback open. Results: `H1-S1-SPIKE.md` §6. Planner has workspace priority (owner).
 - **Working:** `api/` Worker deployed (`planner-api.komogortev.workers.dev`): GitHub + Google sign-in → one linked account, bearer token, `/me`. App unchanged: L1 sync, L2-S1, frozen financial domain.
 - **Broken:** sync's "unsynced" flag is memory-only (`src/stores/sync.ts:55`), fixed by the H1 outbox.
-- **Blocker:** none. Merges and deploys of code are the owner's (the classifier denies both to Claude).
-- **Next:** S1 session 2 (2026-10-10): step 6 test screen + sign-in nonce + step 8 code in one PR. Owner: deploy Worker + remote migration `0003`, merge (Pages deploys) → desktop sign-in (first positive) → step 7 iPhone. Then close S1 → S2.
+- **Blocker:** none. Claude owns architecture + deploys (owner 2026-10-10); `gh pr merge` is still classifier-denied → owner merges until a permission rule lands.
+- **Next:** S1 session 2 (2026-10-10): #15 (test screen + nonce + step 8 code); Worker `3f95dae2` + remote `0003` done. Owner: merge #15 → desktop sign-in (first positive) → step 7 iPhone. Then close S1 → S2.
 ---
 
 ## Context
