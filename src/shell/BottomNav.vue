@@ -39,7 +39,7 @@ onBeforeUnmount(() => window.clearTimeout(timer))
       v-for="p in PAGES"
       :key="p.to"
       :to="p.to"
-      class="nav-link flex-1 text-center"
+      class="nav-link flex-1 flex items-center justify-center"
       :class="{ 'nav-link-active': route.path === p.to }"
     >
       {{ p.label }}
@@ -73,8 +73,10 @@ onBeforeUnmount(() => window.clearTimeout(timer))
   bottom: 0;
   z-index: 40;
   display: flex;
+  align-items: stretch;
   gap: 4px;
-  padding: 8px 12px calc(env(safe-area-inset-bottom) + 12px);
+  height: calc(12dvh + env(safe-area-inset-bottom)); /* same 12% as the reveal zone */
+  padding: 8px 12px env(safe-area-inset-bottom);
   background: rgb(2 6 23);
   border-top: 1px solid rgb(30 41 59);
   transform: translateY(100%);
