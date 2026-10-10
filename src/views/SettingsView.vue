@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import { clearAllData, getDbStats, seedSampleData } from '@/db/seed'
+import { getDbStats } from '@/db/seed'
 import { useOnline } from '@/composables/useOnline'
 import { useSettingsStore } from '@/stores/settings'
 import { useSyncStore } from '@/stores/sync'
@@ -28,18 +28,6 @@ const stats = ref<SnapshotCounts>({
 
 async function refreshStats(): Promise<void> {
   stats.value = await getDbStats()
-}
-
-async function doSeed(): Promise<void> {
-  if (!confirm('Replace all current data with sample data?')) return
-  await seedSampleData()
-  await refreshStats()
-}
-
-async function doClear(): Promise<void> {
-  if (!confirm('Permanently delete ALL planner data?')) return
-  await clearAllData()
-  await refreshStats()
 }
 
 onMounted(refreshStats)
@@ -130,15 +118,13 @@ async function doDisconnect(): Promise<void> {
     <header>
       <h2 class="text-2xl font-bold">Settings</h2>
       <p class="text-sm text-slate-500 mt-1">
-        App info, sync, and data tools.
+        App info and account.
       </p>
     </header>
 
-    <!-- ============================================================ -->
-    <!-- L1 GitHub sync                                                -->
-    <!-- ============================================================ -->
-    <section class="card">
-      <h3 class="font-semibold mb-1">GitHub sync</h3>
+    <details class="card">
+      <summary class="font-semibold cursor-pointer">Legacy export (GitHub)</summary>
+      <div class="mt-3">
       <p class="text-xs text-slate-500 mb-4">
         Sync your data to a private GitHub repo as a single
         <code class="text-slate-400">data.json</code> snapshot. See
@@ -305,29 +291,12 @@ async function doDisconnect(): Promise<void> {
           </button>
         </div>
       </form>
-    </section>
-
-    <!-- ============================================================ -->
-    <!-- Organization (L2)                                             -->
-    <!-- ============================================================ -->
-    <section class="card">
-      <h3 class="font-semibold mb-1">Organization</h3>
-      <p class="text-xs text-slate-500 mb-4">
-        Categorize and group your records.
-      </p>
-      <div class="flex flex-wrap gap-2">
-        <RouterLink to="/categories" class="btn-ghost">
-          Categories
-        </RouterLink>
       </div>
-    </section>
+    </details>
 
-    <!-- H1-S1 spike: the only way into the sign-in test screen. Removed by S3. -->
+    <!-- Only way into sign-in until the real sign-in screen (S3). -->
     <section class="card">
-      <h3 class="font-semibold mb-1">Account (preview)</h3>
-      <p class="text-xs text-slate-500 mb-4">
-        Tests sign-in to the new backend. Nothing here touches your data.
-      </p>
+      <h3 class="font-semibold mb-1">Account</h3>
       <RouterLink to="/spike-auth" class="btn-ghost">Sign-in test</RouterLink>
     </section>
 
@@ -354,36 +323,6 @@ async function doDisconnect(): Promise<void> {
           <dd class="mt-1">GitHub Contents API</dd>
         </div>
       </dl>
-    </section>
-
-    <!-- ============================================================ -->
-    <!-- Database tools                                                -->
-    <!-- ============================================================ -->
-    <section class="card">
-      <h3 class="font-semibold mb-4">Database</h3>
-      <dl class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm mb-6">
-        <div>
-          <dt class="text-xs text-slate-500 uppercase tracking-wider">Commitments</dt>
-          <dd class="mt-1 text-lg font-semibold">{{ stats.commitments }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs text-slate-500 uppercase tracking-wider">Payments</dt>
-          <dd class="mt-1 text-lg font-semibold">{{ stats.payments }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs text-slate-500 uppercase tracking-wider">Intentions</dt>
-          <dd class="mt-1 text-lg font-semibold">{{ stats.intentions }}</dd>
-        </div>
-        <div>
-          <dt class="text-xs text-slate-500 uppercase tracking-wider">Market entries</dt>
-          <dd class="mt-1 text-lg font-semibold">{{ stats.marketEntries }}</dd>
-        </div>
-      </dl>
-      <div class="flex flex-wrap gap-2">
-        <button class="btn-ghost" @click="refreshStats">Refresh stats</button>
-        <button class="btn-ghost" @click="doSeed">Load sample data</button>
-        <button class="btn-danger" @click="doClear">Clear all data</button>
-      </div>
     </section>
 
     <ConfirmRestoreModal
