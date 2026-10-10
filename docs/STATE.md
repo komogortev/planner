@@ -32,9 +32,10 @@
 
 ## Carried follow-ups (still relevant after the pivot)
 
+- **Version badge in prod** — shown on every page in every environment by owner rule (2026-10-10). Re-entry: **S4
+  cut-over** — decide whether prod keeps it.
 - Pin pnpm via `"packageManager"` in `package.json`; `paths-ignore: ['docs/**', '*.md']` on the deploy workflow;
-  `pnpm typecheck` step before build in CI; bump Node-20 actions.
-- `appVersion` in `src/stores/sync.ts` is hardcoded `'0.1.0'` — derive from `package.json`.
+  bump `deploy.yml` from Node 20 (CI already runs typecheck + tests on Node 24, #20).
 - PAT-expiry warning (persist `connectedAt`, warn at 75/85 days) — now only for the frozen-domain GitHub sync; low priority.
 - Install-prompt mount race (`useInstallPrompt.ts:93`) + dismissal escape hatch — scheduled in H1.
 - Phone verification of Base (install, offline reload, data survives SW update) — becomes part of the H1 exit week.

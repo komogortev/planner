@@ -1,6 +1,8 @@
 <script setup lang="ts">
-// Always-on build identity, every environment: small, semi-transparent, bottom centre. Never takes a tap
-// (pointer-events: none), so it cannot block a control underneath.
+// Always-on build identity, every environment and every page: small, semi-transparent, bottom centre. Never takes a
+// tap (pointer-events: none), so it cannot block a control underneath.
+// Owner rule (2026-10-10): visible on all pages, prod included, FOR NOW. Re-entry: the S4 cut-over (first live
+// production use) — decide then whether prod keeps it.
 import { APP_ENV } from '@/env/applyEnvCue'
 import { BUILD, versionLabel } from '@/env/version'
 

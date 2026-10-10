@@ -282,7 +282,7 @@ Q3–Q9: **defaults confirmed by the owner 2026-10-09** and binding. Q1–Q2: se
 | S1 ✅ **Spike** (closed 2026-10-10; iPhone deferred) — [H1-S1-SPIKE.md](H1-S1-SPIKE.md) | Worker + D1 hello on the free plan; OAuth with GitHub and Google from the deployed Pages origin; **iPhone home-screen sign-in**; CPU per request measured | all three work, or the fallback is chosen with evidence |
 | S2 Backend — [H1-S2-BACKEND.md](H1-S2-BACKEND.md) | D1 schema + migrations, invite script, push/pull/query, cleaning, rate limit, worker tests (§10) | worker tests green incl. negative controls |
 | S3 Client | Dexie v4, capture page as home, sign-in screens, `sync/` loop, outbox status, `persist()`, storage usage in Settings | capture → sync → second device shows it, in dev |
-| S4 Cut-over | financial screens out of nav, deploy Worker + Pages, nightly export cron, owner account seeded | owner signed in on phone + desktop in production |
+| S4 Cut-over | financial screens out of nav, deploy Worker + Pages, nightly export cron, owner account seeded; client to its own `*.pages.dev` origin; **decide whether prod keeps the version badge** (owner rule 2026-10-10: on every page until now) | owner signed in on phone + desktop in production |
 | S5 Exit week | daily real use; acceptance §1 checked item by item | §1 all true |
 
 ## 14. Files this spec will touch (preview)
