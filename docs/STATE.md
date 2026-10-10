@@ -1,11 +1,11 @@
 # Personal Planner — STATE
 
 ## SNAPSHOT
-- **Phase/Last:** H1 S0 spec v2 (2026-10-09) — H0 closed (#7 merged; "Lens" confirmed). Owner's core loop set the H1 shape: invite-only accounts (Google/GitHub), capture page as home, outbox sync to a Cloudflare Worker + D1 backend that cleans, stores and serves entries. Docs only.
+- **Phase/Last:** H1 S0 closed (2026-10-09) — spec v2 merged (#8, #10), §12 defaults confirmed. **Planner has workspace priority until further notice (owner).** Core loop: invite-only accounts (Google/GitHub), capture page as home, outbox sync to a Cloudflare Worker + D1 backend. Docs only.
 - **Working:** deployed app (https://komogortev.github.io/planner/) — L1 sync, L2-S1 categories, frozen financial domain. 54/54 vitest at last run (2026-06-01, not re-run).
 - **Broken:** sync's "unsynced" flag lives only in memory (`src/stores/sync.ts:55`) — offline write, close, reopen → status no longer says unsynced. Fixed by the H1 outbox.
-- **Blocker:** H1 §12 Q1–Q9 (defaults stated); S1 spike must prove free-tier CPU (10 ms) and iPhone home-screen sign-in.
-- **Next:** owner signs off H1 spec → S1 spike (Worker + D1 + OAuth from Pages + iPhone round trip, CPU measured).
+- **Blocker:** none for S1. Owner setup first: Cloudflare account, GitHub + Google OAuth apps (H1-S1-SPIKE §2).
+- **Next:** S1 spike per `docs/H1-S1-SPIKE.md` — free-tier CPU (10 ms), iPhone home-screen sign-in, CORS; 1–2 sessions.
 ---
 
 ## Context
@@ -25,7 +25,7 @@
 |---|---|---|
 | L0 · Base · L1 · L2-S1 | ✅ shipped | PROJECT.md §Tiers |
 | H0 Pivot design | ✅ closed 2026-10-09 | VOCABULARY.md, ARCHITECTURE.md |
-| H1 Core loop | S0 spec v2, §12 Q1–Q9 open (defaults stated) | H1-ENTRIES.md |
+| H1 Core loop | S0 ✅; S1 spike next | H1-ENTRIES.md · H1-S1-SPIKE.md |
 | H1b Organise | planned (categories/tags sync, Inbox, rules) | PROJECT.md §Tiers |
 | H2 Lenses | S0 draft, Q1–Q7 open; starts after H1 exits | H2-LENSES.md |
 | H3 Agent surface · H4 Curation & tasks · H5 In-app AI | planned | PROJECT.md §Tiers |
@@ -42,6 +42,8 @@
 ## Decision log
 
 Full log: PROJECT.md → Decisions log. Latest:
+
+- 2026-10-09 — Planner takes workspace priority until further notice (owner); H1 §12 defaults confirmed; eviction cut.
 
 - 2026-10-09 — Hosted backend (Workers + D1); accounts invite-only, multi-tenant, Google/GitHub sign-in; backend reads
   content; $0 now, $5 later; H1 narrowed to the core loop, organising → H1b; Lens confirmed; work entries = personal

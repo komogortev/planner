@@ -1,7 +1,7 @@
 # H1 — Core loop: accounts, capture, sync (Spec)
 
-**Status: S0 spec draft v2, 2026-10-09.** Supersedes the 2026-10-08 draft (whole-snapshot merge over the GitHub data
-repo). No S1 code until §12 is closed. Terms per [VOCABULARY.md](VOCABULARY.md); invariants per
+**Status: S0 closed, 2026-10-09** — §12 Q3–Q9 confirmed by the owner; Q1–Q2 are settled by the S1 spike
+([H1-S1-SPIKE.md](H1-S1-SPIKE.md)). Supersedes the 2026-10-08 draft (whole-snapshot merge over the GitHub data repo). Terms per [VOCABULARY.md](VOCABULARY.md); invariants per
 [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## 1. Goal
@@ -249,9 +249,9 @@ Workers + D1 is the only option that is free with no idle pause and runs our own
 (clean, query) and H3 reuses (remote MCP endpoint → chat from the phone). Cost: we write sign-in and sync. Dexie Cloud
 stays the fallback if the S1 spike fails on CPU or auth.
 
-## 12. Open questions
+## 12. Questions
 
-Each carries the default S1 proceeds under.
+Q3–Q9: **defaults confirmed by the owner 2026-10-09** and binding. Q1–Q2: settled by the S1 spike.
 
 | # | Question | Default |
 |---|---|---|
@@ -269,8 +269,8 @@ Each carries the default S1 proceeds under.
 
 | Slice | Content | Done when |
 |---|---|---|
-| S0 | This spec; §12 closed | owner sign-off |
-| S1 **Spike** (step 0) | Worker + D1 hello on the free plan; OAuth with GitHub and Google from the deployed Pages origin; **iPhone home-screen sign-in**; CPU per request measured | all three work, or the fallback is chosen with evidence |
+| S0 ✅ | This spec; §12 closed | owner sign-off (2026-10-09) |
+| S1 **Spike** (step 0) — [H1-S1-SPIKE.md](H1-S1-SPIKE.md) | Worker + D1 hello on the free plan; OAuth with GitHub and Google from the deployed Pages origin; **iPhone home-screen sign-in**; CPU per request measured | all three work, or the fallback is chosen with evidence |
 | S2 Backend | D1 schema + migrations, invite script, push/pull/query, cleaning, rate limit, worker tests (§10) | worker tests green incl. negative controls |
 | S3 Client | Dexie v4, capture page as home, sign-in screens, `sync/` loop, outbox status, `persist()`, storage usage in Settings | capture → sync → second device shows it, in dev |
 | S4 Cut-over | financial screens out of nav, deploy Worker + Pages, nightly export cron, owner account seeded | owner signed in on phone + desktop in production |

@@ -28,7 +28,8 @@ Vocabulary is fixed in [VOCABULARY.md](VOCABULARY.md); structure in [ARCHITECTUR
 | [STORAGE-FORMAT.md](STORAGE-FORMAT.md) | `data.json` contract | v1 text; v2 in L2 doc; after H1 frozen-domain only (entries live on the backend) |
 | [L1-GITHUB.md](L1-GITHUB.md) | Sync transport, auth, conflict flow | shipped, reference |
 | [L2-ORGANIZATION.md](L2-ORGANIZATION.md) | Category / Theme / Tag model, schema v3 | S1 shipped; closed by pivot |
-| [H1-ENTRIES.md](H1-ENTRIES.md) | Core loop: accounts, capture page, outbox sync, backend (Worker + D1), schema v4 | S0 spec v2 (2026-10-09), questions open |
+| [H1-ENTRIES.md](H1-ENTRIES.md) | Core loop: accounts, capture page, outbox sync, backend (Worker + D1), schema v4 | S0 closed 2026-10-09 |
+| [H1-S1-SPIKE.md](H1-S1-SPIKE.md) | S1 spike kickoff: owner setup, steps, CPU known positive, decision rules | ready |
 | [H2-LENSES.md](H2-LENSES.md) | Slices, lenses, runs, reports, composer | S0 draft, questions open |
 | [SHEETS-STRUCTURE.md](SHEETS-STRUCTURE.md) | Deferred Sheets backend | historical reference |
 
@@ -125,6 +126,7 @@ Order is strict through H3 (H1b sits between H1 and H2). H4 and H5 may swap on o
 | 2026-10-09 | **H1 narrowed to the core loop; organising moves to a new H1b** | The first loop is capture → sync → serve; organising needs the backend to exist. `Entry.categoryId` and `tags` ship in H1 so H1b needs no entry migration |
 | 2026-10-09 | **Frozen financial data stays frozen and is a deletion candidate** (owner) | Not scheduled; it never moves to the backend. Deleting is irreversible, so it needs the owner's explicit go, and a final export of the frozen tables comes first: dropping tables in a Dexie version wipes them on every device, and the data repo's history would be the only other copy |
 | 2026-10-09 | **Local eviction cut from H1; the device keeps a full copy** (owner) | Text grows ~4 MB a year, so the budget would not bind for years, and the exit week could not exercise the code path. Saves ~0.5 session. Re-enters when local usage passes 50 MB or attachments are scoped |
+| 2026-10-09 | **H1 §12 Q3–Q9 defaults confirmed; the planner takes workspace priority until further notice** (owner) | Closes S0. engine-dev's Release 1 tracks pause in place; nothing there is abandoned |
 
 ## Glossary
 
