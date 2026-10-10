@@ -2,7 +2,7 @@
 
 ## SNAPSHOT
 - **Phase/Last:** H1 **S2 Backend** steps 0–3 ✅; client **quiet base** 2026-10-10 (#24 nav + Settings cut · #25 phone shell · #26 sign-in gate). S1 closed (iPhone C deferred, owner on Android). Vibe-code mode (owner).
-- **Working:** prod `349515f` (Worker `e87b1e4e`) — #24–#26 are NOT deployed yet. Local: shell of 3 swipe pages (Home stub · Dashboard stub · Settings), bottom zone = page dots, touch → 12% menu; signed-out → coat-pocket gate (ring on the button → provider dialog). `pnpm check` (app 99 · worker 18) green; `pnpm smoke` 12/12.
+- **Working:** prod `349515f` (Worker `e87b1e4e`) — #24–#26 are NOT deployed yet. Local: shell of 3 swipe pages (Home stub · Dashboard stub · Settings), bottom zone = page dots, touch → 12% menu; signed-out → coat-pocket gate (fixed 100px ring at screen centre, 58% down; the photo scales to put its button under it → provider dialog). `pnpm check` (app 99 · worker 18) green; `pnpm smoke` 12/12.
 - **Broken:** sync's "unsynced" flag is memory-only (`src/stores/sync.ts:55`), fixed by the H1 outbox. Not verified: a real provider round-trip through the new gate; real-Android swipe vs gesture bar.
 - **Blocker:** none. Ruleset proof: #24 read BLOCKED while CI ran.
 - **Next:** deploy the client (then one real sign-in on prod) · Home = quickdraw capture + Dexie v4 outbox (S3) · S2 step 4 sync push/pull/query (§6; §10 tests), then 5 rate limit, 6 auth carry-overs, 7 CPU read.

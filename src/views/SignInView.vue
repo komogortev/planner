@@ -3,9 +3,9 @@ import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { lastResult, startSignIn } from '@/auth/signIn'
 import bg from '@/assets/auth-bg.webp'
 
-// App gate (owner, 2026-10-10): the photo is a coat pocket; its button is the entry. Tapping the orange ring laid
-// over the button opens the sign-in dialog. The ring is positioned in the photo's own coordinates (the stage below
-// scales and shifts with the photo), so it stays on the button at every screen size.
+// App gate (owner, 2026-10-10): the photo is a coat pocket; its button is the entry. The screen decides, the photo
+// follows: the orange ring is a fixed thumb-sized target at the screen's centre (a little below middle, like a
+// fingerprint-scan template), and the photo is scaled and shifted so its pocket button sits under the ring.
 const open = ref(false)
 
 // Only a rejection from the attempt that just brought the user back here (not a stale one from days ago).
@@ -21,11 +21,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 
 <template>
   <div class="gate">
-    <!-- 1672x940 photo; button centre at (48.6%, 66.2%) of it. -->
     <div class="stage">
       <img :src="bg" alt="" class="photo" draggable="false" />
-      <button class="ring" data-test="gate-button" aria-label="Sign in" @click="open = true" />
     </div>
+    <button class="ring" data-test="gate-button" aria-label="Sign in" @click="open = true" />
 
     <p v-if="rejected" class="note" data-test="signin-rejected">{{ rejected }}</p>
 
@@ -56,16 +55,21 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   background: #020100;
   container-type: size;
 }
-/* "Cover" with a focal point: the stage is at least the screen's size, keeps the photo's 1672:940 shape, and is
-   shifted so the pocket button lands at the horizontal centre (clamped so no edge shows). */
+/* Photo is 1672x940; its button has centre (48.6%, 66.2%) and a ~86px diameter (ring glow included). Photo scale:
+   large enough that its button matches the ring, and large enough to cover the screen with the button held at
+   (50%, 58%) — the three terms are those constraints (button, width, height). */
+.gate {
+  --ring: 100px;
+  --cy: 58cqh;
+}
 .stage {
-  --sw: max(100cqw, calc(100cqh * 1.7787));
+  --sw: max(calc(var(--ring) * 19.44), calc(100cqw * 1.029), calc(100cqh * 2.209));
   --sh: calc(var(--sw) * 0.5622);
   position: absolute;
   width: var(--sw);
   height: var(--sh);
-  left: clamp(calc(100cqw - var(--sw)), calc(50cqw - 0.486 * var(--sw)), 0px);
-  top: calc((100cqh - var(--sh)) / 2);
+  left: calc(50cqw - 0.486 * var(--sw));
+  top: calc(var(--cy) - 0.662 * var(--sh));
 }
 .photo {
   width: 100%;
@@ -76,9 +80,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 }
 .ring {
   position: absolute;
-  left: 48.6%;
-  top: 66.2%;
-  width: max(5.6%, 52px); /* at least a thumb-sized target */
+  left: 50%;
+  top: var(--cy);
+  width: var(--ring);
   aspect-ratio: 1;
   transform: translate(-50%, -50%);
   border-radius: 50%;
