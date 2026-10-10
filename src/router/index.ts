@@ -6,18 +6,21 @@ import { createRouter, createWebHistory } from 'vue-router'
 // VITE_SKIP_AUTH=1 lets `pnpm dev` iterate on screens without the API (dev builds only).
 const skipAuth = import.meta.env.DEV && import.meta.env.VITE_SKIP_AUTH === '1'
 
+// Placeholder: the three main routes are drawn by the pager (App.vue).
+const PagerPage = { render: () => null }
+
 export const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
       path: '/',
       name: 'home',
-      component: () => import('@/views/HomeView.vue'),
+      component: PagerPage, // drawn by shell/Pager.vue; the router only owns the URL
     },
     {
       path: '/dashboard',
       name: 'dashboard',
-      component: () => import('@/views/DashboardView.vue'),
+      component: PagerPage, // drawn by shell/Pager.vue; the router only owns the URL
     },
     // Financial screens: out of the nav (quiet base), reachable by URL only until the financial domain is deleted.
     {
@@ -48,7 +51,7 @@ export const router = createRouter({
     {
       path: '/settings',
       name: 'settings',
-      component: () => import('@/views/SettingsView.vue'),
+      component: PagerPage, // drawn by shell/Pager.vue; the router only owns the URL
     },
     {
       path: '/signin',

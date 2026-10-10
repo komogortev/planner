@@ -75,7 +75,7 @@ onBeforeUnmount(() => window.clearTimeout(timer))
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  border: 1.5px solid rgb(148 163 184 / 0.6);
+  border: 1.5px solid rgb(var(--s-400) / 0.7);
   transition: background-color 120ms, border-color 120ms;
 }
 .dot-active {
@@ -93,8 +93,8 @@ onBeforeUnmount(() => window.clearTimeout(timer))
   gap: 4px;
   height: calc(12dvh + env(safe-area-inset-bottom)); /* same 12% as the reveal zone */
   padding: 8px 12px env(safe-area-inset-bottom);
-  background: rgb(2 6 23);
-  border-top: 1px solid rgb(30 41 59);
+  background: rgb(var(--s-900));
+  border-top: 1px solid rgb(var(--s-700));
   transform: translateY(100%);
   transition: transform 160ms ease-out;
 }

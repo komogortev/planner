@@ -10,10 +10,13 @@ import { useCleanupStore } from './stores/cleanup'
 import { setupSyncDirtyTracking } from './db/syncTracking'
 import { dedupeCategoriesInDb } from './db/cleanup'
 import { applyEnvCue } from './env/applyEnvCue'
+import { applyTheme } from './theme/theme'
 import './style.css'
 
 // Local / preview builds get a coloured banner, tab title, favicon and status bar; prod is untouched.
 applyEnvCue()
+// Light / dark (Settings → Appearance), applied before mount so the first paint is already in the right theme.
+applyTheme()
 
 const app = createApp(App)
 

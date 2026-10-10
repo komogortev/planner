@@ -3,8 +3,44 @@
 @tailwind utilities;
 
 @layer base {
+  /* Theme variables. `--s-*` are the channels behind every `slate-*` class (tailwind.config.ts); `--sheet-*` colour the
+     hovering page sheets (src/shell/Pager.vue). Dark is the default; the light theme (Settings → Appearance) sets
+     html[data-theme='light'] (src/theme/theme.ts). */
+  :root {
+    color-scheme: dark;
+    --s-50: 250 247 243; --s-100: 241 235 227; --s-200: 227 217 204; --s-300: 205 191 174; --s-400: 168 149 127;
+    --s-500: 133 114 97; --s-600: 90 74 58; --s-700: 61 49 38; --s-800: 42 33 25; --s-900: 29 23 18; --s-950: 20 16 12;
+    --backdrop: #2b2016;
+    --vignette: rgb(0 0 0 / 0.45);
+    --twill: rgb(255 220 170 / 0.035);
+    --sheet-bg: rgb(20 16 12 / 0.9);
+    --sheet-edge: rgb(255 225 180 / 0.08);
+    --sheet-shadow: 0 10px 30px rgb(0 0 0 / 0.55);
+    --grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .62  0 0 0 0 .44  0 0 0 0 .26  0 0 0 .6 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  }
+  html[data-theme='light'] {
+    color-scheme: light;
+    --s-50: 29 23 18; --s-100: 42 33 25; --s-200: 61 49 38; --s-300: 90 74 58; --s-400: 120 100 82; --s-500: 133 114 97;
+    --s-600: 168 149 127; --s-700: 205 191 174; --s-800: 232 222 207; --s-900: 243 236 224; --s-950: 250 246 238;
+    --backdrop: #d9c7a8;
+    --vignette: rgb(70 40 10 / 0.25);
+    --twill: rgb(90 60 30 / 0.05);
+    --sheet-bg: rgb(250 246 238 / 0.93);
+    --sheet-edge: rgb(90 60 30 / 0.14);
+    --sheet-shadow: 0 8px 24px rgb(60 35 10 / 0.3);
+    --grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .36  0 0 0 0 .24  0 0 0 0 .12  0 0 0 .5 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  }
+
+  /* Warm wool backdrop: tinted fractal-noise grain over a base colour, plus a faint twill and a vignette. Pages hover
+     over it as sheets. The grain is a data-URI SVG, so there is no image to load. */
   body {
-    @apply bg-slate-950 text-slate-100 antialiased;
+    @apply text-slate-100 antialiased;
+    background-color: var(--backdrop);
+    background-image:
+      radial-gradient(120% 90% at 50% 30%, transparent 40%, var(--vignette) 100%),
+      repeating-linear-gradient(45deg, var(--twill) 0 1px, transparent 1px 3px),
+      var(--grain);
+    background-attachment: fixed;
   }
 
   * {
@@ -24,7 +60,7 @@
   }
 
   .btn-ghost {
-    @apply inline-flex items-center gap-2 rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-700 active:bg-slate-900 disabled:opacity-50;
+    @apply inline-flex items-center gap-2 rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-100 transition-colors hover:bg-slate-700 active:bg-slate-900 disabled:opacity-50;
   }
 
   .btn-danger {
@@ -36,7 +72,7 @@
   }
 
   .input {
-    @apply w-full rounded-xl bg-slate-800 text-white text-sm px-4 py-2.5 border border-slate-700 focus:outline-none focus:border-indigo-500 transition-colors;
+    @apply w-full rounded-xl bg-slate-800 text-slate-100 text-sm px-4 py-2.5 border border-slate-700 focus:outline-none focus:border-indigo-500 transition-colors;
   }
 
   .label {
@@ -44,10 +80,10 @@
   }
 
   .nav-link {
-    @apply px-3 py-1.5 rounded-lg text-sm font-medium text-slate-400 hover:text-white hover:bg-slate-800 transition-colors;
+    @apply px-3 py-1.5 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors;
   }
 
   .nav-link-active {
-    @apply bg-slate-800 text-white;
+    @apply bg-slate-800 text-slate-100;
   }
 }

@@ -27,8 +27,8 @@ const label = versionLabel(BUILD, APP_ENV)
   white-space: nowrap;
   padding: 2px 8px;
   border-radius: 999px;
-  background: rgb(2 6 23 / 0.55); /* slate-950 */
-  color: rgb(203 213 225 / 0.75); /* slate-300 */
+  background: rgb(var(--s-950) / 0.55);
+  color: rgb(var(--s-300) / 0.85);
   font: 500 10px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   letter-spacing: 0.02em;
 }

@@ -5,20 +5,27 @@ export const PAGES = [
   { to: '/settings', label: 'Settings' },
 ] as const
 
-/** Index of the page a path belongs to, or -1 (e.g. /legacy, /spike-auth: outside the swipe order). */
+/** Index of the page a path belongs to, or -1 (e.g. /legacy, /signin: outside the swipe order). */
 export function pageIndex(path: string): number {
   return PAGES.findIndex((p) => p.to === path)
 }
 
-/** Target of a swipe: dx < 0 (finger moves left) goes to the next page, dx > 0 to the previous. null at the ends. */
-export function swipeTarget(path: string, dx: number): string | null {
-  const i = pageIndex(path)
-  if (i < 0) return null
-  const j = dx < 0 ? i + 1 : i - 1
-  return PAGES[j]?.to ?? null
+/**
+ * Where a drag ends. `dx` is the finger's horizontal travel (negative = towards the next page), `vx` its release
+ * velocity in px/ms, `width` the page width. A page change needs either 22% of the width or a quick flick;
+ * otherwise the page springs back. The result is clamped to the first and last page — no wrap-around (note 9).
+ */
+export function settle(index: number, dx: number, vx: number, width: number, count = PAGES.length): number {
+  const far = Math.abs(dx) > width * 0.22
+  const flick = Math.abs(vx) > 0.45 && Math.abs(dx) > 24
+  if (!far && !flick) return index
+  const next = index + (dx < 0 ? 1 : -1)
+  return Math.min(count - 1, Math.max(0, next))
 }
 
-/** A swipe is a mostly-horizontal drag of at least `minPx`. */
-export function isSwipe(dx: number, dy: number, minPx = 60): boolean {
-  return Math.abs(dx) >= minPx && Math.abs(dx) > 1.5 * Math.abs(dy)
+/** Drag offset with rubber-band resistance when pulling past the first or last page. */
+export function dragOffset(index: number, dx: number, count = PAGES.length): number {
+  const pastStart = index === 0 && dx > 0
+  const pastEnd = index === count - 1 && dx < 0
+  return pastStart || pastEnd ? dx * 0.3 : dx
 }

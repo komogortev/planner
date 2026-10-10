@@ -8,6 +8,7 @@ import { useSettingsStore } from '@/stores/settings'
 import { useSyncStore } from '@/stores/sync'
 import { GitHubError } from '@/db/github'
 import type { SnapshotCounts } from '@/db/snapshot'
+import { setThemeChoice, themeChoice, type ThemeChoice } from '@/theme/theme'
 import InstallButton from '@/components/InstallButton.vue'
 import ConfirmRestoreModal from '@/components/ConfirmRestoreModal.vue'
 import ConflictModal from '@/components/ConflictModal.vue'
@@ -33,6 +34,11 @@ async function refreshStats(): Promise<void> {
 }
 
 const router = useRouter()
+const themeOptions: { value: ThemeChoice; label: string }[] = [
+  { value: 'system', label: 'System' },
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
+]
 const me = ref<Me | { error: string } | null>(null)
 
 function signOut(): void {
@@ -325,6 +331,24 @@ async function doDisconnect(): Promise<void> {
 
     <!-- ============================================================ -->
     <!-- App info                                                      -->
+    <section class="card">
+      <h3 class="font-semibold mb-3">Appearance</h3>
+      <div class="theme-choice" role="radiogroup" aria-label="Theme">
+        <button
+          v-for="o in themeOptions"
+          :key="o.value"
+          role="radio"
+          :aria-checked="themeChoice === o.value"
+          class="theme-opt"
+          :class="{ 'theme-opt-on': themeChoice === o.value }"
+          :data-test="`theme-${o.value}`"
+          @click="setThemeChoice(o.value)"
+        >
+          {{ o.label }}
+        </button>
+      </div>
+    </section>
+
     <!-- ============================================================ -->
     <section class="card">
       <h3 class="font-semibold mb-4">App info</h3>
@@ -370,3 +394,26 @@ async function doDisconnect(): Promise<void> {
     />
   </div>
 </template>
+
+<style scoped>
+.theme-choice {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: rgb(var(--s-800));
+}
+.theme-opt {
+  flex: 1;
+  padding: 8px 0;
+  border-radius: 9px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: rgb(var(--s-400));
+}
+.theme-opt-on {
+  background: rgb(var(--s-950));
+  color: rgb(var(--s-100));
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
+}
+</style>
