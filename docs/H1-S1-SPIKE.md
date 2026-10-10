@@ -104,12 +104,11 @@ step 8; the test screen by S3.
   (Safari/iCloud, Chrome Sync) may record it before `replaceState` runs, and Workers observability may log the
   `Location` header. Check both after the first prod sign-in; if either holds, return a short-lived single-use code in
   the fragment and exchange it by POST.
-- **Google email linking.** `email_verified` on a non-Gmail Google account was checked once, at creation. Auto-link
-  only `@gmail.com` or tokens with `hd`; otherwise the already-linked provider confirms.
-- **Revoking an invite** must delete that user's sessions (the allowlist is checked only at sign-in); add logout and an
-  expired-session purge.
-- Two sign-ins in parallel tabs overwrite one flow cookie (name it per state if it matters). Check whether GitHub OAuth
-  Apps take PKCE now, and enable it if so.
+- ~~**Google email linking.**~~ Done in S2 step 6: an address is used for lookup or invite redemption only for
+  `@gmail.com` / `@googlemail.com` or a token whose `hd` is the address's domain; a linked identity still signs in by `sub`.
+- ~~**Revoking an invite** must delete that user's sessions~~ Done in S2 step 3.
+- ~~Two sign-ins in parallel tabs overwrite one flow cookie; GitHub PKCE~~ Done in S2 step 6: cookie per `state` (max 5
+  unfinished), GitHub OAuth Apps take PKCE `S256` since 2025-07-14 and it is on.
 
 ## 6. Results
 

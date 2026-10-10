@@ -1,10 +1,17 @@
 // H1 §8 rate limits. The limits come from wrangler.toml (auth 20/min per IP, push 60/min per IP, push 20/min per user);
 // each test uses fresh addresses and accounts, so counters from one test never reach another.
 import { env } from 'cloudflare:test'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createSession } from '../src/auth'
 import app from '../src/index'
 import { ipKey, overLimit, resetNoIpWarning } from '../src/ratelimit'
+
+// The local limiter counts in fixed windows aligned to the wall clock (miniflare: epoch = floor(now / period)), so a test that
+// sends 21 requests across a minute boundary sees its counter reset and never gets the 429. Start each test clear of the edge.
+beforeEach(async () => {
+  const left = 60_000 - (Date.now() % 60_000)
+  if (left < 5_000) await new Promise((r) => setTimeout(r, left + 100))
+})
 
 const API = 'https://api.test'
 const APP_ORIGIN = 'https://app.test'
