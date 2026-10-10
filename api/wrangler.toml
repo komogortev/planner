@@ -1,0 +1,18 @@
+name = "planner-api"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+
+# Production only: the app URL(s) sign-in may return to; CORS admits their origins (src/config.ts).
+# Local dev overrides this with `--var` in package.json's `dev` script — localhost never reaches production.
+[vars]
+ALLOWED_APP_URLS = "https://komogortev.github.io/planner/"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "planner"
+# Filled in from `wrangler d1 create planner`. Not a secret — it is only usable with this account's credentials.
+database_id = "40a3af08-9757-41aa-a448-d18f27430131"
+migrations_dir = "migrations"
+
+[observability]
+enabled = true

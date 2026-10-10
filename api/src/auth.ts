@@ -1,0 +1,211 @@
+// GitHub + Google sign-in → opaque bearer token. Plain fetch + Web Crypto, adapted from the 0BSD
+// examples Arctic's maintainer published when deprecating it (github.com/pilcrowonpaper/arctic/tree/main/code).
+import { Hono, type Context } from 'hono'
+import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
+import { appUrls } from './config'
+import type { Env } from './index'
+
+type Provider = 'github' | 'google'
+// `emails`: every verified address the provider vouches for. The account email is the first one on the allowlist.
+type Identity = { providerUserId: string; emails: string[]; name: string | null }
+type Admitted = { providerUserId: string; email: string; name: string | null }
+type C = Context<{ Bindings: Env }>
+
+const SESSION_DAYS = 30
+const FLOW_COOKIE = 'oauth_flow'
+
+const PROVIDERS = {
+  github: {
+    authorize: 'https://github.com/login/oauth/authorize',
+    token: 'https://github.com/login/oauth/access_token',
+    scope: 'read:user user:email',
+    pkce: false,
+  },
+  google: {
+    authorize: 'https://accounts.google.com/o/oauth2/v2/auth',
+    token: 'https://oauth2.googleapis.com/token',
+    scope: 'openid email profile',
+    pkce: true,
+  },
+} as const
+
+// ── encoding helpers ────────────────────────────────────────────────────────
+
+function base64url(bytes: Uint8Array): string {
+  let s = ''
+  for (const b of bytes) s += String.fromCharCode(b)
+  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+function randomToken(): string {
+  return base64url(crypto.getRandomValues(new Uint8Array(32)))
+}
+
+async function sha256(text: string): Promise<string> {
+  return base64url(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))))
+}
+
+function credentials(env: Env, p: Provider) {
+  return p === 'github'
+    ? { id: env.GITHUB_CLIENT_ID, secret: env.GITHUB_CLIENT_SECRET }
+    : { id: env.GOOGLE_CLIENT_ID, secret: env.GOOGLE_CLIENT_SECRET }
+}
+
+function redirectUri(c: C, p: Provider): string {
+  return `${new URL(c.req.url).origin}/auth/callback/${p}`
+}
+
+function isProvider(p: string): p is Provider {
+  return p === 'github' || p === 'google'
+}
+
+// ── identity fetch per provider ─────────────────────────────────────────────
+
+async function githubIdentity(accessToken: string): Promise<Identity | null> {
+  const headers = { Authorization: `Bearer ${accessToken}`, 'User-Agent': 'planner-api', Accept: 'application/vnd.github+json' }
+  const [userRes, emailsRes] = await Promise.all([
+    fetch('https://api.github.com/user', { headers }),
+    fetch('https://api.github.com/user/emails', { headers }),
+  ])
+  if (!userRes.ok || !emailsRes.ok) return null
+  const user = (await userRes.json()) as { id: number; name: string | null; login: string }
+  const emails = (await emailsRes.json()) as { email: string; primary: boolean; verified: boolean }[]
+  // Primary first, so it wins when several verified addresses are allowlisted.
+  const verified = emails.filter((e) => e.verified).sort((a, b) => Number(b.primary) - Number(a.primary))
+  if (verified.length === 0) return null
+  return { providerUserId: String(user.id), emails: verified.map((e) => e.email.toLowerCase()), name: user.name ?? user.login }
+}
+
+// The ID token comes straight from Google's token endpoint over TLS, which OIDC Core §3.1.3.7 accepts in place of
+// a signature check. The claims are still checked.
+function googleIdentity(idToken: string, clientId: string): Identity | null {
+  const part = idToken.split('.')[1]
+  if (!part) return null
+  // atob yields one char per byte; decode those bytes as UTF-8 or non-Latin names arrive garbled.
+  const bytes = Uint8Array.from(atob(part.replace(/-/g, '+').replace(/_/g, '/')), (ch) => ch.charCodeAt(0))
+  const claims = JSON.parse(new TextDecoder().decode(bytes)) as {
+    iss: string; aud: string; exp: number; sub: string; email?: string; email_verified?: boolean; name?: string
+  }
+  const issOk = claims.iss === 'https://accounts.google.com' || claims.iss === 'accounts.google.com'
+  if (!issOk || claims.aud !== clientId || claims.exp * 1000 < Date.now()) return null
+  if (!claims.email || claims.email_verified !== true) return null
+  return { providerUserId: claims.sub, emails: [claims.email.toLowerCase()], name: claims.name ?? null }
+}
+
+// ── account + session writes ────────────────────────────────────────────────
+
+async function upsertUser(db: D1Database, p: Provider, who: Admitted): Promise<string> {
+  const linked = await db
+    .prepare('SELECT user_id FROM identities WHERE provider = ? AND provider_user_id = ?')
+    .bind(p, who.providerUserId)
+    .first<{ user_id: string }>()
+  if (linked) return linked.user_id
+
+  // Same verified email from another provider → same account.
+  const existing = await db.prepare('SELECT id FROM users WHERE email = ?').bind(who.email).first<{ id: string }>()
+  const userId = existing?.id ?? crypto.randomUUID()
+  const writes = [db.prepare('INSERT INTO identities (provider, provider_user_id, user_id) VALUES (?, ?, ?)').bind(p, who.providerUserId, userId)]
+  if (!existing) {
+    writes.unshift(db.prepare('INSERT INTO users (id, email, name, created_at) VALUES (?, ?, ?, ?)').bind(userId, who.email, who.name, Date.now()))
+  }
+  await db.batch(writes)
+  return userId
+}
+
+async function createSession(db: D1Database, userId: string): Promise<string> {
+  const token = randomToken()
+  const now = Date.now()
+  await db
+    .prepare('INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)')
+    .bind(await sha256(token), userId, now, now + SESSION_DAYS * 86_400_000)
+    .run()
+  return token
+}
+
+/** The signed-in user for a request's `Authorization: Bearer <token>`, or null. */
+export async function sessionUser(c: C): Promise<{ id: string; email: string; name: string | null } | null> {
+  const token = c.req.header('Authorization')?.match(/^Bearer (.+)$/)?.[1]
+  if (!token) return null
+  return c.env.DB.prepare(
+    `SELECT u.id, u.email, u.name FROM sessions s JOIN users u ON u.id = s.user_id
+     WHERE s.token_hash = ? AND s.expires_at > ?`,
+  )
+    .bind(await sha256(token), Date.now())
+    .first()
+}
+
+// ── routes ──────────────────────────────────────────────────────────────────
+
+export const auth = new Hono<{ Bindings: Env }>()
+
+// GET /auth/start/:provider?return_to=<app URL> — the app navigates here (top-level, not fetch).
+auth.get('/start/:provider', async (c) => {
+  const p = c.req.param('provider')
+  if (!isProvider(p)) return c.text('unknown provider', 404)
+
+  let returnTo = ''
+  try { returnTo = new URL(c.req.query('return_to') ?? '').href } catch { /* invalid → rejected below */ }
+  // Spike: the API's own /spike/landing page is also accepted (removed at spike step 8).
+  const spikeLanding = returnTo.startsWith(`${new URL(c.req.url).origin}/spike/landing`)
+  if (!spikeLanding && !appUrls(c.env).some((u) => returnTo.startsWith(u))) return c.text('return_to not allowed', 400)
+
+  const cfg = PROVIDERS[p]
+  const state = randomToken()
+  const verifier = cfg.pkce ? randomToken() : ''
+  const url = new URL(cfg.authorize)
+  url.searchParams.set('response_type', 'code')
+  url.searchParams.set('client_id', credentials(c.env, p).id)
+  url.searchParams.set('redirect_uri', redirectUri(c, p))
+  url.searchParams.set('scope', cfg.scope)
+  url.searchParams.set('state', state)
+  if (cfg.pkce) {
+    url.searchParams.set('code_challenge', await sha256(verifier))
+    url.searchParams.set('code_challenge_method', 'S256')
+  }
+
+  // The API's own origin (workers.dev is on the public suffix list), so no other site can plant this cookie.
+  setCookie(c, FLOW_COOKIE, JSON.stringify({ p, state, verifier, returnTo }), {
+    path: '/auth', httpOnly: true, secure: true, sameSite: 'Lax', maxAge: 600,
+  })
+  return c.redirect(url.toString())
+})
+
+// GET /auth/callback/:provider?code&state — the provider redirects here.
+auth.get('/callback/:provider', async (c) => {
+  const p = c.req.param('provider')
+  if (!isProvider(p)) return c.text('unknown provider', 404)
+
+  const raw = getCookie(c, FLOW_COOKIE)
+  deleteCookie(c, FLOW_COOKIE, { path: '/auth', secure: true })
+  let flow: { p: string; state: string; verifier: string; returnTo: string } | null = null
+  try { flow = raw ? JSON.parse(raw) : null } catch { /* tampered → treated as expired */ }
+  const code = c.req.query('code')
+  if (!flow || flow.p !== p || typeof flow.returnTo !== 'string' || !code || c.req.query('state') !== flow.state) {
+    return c.text('sign-in expired, start again', 400)
+  }
+
+  const cred = credentials(c.env, p)
+  const body = new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: redirectUri(c, p), client_id: cred.id, client_secret: cred.secret })
+  if (flow.verifier) body.set('code_verifier', flow.verifier)
+  const tokenRes = await fetch(PROVIDERS[p].token, { method: 'POST', body, headers: { Accept: 'application/json' } })
+  // GitHub answers a bad or expired code with 200 + {error}, so check both.
+  const tokens = tokenRes.ok ? ((await tokenRes.json()) as { access_token?: string; id_token?: string; error?: string }) : null
+  if (!tokens || tokens.error) return c.text('provider refused the code', 502)
+
+  const who = p === 'github'
+    ? tokens.access_token ? await githubIdentity(tokens.access_token) : null
+    : tokens.id_token ? googleIdentity(tokens.id_token, cred.id) : null
+  if (!who) return c.text('no verified email from provider', 403)
+
+  const allowed = c.env.ALLOWED_EMAILS.split(',').map((e) => e.trim().toLowerCase())
+  const email = who.emails.find((e) => allowed.includes(e))
+  // Shown only to whoever just proved they own these addresses — it names nothing they don't already know.
+  if (!email) return c.text(`not invited — ${p} reported: ${who.emails.join(', ')}`, 403)
+
+  const token = await createSession(c.env.DB, await upsertUser(c.env.DB, p, { ...who, email }))
+  // Fragment, not query: never sent to a server or written to access logs. Set via URL so a `#` already in
+  // return_to is replaced, not appended to.
+  const back = new URL(flow.returnTo)
+  back.hash = `token=${token}`
+  return c.redirect(back.href)
+})

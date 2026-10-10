@@ -16,7 +16,7 @@ Nothing else is in scope. No entries table, no sync, no UI beyond a test screen.
 ## 2. Owner setup — before the session (~45 min)
 
 Only the owner can do these: they create accounts and handle secrets. **Never paste a secret into chat**; it goes
-straight into the Worker's secret store or the git-ignored `api/.dev.vars`.
+straight into the Worker's secret store or the git-ignored `api/.env`.
 
 **Cloudflare**
 
@@ -45,15 +45,18 @@ each.
 
 **Where the secrets go**
 
-| Value | Local dev | Production |
-|---|---|---|
-| GitHub client id/secret (`planner-dev`) | `api/.dev.vars` | — |
-| GitHub client id/secret (`planner`) | — | `wrangler secret put GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` |
-| Google client id/secret | `api/.dev.vars` | `wrangler secret put GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` |
-| Session signing secret | `api/.dev.vars` (any random string) | `wrangler secret put SESSION_SECRET` |
+*Corrected 2026-10-09 (session 1): `.env` instead of `.dev.vars`, `secret bulk` instead of `secret put`, no
+`SESSION_SECRET`, plus `ALLOWED_EMAILS` — see §6 environment notes for why.*
 
-`.dev.vars` and `.wrangler/` are git-ignored (added with this doc). Claude checks `git status` shows neither before
-every commit.
+| Value | Local dev — `api/.env`, created by the owner | Production — `api/.env.production`, uploaded then deleted |
+|---|---|---|
+| GitHub client id/secret | `planner-dev` app | `planner` app |
+| Google client id/secret | same client | same client |
+| `ALLOWED_EMAILS` (verified emails, comma-separated) | yes | yes |
+
+Production upload: `pnpm --dir api exec wrangler secret bulk .env.production`, then delete the file.
+`.env`, `.env.*`, `.dev.vars` and `.wrangler/` are git-ignored. Claude checks `git status` shows none of them before
+every commit, and never creates or reads `api/.env*`.
 
 ## 3. Session plan
 
@@ -67,7 +70,7 @@ every commit.
 | 5 | Measure CPU: 20 calls each to the callback, `/me`, `/spike/note`. Read p50/p99 from the dashboard (Workers → Metrics → CPU time) or `wrangler tail --format json`, whichever this account shows | table in §6 |
 | 6 | Hidden test screen in the app: route `/spike-auth`, reachable only from a link in Settings → "Sign-in test". Merged to `main` so the installed PWA has it | deployed |
 | 7 | **iPhone protocol (owner, ~15 min):** delete any old home-screen icon → open the site in Safari → Share → Add to Home Screen → open from the icon → Settings → Sign-in test → sign in with GitHub, then Google. Record: did it return to the installed app? Signed in? Close the app fully, reopen: still signed in? Open the same page in a Safari tab: signed **out** (separate storage — expected) | outcome per provider |
-| 8 | Close: record results, decide by §4, update H1 §12 Q1–Q2, delete `/spike/burn` and `/spike/note` | H1 doc + STATE |
+| 8 | Close: record results, decide by §4, update H1 §12 Q1–Q2. Remove: `/spike/landing` + the `spikeLanding` exception in `auth.ts`; a `0003` migration dropping `spike_notes` (`/spike/burn` + `/spike/note` already went in session 1). The `/spike-auth` test screen stays until S3 | H1 doc + STATE |
 
 ## 4. Decision rules
 
@@ -84,18 +87,45 @@ A stop is reported with the evidence; nothing switches backend without the owner
 
 ## 5. Not in the spike
 
-Entries, outbox, sync, cleaning, invites, rate limits, migrations, the capture page (all S2–S3). The test screen and
-spike routes are removed by S3.
+Entries, outbox, sync, cleaning, invites, rate limits, migrations, the capture page (all S2–S3). Spike routes go at
+step 8; the test screen by S3.
+
+**Carried to S2 from the session-1 review** (low risk while a token only reads `/me`; Blocking once it guards entries):
+
+- **Login CSRF on the last hop.** The app accepts any `#token=`. Step 6 adds a nonce: the app keeps it in
+  `sessionStorage`, passes it through `/auth/start`, the Worker echoes it in the fragment, a mismatch is rejected.
+- **Google email linking.** `email_verified` on a non-Gmail Google account was checked once, at creation. Auto-link
+  only `@gmail.com` or tokens with `hd`; otherwise the already-linked provider confirms.
+- **Revoking an invite** must delete that user's sessions (the allowlist is checked only at sign-in); add logout and an
+  expired-session purge.
+- Two sign-ins in parallel tabs overwrite one flow cookie (name it per state if it matters). Check whether GitHub OAuth
+  Apps take PKCE now, and enable it if so.
 
 ## 6. Results
 
-*Filled in during the spike.*
+Session 1, 2026-10-09 — steps 0–5. Steps 6–8 next session. Production figures from `wrangler tail`, summarised by
+`api/scripts/cpu-summary.mjs`.
 
 | Item | Result |
 |---|---|
-| Auth / router picks | |
-| Burn route (known positive) | |
-| CPU p50 / p99 — callback · `/me` · D1 write | |
-| CORS negative control | |
-| iPhone — GitHub · Google · after reopen · Safari tab separate | |
-| Decision | |
+| Auth / router picks | **Own OAuth code** (fetch + Web Crypto, from the 0BSD examples Arctic's maintainer published) **+ Hono** 4.13 (8.1 KB gz). Arctic was the first pick (4.9 KB) but is **deprecated by its maintainer since 2026-07-29** — npm showed it only at install. Better Auth: 209.6 KB gz, 17 deps — stays the §4 fallback, though it is unlikely to be cheaper. Deployed Worker: 19.5 KB gz, 2 ms startup |
+| Burn route (known positive) | meter reads true and scales: n=0 → 0 ms · 10 M → 27–34 ms · 25 M → 61–63 ms · 100 M → 240–246 ms. **No 1102 at any size** — over these 11 requests the free plan did not enforce 10 ms per request |
+| CPU p50 / p99 — D1 write | 1 / 2 ms (n=20, paced) |
+| CPU p50 / p99 — `/me` | 1 / 2 ms (n=10) |
+| CPU p50 / p99 — callback | GitHub 5 / **9** ms (n=7: one 9, six at 5) · Google 3 / 6 ms (n=5) · start routes ≤ 1 ms (n=17). 12 callbacks = 12 session rows, so tail missed none. Short of the planned 20 per route |
+| CORS negative control | Pages origin: `/health`, JSON POST, `Authorization` request all succeed. `example.com`: all three blocked, and **0 rows written** (preflight refused). Local: `localhost:5173` allowed, `evil.example` + `localhost:5176` refused |
+| Sign-in | GitHub + Google, local and production: both resolve to **one account** (verified-email link); only SHA-256 token hashes stored. Allowlist (`ALLOWED_EMAILS` secret) stands in for S2 invites |
+| iPhone — GitHub · Google · after reopen · Safari tab separate | *next session* |
+| Decision | **A ✅. B ✅ on steady state** (owner, 2026-10-09): every route p50 1–5 ms; the one 9 ms GitHub callback is an open outlier, under the limit and against a limit not enforced at 246 ms. **Re-entry:** when S2's real auth flow is deployed, read production CPU over ≥ 50 callbacks; p99 > 7 ms → find what in the route costs it before S2 continues. §4's "switch to the other candidate" does not apply to this kind of result (Better Auth cannot be cheaper). **C:** next session, steps 6–7 |
+
+**Environment notes found on the way**
+
+- Wrangler 4.149 needs Node ≥ 22; the machine moved 20.15 → **24.20** (Node 20 was EOL 2026-04-30). Typecheck + build
+  green on SHARED, engine-dev, planner before and after.
+- Local secrets live in **`api/.env`**, not `.dev.vars`: a file Claude wrote is echoed back to it on every save.
+  Production secrets go in via `wrangler secret bulk <file>` — the interactive `secret put` prompt stored a 3-char value
+  twice on this machine. `SESSION_SECRET` is not used (tokens are random, stored hashed; nothing is signed).
+- The `personal-planner` launch config serves the app on **:5176**, which CORS refuses. Step 6 picks one port.
+- `wrangler tail` drops events in bursts — pace measurement calls.
+- The planner's `typecheck` now also runs `api`'s (the Stop-hook gate mapped `api/*.ts` to `vue-tsc -b`, which never saw
+  them). Known positive: a planted TS2322 in `api/` fails it.
