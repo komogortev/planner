@@ -7,11 +7,21 @@ import type { Env } from './index'
 
 type Provider = 'github' | 'google'
 // `emails`: every verified address the provider vouches for, primary first. A new account takes the first invited one.
-type Identity = { providerUserId: string; emails: string[]; name: string | null }
+// `unvouched`: addresses the provider reported but whose ownership it cannot stand behind (see googleIdentity). They are
+// never used to find or create an account — only to tell the person why they were refused.
+type Identity = { providerUserId: string; emails: string[]; unvouched: string[]; name: string | null }
 type C = Context<{ Bindings: Env }>
 
 const SESSION_DAYS = 30
+// One cookie per sign-in, named by its `state`: two tabs signing in at once no longer overwrite each other's flow.
 const FLOW_COOKIE = 'oauth_flow'
+const STATE_RE = /^[A-Za-z0-9_-]{43}$/ // randomToken(): 32 bytes, base64url
+// The exact name this Worker writes. Hono reads cookie names with a relaxed pattern but writes (and deletes) with a strict
+// one, so a stray `oauth_flow_a@b` in a request would make `deleteCookie` throw and the sign-in answer 500.
+const FLOW_NAME_RE = new RegExp(`^${FLOW_COOKIE}_[A-Za-z0-9_-]{43}$`)
+// Unfinished sign-ins pile up for 10 minutes (the cookie's life); cap them so the Cookie header cannot grow without bound.
+const MAX_FLOWS = 5
+const flowCookie = (state: string) => `${FLOW_COOKIE}_${state}`
 // base64url, as the app generates it; bounded so it cannot bloat the flow cookie.
 const NONCE_RE = /^[A-Za-z0-9_-]{16,128}$/
 
@@ -20,7 +30,7 @@ const PROVIDERS = {
     authorize: 'https://github.com/login/oauth/authorize',
     token: 'https://github.com/login/oauth/access_token',
     scope: 'read:user user:email',
-    pkce: false,
+    pkce: true, // GitHub OAuth Apps accept S256 since 2025-07-14; the verifier is then required at the token exchange
   },
   google: {
     authorize: 'https://accounts.google.com/o/oauth2/v2/auth',
@@ -74,7 +84,7 @@ async function githubIdentity(accessToken: string): Promise<Identity | null> {
   // Primary first, so it wins when several verified addresses are allowlisted.
   const verified = emails.filter((e) => e.verified).sort((a, b) => Number(b.primary) - Number(a.primary))
   if (verified.length === 0) return null
-  return { providerUserId: String(user.id), emails: verified.map((e) => e.email.toLowerCase()), name: user.name ?? user.login }
+  return { providerUserId: String(user.id), emails: verified.map((e) => e.email.toLowerCase()), unvouched: [], name: user.name ?? user.login }
 }
 
 // The ID token comes straight from Google's token endpoint over TLS, which OIDC Core §3.1.3.7 accepts in place of
@@ -85,39 +95,60 @@ function googleIdentity(idToken: string, clientId: string): Identity | null {
   // atob yields one char per byte; decode those bytes as UTF-8 or non-Latin names arrive garbled.
   const bytes = Uint8Array.from(atob(part.replace(/-/g, '+').replace(/_/g, '/')), (ch) => ch.charCodeAt(0))
   const claims = JSON.parse(new TextDecoder().decode(bytes)) as {
-    iss: string; aud: string; exp: number; sub: string; email?: string; email_verified?: boolean; name?: string
+    iss: string; aud: string; exp: number; sub: string; email?: string; email_verified?: boolean; name?: string; hd?: string
   }
   const issOk = claims.iss === 'https://accounts.google.com' || claims.iss === 'accounts.google.com'
   if (!issOk || claims.aud !== clientId || claims.exp * 1000 < Date.now()) return null
   if (!claims.email || claims.email_verified !== true) return null
-  return { providerUserId: claims.sub, emails: [claims.email.toLowerCase()], name: claims.name ?? null }
+  // `email_verified` is checked once, when Google issues the token. For an address Google does not host that is weak: the
+  // domain can lapse and be re-registered, and the new owner gets a "verified" Google account with the old address — so
+  // linking by email would hand them the old owner's planner. Google's own guidance: trust the address only for Gmail, or
+  // for a Workspace account (`hd`, the hosted domain) whose domain is the address's. Anyone else still signs in by `sub`
+  // once linked; they are just never matched or created by email.
+  const email = claims.email.toLowerCase()
+  const domain = email.slice(email.lastIndexOf('@') + 1)
+  const vouched = domain === 'gmail.com' || domain === 'googlemail.com' || (!!claims.hd && claims.hd.toLowerCase() === domain)
+  return { providerUserId: claims.sub, emails: vouched ? [email] : [], unvouched: vouched ? [] : [email], name: claims.name ?? null }
 }
 
 // ── account + session writes ────────────────────────────────────────────────
 
+/** When a flow cookie was set, or 0 when it cannot be read. */
+function flowStartedAt(raw: string): number {
+  try {
+    const at = (JSON.parse(raw) as { at?: unknown }).at
+    return typeof at === 'number' ? at : 0
+  } catch { return 0 }
+}
+
 type UserRow = { id: string; email: string; disabled_at: number | null }
+
+type Admission = { userId: string } | { refused: 'disabled' | 'not-invited' }
+const REFUSED_DISABLED: Admission = { refused: 'disabled' }
+const REFUSED_NOT_INVITED: Admission = { refused: 'not-invited' }
 
 /**
  * Who may sign in, in order: an identity already linked to an account; an existing account with one of the verified
  * emails (this provider gets linked to it); a new account, only through an open invite for a verified email.
- * Returns the account id, or null when the caller is not invited or the account is disabled (revoked).
+ * Refused when the caller is not invited or the account is disabled (revoked).
  */
-async function admit(db: D1Database, p: Provider, who: Identity): Promise<string | null> {
+async function admit(db: D1Database, p: Provider, who: Identity): Promise<Admission> {
   const linked = await db
     .prepare('SELECT u.id, u.email, u.disabled_at FROM identities i JOIN users u ON u.id = i.user_id WHERE i.provider = ? AND i.provider_user_id = ?')
     .bind(p, who.providerUserId)
     .first<UserRow>()
-  if (linked) return linked.disabled_at === null ? linked.id : null
+  if (linked) return linked.disabled_at === null ? { userId: linked.id } : REFUSED_DISABLED
+  if (who.emails.length === 0) return REFUSED_NOT_INVITED // nothing the provider vouches for: no account is found or made by email
 
   // Same verified email from another provider → same account. Primary email first (who.emails is ordered).
   const marks = who.emails.map(() => '?').join(', ')
   const { results } = await db.prepare(`SELECT id, email, disabled_at FROM users WHERE email IN (${marks})`).bind(...who.emails).all<UserRow>()
   const existing = who.emails.map((e) => results.find((u) => u.email === e)).find(Boolean)
   if (existing) {
-    if (existing.disabled_at !== null) return null
+    if (existing.disabled_at !== null) return REFUSED_DISABLED
     // OR IGNORE: two first sign-ins with the same new identity (a double-clicked tab) would otherwise 500 on the PK.
     await db.prepare('INSERT OR IGNORE INTO identities (provider, provider_user_id, user_id) VALUES (?, ?, ?)').bind(p, who.providerUserId, existing.id).run()
-    return existing.id
+    return { userId: existing.id }
   }
 
   // New account. One batch (one transaction) per candidate email: every write is conditional on an open invite, so a
@@ -134,9 +165,9 @@ async function admit(db: D1Database, p: Provider, who: Identity): Promise<string
       db.prepare(`UPDATE invites SET used_by = ?, used_at = ? WHERE email = ? AND used_by IS NULL AND EXISTS (SELECT 1 FROM users WHERE id = ?)`)
         .bind(userId, now, email, userId),
     ])
-    if (created.meta.changes === 1) return userId
+    if (created.meta.changes === 1) return { userId }
   }
-  return null
+  return REFUSED_NOT_INVITED
 }
 
 /** A new session for the account; its expired sessions are purged on the way (no cron needed for one user's rows). */
@@ -219,8 +250,15 @@ auth.get('/start/:provider', async (c) => {
     url.searchParams.set('code_challenge_method', 'S256')
   }
 
+  // Keep the newest MAX_FLOWS-1 unfinished sign-ins (plus this one); forget the rest. An unreadable cookie counts as oldest.
+  const open = Object.entries(getCookie(c))
+    .filter(([name]) => FLOW_NAME_RE.test(name))
+    .map(([name, raw]) => ({ name, at: flowStartedAt(raw) }))
+    .sort((a, b) => b.at - a.at)
+  for (const old of open.slice(MAX_FLOWS - 1)) deleteCookie(c, old.name, { path: '/auth', secure: true })
+
   // The API's own origin (workers.dev is on the public suffix list), so no other site can plant this cookie.
-  setCookie(c, FLOW_COOKIE, JSON.stringify({ p, state, verifier, returnTo, nonce }), {
+  setCookie(c, flowCookie(state), JSON.stringify({ p, state, verifier, returnTo, nonce, at: Date.now() }), {
     path: '/auth', httpOnly: true, secure: true, sameSite: 'Lax', maxAge: 600,
   })
   return c.redirect(url.toString())
@@ -231,12 +269,15 @@ auth.get('/callback/:provider', async (c) => {
   const p = c.req.param('provider')
   if (!isProvider(p)) return c.text('unknown provider', 404)
 
-  const raw = getCookie(c, FLOW_COOKIE)
-  deleteCookie(c, FLOW_COOKIE, { path: '/auth', secure: true })
+  // Only the cookie of the sign-in this `state` belongs to; a malformed state names no cookie at all.
+  const state = c.req.query('state') ?? ''
+  const name = STATE_RE.test(state) ? flowCookie(state) : null
+  const raw = name ? getCookie(c, name) : undefined
+  if (name) deleteCookie(c, name, { path: '/auth', secure: true })
   let flow: { p: string; state: string; verifier: string; returnTo: string; nonce: string } | null = null
   try { flow = raw ? JSON.parse(raw) : null } catch { /* tampered → treated as expired */ }
   const code = c.req.query('code')
-  if (!flow || flow.p !== p || typeof flow.returnTo !== 'string' || typeof flow.nonce !== 'string' || !code || c.req.query('state') !== flow.state) {
+  if (!flow || flow.p !== p || typeof flow.returnTo !== 'string' || typeof flow.nonce !== 'string' || !code || state !== flow.state) {
     return c.text('sign-in expired, start again', 400)
   }
 
@@ -253,11 +294,17 @@ auth.get('/callback/:provider', async (c) => {
     : tokens.id_token ? googleIdentity(tokens.id_token, cred.id) : null
   if (!who) return c.text('no verified email from provider', 403)
 
-  const userId = await admit(c.env.DB, p, who)
+  const admitted = await admit(c.env.DB, p, who)
   // Shown only to whoever just proved they own these addresses — it names nothing they don't already know.
-  if (!userId) return c.text(`not invited — ${p} reported: ${who.emails.join(', ')}`, 403)
+  if ('refused' in admitted) {
+    if (admitted.refused === 'disabled') return c.text(`this account has been disabled — ${p} sign-in refused`, 403)
+    const why = who.unvouched.length
+      ? `${p} cannot vouch for ${who.unvouched.join(', ')} — sign in with GitHub, or a Gmail or Google Workspace account`
+      : `${p} reported: ${who.emails.join(', ')}`
+    return c.text(`not invited — ${why}`, 403)
+  }
 
-  const token = await createSession(c.env.DB, userId)
+  const token = await createSession(c.env.DB, admitted.userId)
   // Fragment, not query: never sent to a server or written to access logs. Set via URL so a `#` already in
   // return_to is replaced, not appended to.
   const back = new URL(flow.returnTo)
