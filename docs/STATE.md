@@ -13,7 +13,7 @@
 - **Repo:** own git, `origin` → `https://github.com/komogortev/planner.git` (**public** — no personal data in code,
   fixtures or docs). Data: private `komogortev/planner-data`, single `data.json` (8.4 KB, 2026-10-08) — after H1 it holds the frozen
   financial tables and the nightly entries export; entries themselves live on the backend.
-- **Dev:** launch config `personal-planner` on `:5176` (app at `/planner/`) + `planner-api` on `:8787`; production
+- **Run / test / deploy:** [RUNBOOK.md](RUNBOOK.md) — `pnpm check`, `pnpm smoke[:local]`, links. Dev: launch config `personal-planner` on `:5176` (app at `/planner/`) + `planner-api` on `:8787`; production
   preview `personal-planner-preview` on `:4173` (build first) at `/planner/`.
 - **Schema:** Dexie v3, snapshot `schemaVersion` 2. Next: Dexie v4 (`entries`, `outbox`, `syncMeta`) + D1 schema in H1.
 - **PAT gotcha:** fine-grained tokens take 30–60 s to propagate; a 404 right after creating one is not "no access".
