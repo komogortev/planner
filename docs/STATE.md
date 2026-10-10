@@ -1,20 +1,21 @@
 # Personal Planner — STATE
 
 ## SNAPSHOT
-- **Phase/Last:** H0 Pivot design (2026-10-08) — reopened as the personal helper; deprecation (2026-09-21) lifted by owner. Docs only so far: VOCABULARY, ARCHITECTURE, H1/H2 S0 drafts, PROJECT tiers rewritten.
+- **Phase/Last:** H1 S0 spec v2 (2026-10-09) — H0 closed (#7 merged; "Lens" confirmed). Owner's core loop set the H1 shape: invite-only accounts (Google/GitHub), capture page as home, outbox sync to a Cloudflare Worker + D1 backend that cleans, stores and serves entries. Docs only.
 - **Working:** deployed app (https://komogortev.github.io/planner/) — L1 sync, L2-S1 categories, frozen financial domain. 54/54 vitest at last run (2026-06-01, not re-run).
-- **Broken:** nothing known. Hazard to fix in H1: whole-snapshot sync drops unsynced entries on a 409 (H1 Q8).
-- **Blocker:** H1 S0 open questions Q1–Q9 (Q9 is an owner policy call).
-- **Next:** owner confirms vocabulary ("Lens") → close H1 Q1–Q9 → H1-S1 schema v4 + snapshot v3 + merge.
+- **Broken:** sync's "unsynced" flag lives only in memory (`src/stores/sync.ts:55`) — offline write, close, reopen → status no longer says unsynced. Fixed by the H1 outbox.
+- **Blocker:** H1 §12 Q1–Q9 (defaults stated); S1 spike must prove free-tier CPU (10 ms) and iPhone home-screen sign-in.
+- **Next:** owner signs off H1 spec → S1 spike (Worker + D1 + OAuth from Pages + iPhone round trip, CPU measured).
 ---
 
 ## Context
 
 - **Repo:** own git, `origin` → `https://github.com/komogortev/planner.git` (**public** — no personal data in code,
-  fixtures or docs). Data: private `komogortev/planner-data`, single `data.json` (8.4 KB, 2026-10-08).
+  fixtures or docs). Data: private `komogortev/planner-data`, single `data.json` (8.4 KB, 2026-10-08) — after H1 it holds the frozen
+  financial tables and the nightly entries export; entries themselves live on the backend.
 - **Dev:** `pnpm --dir E:/Projects/apps/personal-planner dev` on `:5173` (launch config `personal-planner`); production
   preview `personal-planner-preview` on `:4173` (build first) at `/planner/`.
-- **Schema:** Dexie v3, snapshot `schemaVersion` 2. Next: v4 / snapshot 3 in H1.
+- **Schema:** Dexie v3, snapshot `schemaVersion` 2. Next: Dexie v4 (`entries`, `outbox`, `syncMeta`) + D1 schema in H1.
 - **PAT gotcha:** fine-grained tokens take 30–60 s to propagate; a 404 right after creating one is not "no access".
   Never paste a PAT into chat.
 
@@ -23,8 +24,9 @@
 | Tier | Status | Doc |
 |---|---|---|
 | L0 · Base · L1 · L2-S1 | ✅ shipped | PROJECT.md §Tiers |
-| H0 Pivot design | 🔄 docs drafted, awaiting owner review | VOCABULARY.md, ARCHITECTURE.md |
-| H1 Entries & capture | S0 draft, Q1–Q9 open | H1-ENTRIES.md |
+| H0 Pivot design | ✅ closed 2026-10-09 | VOCABULARY.md, ARCHITECTURE.md |
+| H1 Core loop | S0 spec v2, §12 Q1–Q9 open (defaults stated) | H1-ENTRIES.md |
+| H1b Organise | planned (categories/tags sync, Inbox, rules) | PROJECT.md §Tiers |
 | H2 Lenses | S0 draft, Q1–Q7 open; starts after H1 exits | H2-LENSES.md |
 | H3 Agent surface · H4 Curation & tasks · H5 In-app AI | planned | PROJECT.md §Tiers |
 
@@ -33,13 +35,17 @@
 - Pin pnpm via `"packageManager"` in `package.json`; `paths-ignore: ['docs/**', '*.md']` on the deploy workflow;
   `pnpm typecheck` step before build in CI; bump Node-20 actions.
 - `appVersion` in `src/stores/sync.ts` is hardcoded `'0.1.0'` — derive from `package.json`.
-- PAT-expiry warning (persist `connectedAt`, warn at 75/85 days) — fold into H1 or H3.
+- PAT-expiry warning (persist `connectedAt`, warn at 75/85 days) — now only for the frozen-domain GitHub sync; low priority.
 - Install-prompt mount race (`useInstallPrompt.ts:93`) + dismissal escape hatch — scheduled in H1.
 - Phone verification of Base (install, offline reload, data survives SW update) — becomes part of the H1 exit week.
 
 ## Decision log
 
 Full log: PROJECT.md → Decisions log. Latest:
+
+- 2026-10-09 — Hosted backend (Workers + D1); accounts invite-only, multi-tenant, Google/GitHub sign-in; backend reads
+  content; $0 now, $5 later; H1 narrowed to the core loop, organising → H1b; Lens confirmed; work entries = personal
+  obligations only.
 
 - 2026-10-08 — Reopened as the personal helper (pivot, not a new repo); financial domain frozen, not deleted; H-tier
   prefix; lens trial over the real snapshot instead of a markdown spike; AI outside first (H3), inside later (H5).

@@ -27,6 +27,13 @@ Status column: **shipped** (in schema today) · **H<n>** (tier that introduces i
 | **Task** | `Task`, table `tasks` | A tracked item with status `open · doing · done · dropped`; may carry `direction: promise · waiting` | Entry; the frozen Commitment | H4 |
 | **Origin** | `origin` | Provenance on every record: `author` · `ai-observation` · `proposed` | — | H1 onward |
 | **Audit entry** | `AuditEntry` | One logged tool call or model call: caller, arguments, what it read, what it caused | git history (which also exists) | H3 |
+| **Account** | `users` (backend) | One person's identity on the backend, created on first sign-in with a valid invite. Every backend row belongs to exactly one account | a device | H1 |
+| **Invite** | `invites` | Single-use, expiring code bound to an email; the only way to create an account | — | H1 |
+| **Backend** | `api/` | The hosted Cloudflare Worker + D1 that authenticates, cleans, stores and serves records | the private data repo (frozen domain + nightly export) | H1 |
+| **Outbox** | table `outbox` | On-device queue of changes not yet acknowledged by the backend. "Unsynced" means the outbox is not empty | the old in-memory `dirty` flag | H1 |
+| **Server version** | `serverVersion`, `server_version` | Per-account counter the backend stamps on every write; orders changes and decides conflicts | `updatedAt` (device clock, display only) | H1 |
+| **Cursor** | `syncMeta.cursor` | Highest server version a device has pulled; the next pull asks for changes after it | — | H1 |
+| **Revision** | `entry_revisions` | An entry body replaced by a later edit, kept by the backend so no text is lost | an Entry | H1 |
 
 ## Rules of use
 
@@ -46,7 +53,7 @@ Status column: **shipped** (in schema today) · **H<n>** (tier that introduces i
 | Commitment (for open loops) | **Task** with `direction: 'promise'` | `Commitment` is the frozen financial record. A lens may still *title* its report "Today's commitments"; that is report text |
 | Activity | **Task** with `completedAt`, `repeatEveryDays` | The 2026-06 Activity-log design folded into Task |
 | Label | Category or Tag | Ambiguous between the two |
-| Routine, Recipe | **Lens** | Alternatives considered for "feature"; Routine implies a schedule |
+| Routine, Recipe | **Lens** | Alternatives considered for "feature"; Routine implies a schedule. Lens confirmed by the owner 2026-10-09 |
 
 ## Frozen domain (kept, no new work)
 
@@ -56,4 +63,4 @@ Status column: **shipped** (in schema today) · **H<n>** (tier that introduces i
 | Payment | Logged payment against a commitment |
 | Intention | Mid-horizon plan item with lifecycle status |
 | Market entry | Price / availability observation for an intention |
-| Snapshot-on-demand | Manual full-state push / pull between Dexie and the data repo (still the sync model) |
+| Snapshot-on-demand | Manual full-state push / pull between Dexie and the data repo. After H1 it carries only the frozen tables; entries sync through the Backend |

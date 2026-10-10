@@ -25,10 +25,10 @@ Vocabulary is fixed in [VOCABULARY.md](VOCABULARY.md); structure in [ARCHITECTUR
 | [STATE.md](STATE.md) | Current snapshot + next step | live |
 | [VOCABULARY.md](VOCABULARY.md) | One word per concept — UI, schema, tool names, docs | live, binding |
 | [ARCHITECTURE.md](ARCHITECTURE.md) | Layers, module boundaries, invariants, AI execution modes | live, binding |
-| [STORAGE-FORMAT.md](STORAGE-FORMAT.md) | `data.json` contract | v1 text; v2 in L2 doc; v3 lands in H1 |
+| [STORAGE-FORMAT.md](STORAGE-FORMAT.md) | `data.json` contract | v1 text; v2 in L2 doc; after H1 frozen-domain only (entries live on the backend) |
 | [L1-GITHUB.md](L1-GITHUB.md) | Sync transport, auth, conflict flow | shipped, reference |
 | [L2-ORGANIZATION.md](L2-ORGANIZATION.md) | Category / Theme / Tag model, schema v3 | S1 shipped; closed by pivot |
-| [H1-ENTRIES.md](H1-ENTRIES.md) | Entries, Inbox, capture, tags UI, schema v4 | S0 draft, questions open |
+| [H1-ENTRIES.md](H1-ENTRIES.md) | Core loop: accounts, capture page, outbox sync, backend (Worker + D1), schema v4 | S0 spec v2 (2026-10-09), questions open |
 | [H2-LENSES.md](H2-LENSES.md) | Slices, lenses, runs, reports, composer | S0 draft, questions open |
 | [SHEETS-STRUCTURE.md](SHEETS-STRUCTURE.md) | Deferred Sheets backend | historical reference |
 
@@ -53,30 +53,35 @@ resolved *before* its S1 code. H3–H5 design docs are written when their S0 sta
 | L2-S2 Tags | → H1 (tag input built for entries, reused by frozen screens if ever needed) |
 | L2-S3 Themes | → H4 (themes UI, with AI-proposed themes) |
 | L2-S4 Dashboard surfacing | Dropped — lenses replace dashboard roll-ups |
-| L2-S5 Sync round-trip + intentional 409 | → H1 (snapshot shape changes there) |
+| L2-S5 Sync round-trip + intentional 409 | → H1, then superseded 2026-10-09: entries sync per record through the backend; replay and isolation tests replace the 409 drill |
 | L3 Mobile UX & insight | Capture-relevant items (install race, dismissal escape hatch, FAB quick-add, mobile IA) → H1. Financial insight dropped |
-| L4 Automation | Web Push → H5 (capped notifications). Price monitoring dropped. JSON export: covered by the git-held snapshot |
+| L4 Automation | Web Push → H5 (capped notifications). Price monitoring dropped. JSON export: the nightly backend export to the private data repo (H1) |
 
 ### H-tiers (the helper)
 
 | Tier | Goal | Exit condition | Design doc |
 |---|---|---|---|
-| **H0 Pivot design** | Vocabulary, architecture, tier plan, H1/H2 drafts | Docs merged; owner confirms vocabulary | this set |
-| **H1 Entries & capture** | Write an entry from the phone in two taps, offline; Inbox; tags; category rules; financial screens out of nav | A week of daily phone capture, no data loss across devices, intentional 409 exercised | [H1-ENTRIES.md](H1-ENTRIES.md) |
-| **H2 Lenses** | Slices + lenses + reports; one pure composer; **lens trial first**: Claude Code runs lenses read-only over the synced snapshot before any lens UI | Owner keeps at least one lens after two weeks of trial; composer reproduces the trial prompts | [H2-LENSES.md](H2-LENSES.md) |
-| **H3 Agent surface** | Local MCP server: read/run/propose tools over the data repo, audit log, git commit per write | A lens run from Claude Code writes a report the app shows | `H3-AGENT.md` at its S0 |
+| **H0 Pivot design** ✅ | Vocabulary, architecture, tier plan, H1/H2 drafts | Docs merged (#7); vocabulary confirmed 2026-10-09 | this set |
+| **H1 Core loop** | Invite-only accounts (Google/GitHub sign-in); capture page as home, offline; outbox sync with the backend (Cloudflare Worker + D1) that cleans, stores and serves entries; financial screens out of nav | A week of daily capture on phone + desktop: every entry on both devices and the backend, offline-then-reload keeps unsynced status, replayed push = one entry, second account isolated | [H1-ENTRIES.md](H1-ENTRIES.md) |
+| **H1b Organise** | Categories and tags synced through the backend; Inbox view; tag input; category rules | Entries organised on the desktop show organised on the phone | `H1B-ORGANISE.md` at its S0 |
+| **H2 Lenses** | Slices + lenses + reports; one pure composer; **lens trial first**: Claude Code runs lenses read-only over the nightly entries export before any lens UI | Owner keeps at least one lens after two weeks of trial; composer reproduces the trial prompts | [H2-LENSES.md](H2-LENSES.md) |
+| **H3 Agent surface** | Remote MCP endpoint on the backend: read/run/propose tools, audit table, MCP OAuth — reachable from Claude Code and the Claude phone app | A lens run from Claude (desktop or phone) writes a report the app shows | `H3-AGENT.md` at its S0 |
 | **H4 Curation & tasks** | Proposal queue UI; Task record; themes UI; AI-proposed categories/rules/tags/themes | A curation session's proposals accepted in the app; a lens yields accepted tasks | `H4-CURATION.md` at its S0 |
 | **H5 In-app AI** | One model gate, one scheduler, capped notifications; first scheduled lens | A morning lens arrives with no session open | `H5-IN-APP-AI.md` at its S0 |
 
-Order is strict through H3. H4 and H5 may swap on owner call; H5 is the first tier that spends money (API key).
+Order is strict through H3 (H1b sits between H1 and H2). H4 and H5 may swap on owner call; H5 is the first tier that spends money (API key).
 
 ## Architecture constraints
 
 - **Local-first.** Capture and browsing work with zero network. Sync is additive, never gating.
-- **No hosted backend.** Pages is static hosting. A **local** agent-side process (the H3 MCP server on the owner's
-  desktop) is allowed; a server we host is not. Phone chat therefore waits on an owner decision (ARCHITECTURE §5).
-- **User-owned data.** All records live on the device and in the owner's private data repo. The only third party
-  that sees content is the model provider, at run time, for the entries in the slice being run.
+- **One hosted backend, free tier first** (changed 2026-10-09). The client stays static on Pages; the backend is a
+  Cloudflare Worker + D1. Budget $0, the $5/month Workers Paid plan allowed when limits are reached. No other hosted
+  service without a decision-log entry.
+- **Accounts, invite-only, multi-tenant.** Every backend row belongs to one account; the backend takes the account
+  from the session, never from the request. Sign-in is Google or GitHub OAuth; no passwords stored.
+- **Data custody.** Entries live on the device (cache) and on the backend, which may read them (no end-to-end
+  encryption, owner decision 2026-10-09). The owner keeps a copy through a nightly export to the private data repo.
+  The model provider sees content only at run time, for the entries in the slice being run.
 - **This code repo is public.** No personal data, no real entries, no employer content in code, fixtures or docs.
   Built-in lens instructions are public by design.
 - **Dexie versions are frozen once shipped.** Changes go in `version(N+1).upgrade(...)`; the same per-row migration
@@ -107,12 +112,17 @@ Order is strict through H3. H4 and H5 may swap on owner call; H5 is the first ti
 | 2026-04-27 | **L2 model: three layers (Category single-pick + Theme cross-cutting many-to-many + Tag free folksonomy), not tags-only** | User mental model implicitly distinguishes *the bucket the thing IS in* (Category, single-valued) from *the goal it CONTRIBUTES to* (Theme, multi-valued, with own metadata + progression). Tag-only systems conflate these and drift on synonyms. Industry pattern (Things, Notion, Linear, Obsidian) consistently layers all three. Tags sit on top as ad-hoc filter primitive, additive not replacing |
 | 2026-04-27 | **L3 mobile UX deferred until after L2-S4 lands** | Themes change what the dashboard renders and what list-views need to surface. Designing density / card behavior / dashboard rollups before the organization layer is in place is premature. Two specific pain points captured for L3 in the meantime: install button mount-timing race in `useInstallPrompt.ts:93` (`beforeinstallprompt` can fire before Vue mounts; spec doesn't replay), and dismissal escape hatch (`useInstallPrompt.reset()` exists but no UI wires it) |
 | 2026-09-21 | **Deprecated** — no continuation planned (owner) | Partially absorbed by the owner's vault + Claude-in-the-loop. Deployment stayed up |
-| 2026-10-08 | **Reopened as the personal helper — pivot, not a new repo** (owner) | The data layer the helper needs (sync, conflict flow, migrations, taxonomy, PWA install, deploy) is ~3,200 of the ~5,700 source lines and already in daily use on the owner's devices. A new repo would rebuild it and lose history, deployment and installs |
+| 2026-10-08 | **Reopened as the personal helper — pivot, not a new repo** (owner) | The data layer the helper needs (sync, conflict flow, migrations, taxonomy, PWA install, deploy) sits in 3,859 of the 5,733 source lines (files outside the financial domain, measured 2026-10-09; schema, migrations and snapshot also carry financial parts) and is already in daily use on the owner's devices. A new repo would rebuild it and lose history, deployment and installs |
 | 2026-10-08 | **Financial domain frozen in place, not deleted** | Deleting its tables is a Dexie version that wipes data on every device; recovery would be only the old snapshots in the data repo history. Hiding the screens costs nothing and keeps the option open |
 | 2026-10-08 | **New tiers use the H prefix; old L3/L4 retired with a mapping, not renumbered** | Reusing L3/L4 for new meanings would make older references ambiguous |
-| 2026-10-08 | **No markdown trial before building; the lens trial runs over the real snapshot (H2)** | With entries in the real app, Claude Code can run lenses read-only over the synced `data.json`: the same test of lens value, on real data, with nothing to import later |
-| 2026-10-08 | **AI integration: outside first (Claude Code over local MCP, H3), inside later (H5)** | Outside runs on the existing subscription; inside needs an API key billed per token and is needed only for runs with no session open |
+| 2026-10-08 | **No markdown trial before building; the lens trial runs over the real snapshot (H2)** | With entries in the real app, Claude Code can run lenses read-only over the synced `data.json`: the same test of lens value, on real data, with nothing to import later. *2026-10-09: entries leave `data.json`; the trial reads the nightly export instead (H2-LENSES Q1)* |
+| 2026-10-08 | **AI integration: outside first (Claude Code over local MCP, H3), inside later (H5)** | Outside runs on the existing subscription; inside needs an API key billed per token and is needed only for runs with no session open. *2026-10-09: "local MCP" becomes a remote MCP endpoint on the backend; outside-first stands* |
 | 2026-10-08 | **"Lens" names the saved AI instruction; "Commitment" stays the frozen financial record** | "Feature" collides with product features; open loops are Tasks with `direction: 'promise'` (VOCABULARY.md). Lens is the working name pending owner confirmation |
+| 2026-10-09 | **Vocabulary confirmed: Lens** (owner) — closes H0 | Alternatives Routine/Recipe rejected (VOCABULARY) |
+| 2026-10-09 | **Work entries are personal obligations only, never employer content** (owner) | The office side keeps its own journal; this code repo is public and the backend reads content |
+| 2026-10-09 | **Hosted backend: Cloudflare Workers + D1; entries leave `data.json`** (owner input; backend pick = working choice, H1 §11) | Owner's core loop needs a backend that authenticates, cleans, stores and serves entries. Workers + D1 is the only option compared that is free with no idle pause and runs our own code; Supabase free pauses after 7 idle days, Dexie Cloud runs no server logic, Firebase functions need billing. Per-record sync removes the whole-snapshot 409 entry-loss hazard. Supersedes "No hosted backend" and the 2026-10-08 record-level-merge plan |
+| 2026-10-09 | **Accounts invite-only and multi-tenant; Google/GitHub sign-in; backend may read content; $0 now, $5 later** (owner) | Multi-tenant schema costs little now and avoids a rewrite; invite-only defers abuse handling and public terms. Server-readable content is what cleaning, query, server lenses and the remote MCP endpoint need |
+| 2026-10-09 | **H1 narrowed to the core loop; organising moves to a new H1b** | The first loop is capture → sync → serve; organising needs the backend to exist. `Entry.categoryId` and `tags` ship in H1 so H1b needs no entry migration |
 
 ## Glossary
 
