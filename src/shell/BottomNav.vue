@@ -75,7 +75,7 @@ onBeforeUnmount(() => window.clearTimeout(timer))
   width: 9px;
   height: 9px;
   border-radius: 50%;
-  border: 1.5px solid rgb(var(--s-400) / 0.7);
+  border: 1.5px solid rgb(var(--s-200) / 0.65); /* s-200 is the light ink in dark theme and the dark ink in light: visible on both backdrops */
   transition: background-color 120ms, border-color 120ms;
 }
 .dot-active {

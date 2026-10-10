@@ -7,7 +7,7 @@ export type ThemeChoice = 'system' | 'light' | 'dark'
 export type Theme = 'light' | 'dark'
 
 const KEY = 'planner.theme'
-const THEME_COLOR: Record<Theme, string> = { dark: '#1d1712', light: '#d9c7a8' }
+const THEME_COLOR: Record<Theme, string> = { dark: '#1d1712', light: '#86a0ae' }
 
 export function parseChoice(raw: string | null): ThemeChoice {
   return raw === 'light' || raw === 'dark' || raw === 'system' ? raw : 'dark'

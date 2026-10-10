@@ -125,8 +125,9 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   color: rgb(253 164 175);
   text-shadow: 0 1px 3px #000;
 }
-/* Frosted glass over the photo (from the owner's template): warm translucent dark, a hairline light edge, small
-   corners, an outlined warm button. The photo stays visible through it — the scrim only dims a little. */
+/* Frosted glass over the photo (from the owner's template). Its colours (--glass-*) come from the theme variables in
+   style.css — do not redefine them here: a scoped `:global(html[data-theme]) .x` rule loses its `.x` in Vue's
+   compiler and the light values never reach the dialog. The photo stays visible through it. */
 .scrim {
   position: absolute;
   inset: 0;
@@ -136,10 +137,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   background: rgb(0 0 0 / 0.22);
 }
 .dialog {
-  --glass-text: #f4e8d6;
-  --glass-sub: rgb(244 232 214 / 0.62);
-  --glass-btn-edge: rgb(236 200 150 / 0.5);
-  --glass-btn-bg: rgb(255 220 170 / 0.08);
   width: 100%;
   max-width: 24rem;
   margin: 0 12px 16px;
@@ -151,12 +148,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   -webkit-backdrop-filter: var(--glass-blur);
   backdrop-filter: var(--glass-blur);
   color: var(--glass-text);
-}
-:global(html[data-theme='light']) .dialog {
-  --glass-text: #2a2119;
-  --glass-sub: rgb(42 33 25 / 0.62);
-  --glass-btn-edge: rgb(42 33 25 / 0.4);
-  --glass-btn-bg: rgb(255 255 255 / 0.25);
 }
 .dialog-title {
   font: 500 1.25rem/1.2 ui-serif, Georgia, 'Times New Roman', serif;
