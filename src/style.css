@@ -8,6 +8,8 @@
      html[data-theme='light'] (src/theme/theme.ts). */
   :root {
     color-scheme: dark;
+    --grain-size: 720px; /* the weave's scale (tile edge). The base tile is 240px; 720px = 3x larger (owner's test). */
+    --twill-step: 9px; /* diagonal twill pitch, scaled with the grain */
     --s-50: 250 247 243; --s-100: 241 235 227; --s-200: 227 217 204; --s-300: 205 191 174; --s-400: 168 149 127;
     --s-500: 133 114 97; --s-600: 90 74 58; --s-700: 61 49 38; --s-800: 42 33 25; --s-900: 29 23 18; --s-950: 20 16 12;
     --backdrop: #2b2016;
@@ -23,7 +25,7 @@
     --glass-blur: blur(14px) saturate(1.1);
     --float-1: 0 28px 34px rgb(0 0 0 / 0.3);
     --float-2: 0 7px 12px rgb(0 0 0 / 0.2);
-    --grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .62  0 0 0 0 .44  0 0 0 0 .26  0 0 0 .6 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+    --grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240' viewBox='0 0 240 240'><filter id='n' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .62  0 0 0 0 .44  0 0 0 0 .26  0 0 0 .6 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
   }
   html[data-theme='light'] {
     color-scheme: light;
@@ -38,7 +40,7 @@
     --glass-edge: rgb(255 255 255 / 0.55);
     --float-1: 0 28px 34px rgb(60 35 10 / 0.24);
     --float-2: 0 7px 12px rgb(60 35 10 / 0.15);
-    --grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .36  0 0 0 0 .24  0 0 0 0 .12  0 0 0 .5 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+    --grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240' viewBox='0 0 240 240'><filter id='n' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .36  0 0 0 0 .24  0 0 0 0 .12  0 0 0 .5 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
   }
 
   /* Warm wool backdrop: tinted fractal-noise grain over a base colour, plus a faint twill and a vignette. Pages hover
@@ -48,8 +50,9 @@
     background-color: var(--backdrop);
     background-image:
       radial-gradient(120% 90% at 50% 30%, transparent 40%, var(--vignette) 100%),
-      repeating-linear-gradient(45deg, var(--twill) 0 1px, transparent 1px 3px),
+      repeating-linear-gradient(45deg, var(--twill) 0 calc(var(--twill-step) / 3), transparent calc(var(--twill-step) / 3) var(--twill-step)),
       var(--grain);
+    background-size: auto, auto, var(--grain-size) var(--grain-size);
     background-attachment: fixed;
   }
 
