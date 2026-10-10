@@ -50,7 +50,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
         <div class="mt-5 flex flex-col gap-3">
           <button class="glass-btn" data-test="signin-github" @click="startSignIn('github')">Continue with GitHub</button>
           <button class="glass-btn" data-test="signin-google" @click="startSignIn('google')">Continue with Google</button>
-          <button class="dialog-cancel" @click="open = false">Cancel</button>
         </div>
       </div>
     </div>
@@ -144,7 +143,7 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   width: 100%;
   max-width: 24rem;
   margin: 0 12px 16px;
-  padding: 22px 20px 14px;
+  padding: 22px 20px 20px;
   border-radius: 12px;
   background: var(--glass-bg);
   border: 1px solid var(--glass-edge);
@@ -181,10 +180,5 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
 }
 .glass-btn:active {
   background: rgb(255 220 170 / 0.22);
-}
-.dialog-cancel {
-  padding: 10px 0;
-  font-size: 0.75rem;
-  color: var(--glass-sub);
 }
 </style>
