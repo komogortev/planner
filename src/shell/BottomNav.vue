@@ -23,7 +23,7 @@ onBeforeUnmount(() => window.clearTimeout(timer))
 </script>
 
 <template>
-  <!-- Reveal zone: sits above the Android gesture bar (safe-area inset) + a margin; tap or touch reveals. -->
+  <!-- Reveal zone: starts above the system inset and spans 12% of the screen height; touch or tap reveals. -->
   <div
     v-if="!open"
     class="reveal-zone"
@@ -52,12 +52,13 @@ onBeforeUnmount(() => window.clearTimeout(timer))
   position: fixed;
   left: 0;
   right: 0;
-  bottom: calc(env(safe-area-inset-bottom) + 14px);
-  height: 28px;
+  bottom: env(safe-area-inset-bottom);
+  height: 12dvh; /* owner 2026-10-10: 10-15% of the screen height */
   z-index: 40;
   display: flex;
   justify-content: center;
   align-items: flex-end;
+  padding-bottom: 14px; /* handle rides above the system gesture bar */
 }
 .reveal-handle {
   width: 36px;
