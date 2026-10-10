@@ -15,7 +15,9 @@
     --twill: rgb(255 220 170 / 0.035);
     --sheet-bg: rgb(20 16 12 / 0.9);
     --sheet-edge: rgb(255 225 180 / 0.08);
-    --sheet-shadow: 0 10px 30px rgb(0 0 0 / 0.55);
+    /* Two soft layers, offset down: the object hovers a few cm above the weave. Used as drop-shadow() and box-shadow. */
+    --float-1: 0 28px 34px rgb(0 0 0 / 0.3);
+    --float-2: 0 7px 12px rgb(0 0 0 / 0.2);
     --grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .62  0 0 0 0 .44  0 0 0 0 .26  0 0 0 .6 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
   }
   html[data-theme='light'] {
@@ -27,7 +29,8 @@
     --twill: rgb(90 60 30 / 0.05);
     --sheet-bg: rgb(250 246 238 / 0.93);
     --sheet-edge: rgb(90 60 30 / 0.14);
-    --sheet-shadow: 0 8px 24px rgb(60 35 10 / 0.3);
+    --float-1: 0 28px 34px rgb(60 35 10 / 0.24);
+    --float-2: 0 7px 12px rgb(60 35 10 / 0.15);
     --grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .36  0 0 0 0 .24  0 0 0 0 .12  0 0 0 .5 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
   }
 
@@ -69,7 +72,7 @@
 
   .card {
     @apply rounded-2xl bg-slate-900 border border-slate-800 p-6;
-    box-shadow: var(--sheet-shadow); /* hovers over the textured backdrop */
+    box-shadow: var(--float-1), var(--float-2); /* hovers over the textured backdrop */
   }
 
   .input {

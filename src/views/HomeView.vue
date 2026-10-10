@@ -83,7 +83,7 @@ function onKey(e: KeyboardEvent): void {
   aspect-ratio: 520 / 876;
   background-size: 100% 100%;
   background-repeat: no-repeat;
-  filter: drop-shadow(0 10px 24px rgb(0 0 0 / 0.55));
+  filter: drop-shadow(var(--float-1)) drop-shadow(var(--float-2));
 }
 /* Hotspots are placed in the photo's own proportions (measured on the cutout). */
 .window {

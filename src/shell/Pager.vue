@@ -105,9 +105,13 @@ const trackStyle = computed(() => ({
    drop-shadow, the cards' box-shadow in style.css). The sheet is only the page's own scroll container. */
 .sheet {
   position: relative;
-  height: 100%;
-  overflow-y: auto;
+  height: calc(100% + 80px); /* the page's own 100% plus the 24px above and 56px below it */
+  overflow-y: auto; /* a scroll box clips on both axes, so it is made wider/taller than the page: */
   overscroll-behavior: contain;
+  /* ...the page keeps its layout (negative margin = padding), but shadows get 56px of room on every side, spilling
+     into the neighbouring page when they fall that way. Only the screen edge itself (.pager) cuts them. */
+  margin: -24px -56px -56px;
+  padding: 24px 56px 56px;
 }
 @media (prefers-reduced-motion: reduce) {
   .track {
