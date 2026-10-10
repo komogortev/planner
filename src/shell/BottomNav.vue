@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, ref, watch } from 'vue'
 import { RouterLink, useRoute } from 'vue-router'
-import { PAGES } from './pages'
+import { PAGES, pageIndex } from './pages'
 
 // Hidden by default (note 11): touching the strip just above the system gesture inset slides the bar in.
 // It hides again on navigation, on a tap outside, or after a few idle seconds.
@@ -31,7 +31,14 @@ onBeforeUnmount(() => window.clearTimeout(timer))
     @touchstart.passive="show"
     @click="show"
   >
-    <span class="reveal-handle" />
+    <span class="dots" role="img" :aria-label="`Page ${pageIndex(route.path) + 1} of ${PAGES.length}`">
+      <span
+        v-for="(p, i) in PAGES"
+        :key="p.to"
+        class="dot"
+        :class="{ 'dot-active': i === pageIndex(route.path) }"
+      />
+    </span>
   </div>
   <div v-else class="fixed inset-0 z-30" @touchstart.passive="hide" @click="hide" />
   <nav class="bottom-nav" :class="{ 'bottom-nav-open': open }" aria-label="Pages">
@@ -58,13 +65,22 @@ onBeforeUnmount(() => window.clearTimeout(timer))
   display: flex;
   justify-content: center;
   align-items: flex-end;
-  padding-bottom: 14px; /* handle rides above the system gesture bar */
+  padding-bottom: 30px; /* dots ride above the system gesture bar and the version badge */
 }
-.reveal-handle {
-  width: 36px;
-  height: 4px;
-  border-radius: 2px;
-  background: rgb(148 163 184 / 0.35);
+.dots {
+  display: flex;
+  gap: 10px;
+}
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid rgb(148 163 184 / 0.6);
+  transition: background-color 120ms, border-color 120ms;
+}
+.dot-active {
+  background: rgb(99 102 241); /* indigo-500, the app accent (btn-primary) */
+  border-color: rgb(99 102 241);
 }
 .bottom-nav {
   position: fixed;
