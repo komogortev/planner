@@ -13,6 +13,7 @@ export default defineConfig(async () => {
           bindings: {
             TEST_MIGRATIONS: migrations,
             ALLOWED_APP_URLS: 'https://app.test/planner/',
+            APP_ENV: 'prod',
             GITHUB_CLIENT_ID: 'gh-test-id',
             GITHUB_CLIENT_SECRET: 'gh-test-secret',
             GOOGLE_CLIENT_ID: 'google-test-id',

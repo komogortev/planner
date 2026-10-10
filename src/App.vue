@@ -2,6 +2,7 @@
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { computed } from 'vue'
 import CleanupBanner from '@/components/CleanupBanner.vue'
+import EnvBanner from '@/components/EnvBanner.vue'
 import InstallButton from '@/components/InstallButton.vue'
 import OnlineIndicator from '@/components/OnlineIndicator.vue'
 import SyncStatusPill from '@/components/SyncStatusPill.vue'
@@ -22,11 +23,12 @@ const currentPath = computed(() => route.path)
 
 <template>
   <div class="min-h-screen flex flex-col">
+    <EnvBanner />
     <UpdateBanner />
     <CleanupBanner />
 
     <header
-      class="sticky top-0 z-20 backdrop-blur-sm bg-slate-950/80 border-b border-slate-800"
+      class="app-header sticky top-0 z-20 backdrop-blur-sm bg-slate-950/80 border-b border-slate-800"
     >
       <div class="max-w-5xl mx-auto w-full px-6 py-3 flex items-center justify-between gap-4">
         <div class="flex items-center gap-6">

@@ -6,6 +6,8 @@ compatibility_date = "2026-10-01"
 # Local dev overrides this with `--var` in package.json's `dev` script — localhost never reaches production.
 [vars]
 ALLOWED_APP_URLS = "https://komogortev.github.io/planner/"
+# Which environment this Worker is (favicon cue, src/env/appEnv.ts). The local `dev` script overrides it to `local`.
+APP_ENV = "prod"
 
 [[d1_databases]]
 binding = "DB"

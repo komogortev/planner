@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev --port 8787 --var ALLOWED_APP_URLS:http://localhost:5176/planner/",
+    "dev": "wrangler dev --port 8787 --var ALLOWED_APP_URLS:http://localhost:5176/planner/ --var APP_ENV:local",
     "deploy": "node scripts/deploy.mjs",
     "typecheck": "tsc --noEmit -p .",
     "test": "vitest run",
