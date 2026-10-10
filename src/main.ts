@@ -1,3 +1,5 @@
+// Must stay the first import: it may rewrite the URL, and the router captures the URL when its module loads.
+import './auth/consumeReturn'
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'

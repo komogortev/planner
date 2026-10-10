@@ -13,6 +13,8 @@ type C = Context<{ Bindings: Env }>
 
 const SESSION_DAYS = 30
 const FLOW_COOKIE = 'oauth_flow'
+// base64url, as the app generates it; bounded so it cannot bloat the flow cookie.
+const NONCE_RE = /^[A-Za-z0-9_-]{16,128}$/
 
 const PROVIDERS = {
   github: {
@@ -138,16 +140,19 @@ export async function sessionUser(c: C): Promise<{ id: string; email: string; na
 
 export const auth = new Hono<{ Bindings: Env }>()
 
-// GET /auth/start/:provider?return_to=<app URL> — the app navigates here (top-level, not fetch).
+// GET /auth/start/:provider?return_to=<app URL>&nonce=<app-held random> — the app navigates here (top-level, not fetch).
+// The nonce comes back in the fragment next to the token; the app rejects a token whose nonce it did not issue, so
+// nobody can sign the app into *their* account by sending it a crafted `#token=` link (login CSRF).
 auth.get('/start/:provider', async (c) => {
   const p = c.req.param('provider')
   if (!isProvider(p)) return c.text('unknown provider', 404)
 
   let returnTo = ''
   try { returnTo = new URL(c.req.query('return_to') ?? '').href } catch { /* invalid → rejected below */ }
-  // Spike: the API's own /spike/landing page is also accepted (removed at spike step 8).
-  const spikeLanding = returnTo.startsWith(`${new URL(c.req.url).origin}/spike/landing`)
-  if (!spikeLanding && !appUrls(c.env).some((u) => returnTo.startsWith(u))) return c.text('return_to not allowed', 400)
+  // Length-capped too: an oversized flow cookie is dropped silently and the callback reports "expired".
+  if (returnTo.length > 512 || !appUrls(c.env).some((u) => returnTo.startsWith(u))) return c.text('return_to not allowed', 400)
+  const nonce = c.req.query('nonce') ?? ''
+  if (!NONCE_RE.test(nonce)) return c.text('nonce missing or malformed', 400)
 
   const cfg = PROVIDERS[p]
   const state = randomToken()
@@ -164,7 +169,7 @@ auth.get('/start/:provider', async (c) => {
   }
 
   // The API's own origin (workers.dev is on the public suffix list), so no other site can plant this cookie.
-  setCookie(c, FLOW_COOKIE, JSON.stringify({ p, state, verifier, returnTo }), {
+  setCookie(c, FLOW_COOKIE, JSON.stringify({ p, state, verifier, returnTo, nonce }), {
     path: '/auth', httpOnly: true, secure: true, sameSite: 'Lax', maxAge: 600,
   })
   return c.redirect(url.toString())
@@ -177,10 +182,10 @@ auth.get('/callback/:provider', async (c) => {
 
   const raw = getCookie(c, FLOW_COOKIE)
   deleteCookie(c, FLOW_COOKIE, { path: '/auth', secure: true })
-  let flow: { p: string; state: string; verifier: string; returnTo: string } | null = null
+  let flow: { p: string; state: string; verifier: string; returnTo: string; nonce: string } | null = null
   try { flow = raw ? JSON.parse(raw) : null } catch { /* tampered → treated as expired */ }
   const code = c.req.query('code')
-  if (!flow || flow.p !== p || typeof flow.returnTo !== 'string' || !code || c.req.query('state') !== flow.state) {
+  if (!flow || flow.p !== p || typeof flow.returnTo !== 'string' || typeof flow.nonce !== 'string' || !code || c.req.query('state') !== flow.state) {
     return c.text('sign-in expired, start again', 400)
   }
 
@@ -206,6 +211,6 @@ auth.get('/callback/:provider', async (c) => {
   // Fragment, not query: never sent to a server or written to access logs. Set via URL so a `#` already in
   // return_to is replaced, not appended to.
   const back = new URL(flow.returnTo)
-  back.hash = `token=${token}`
+  back.hash = new URLSearchParams({ token, nonce: flow.nonce }).toString()
   return c.redirect(back.href)
 })

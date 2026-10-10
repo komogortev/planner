@@ -6,6 +6,8 @@ import { fileURLToPath, URL } from 'node:url'
 export default defineConfig({
   // GH Pages subpath — repo: komogortev/planner
   base: '/planner/',
+  // The Worker's local ALLOWED_APP_URLS (api/package.json `dev`) names this port; any other is refused.
+  server: { port: 5176, strictPort: true },
   plugins: [
     vue(),
     VitePWA({
