@@ -1,11 +1,11 @@
 # Personal Planner — STATE
 
 ## SNAPSHOT
-- **Phase/Last:** H1 S1 spike session 1 (2026-10-09) — steps 0–5 done, merged as #13 and deployed 2026-10-10 (version `ff7ba61b`, 10/10 prod checks pass). **A ✅** (Worker + D1 from the Pages origin, CORS clean). **B ✅ on steady state** (owner): p50 1–5 ms; one 9 ms GitHub callback open. Results: `H1-S1-SPIKE.md` §6. Planner has workspace priority (owner).
-- **Working:** `api/` Worker deployed (`planner-api.komogortev.workers.dev`): GitHub + Google sign-in → one linked account, bearer token, `/me`. App unchanged: L1 sync, L2-S1, frozen financial domain.
+- **Phase/Last:** H1 **S2 Backend started** 2026-10-10 (`H1-S2-BACKEND.md`): step 0 test harness ✅. **S1 closed** 2026-10-10: A ✅ B ✅, C (iPhone) deferred — owner's phone is Android. Vibe-code mode: Claude owns architecture + deploys (owner). Planner has workspace priority.
+- **Working:** Worker `3f95dae2` (`planner-api.komogortev.workers.dev`): GitHub + Google sign-in with nonce → one account, bearer token, `/me`; app test screen `/spike-auth`. Worker tests: `pnpm test:api` (workerd + D1). App unchanged otherwise: L1 sync, L2-S1, frozen financial domain.
 - **Broken:** sync's "unsynced" flag is memory-only (`src/stores/sync.ts:55`), fixed by the H1 outbox.
-- **Blocker:** none. Claude owns architecture + deploys (owner 2026-10-10); `gh pr merge` is still classifier-denied → owner merges until a permission rule lands.
-- **Next:** S1 session 2 (2026-10-10): #15 (test screen + nonce + step 8 code); Worker `3f95dae2` + remote `0003` done. Owner: merge #15 → desktop sign-in (first positive) → step 7 iPhone. Then close S1 → S2.
+- **Blocker:** none. Planner-only merge rule added 2026-10-10 (`PowerShell(gh pr merge --repo komogortev/planner *)`); unproven until the first merge under it.
+- **Next:** S2 steps 1–4: shared `domain/clean.ts` → migration `0004` → invites → sync push/pull/query. Owner (optional, 5 min): one desktop sign-in through Settings → Sign-in test — still no full positive run.
 ---
 
 ## Context
@@ -25,7 +25,7 @@
 |---|---|---|
 | L0 · Base · L1 · L2-S1 | ✅ shipped | PROJECT.md §Tiers |
 | H0 Pivot design | ✅ closed 2026-10-09 | VOCABULARY.md, ARCHITECTURE.md |
-| H1 Core loop | S0 ✅; S1 spike: A ✅ B ✅, C next session | H1-ENTRIES.md · H1-S1-SPIKE.md |
+| H1 Core loop | S0 ✅ · S1 ✅ (C deferred) · S2 step 0 ✅ | H1-ENTRIES.md · H1-S1-SPIKE.md · H1-S2-BACKEND.md |
 | H1b Organise | planned (categories/tags sync, Inbox, rules) | PROJECT.md §Tiers |
 | H2 Lenses | S0 draft, Q1–Q7 open; starts after H1 exits | H2-LENSES.md |
 | H3 Agent surface · H4 Curation & tasks · H5 In-app AI | planned | PROJECT.md §Tiers |
@@ -42,6 +42,10 @@
 ## Decision log
 
 Full log: PROJECT.md → Decisions log. Latest:
+
+- 2026-10-10 — S1 closed (C deferred: owner on Android); S2 started. Vibe-code mode (owner). Client moves to its own
+  `*.pages.dev` origin at S4 (Claude, delegated; amends H1 Q8). Worker tests on `@cloudflare/vitest-plugin` — its
+  predecessor `vitest-pool-workers` is deprecated, again visible only after install.
 
 - 2026-10-09 — S1 session 1: own OAuth code + Hono (Arctic deprecated by its maintainer 2026-07; Better Auth 210 KB
   gz). B passes on steady state (owner) — the 9 ms GitHub callback re-enters at S2 over ≥ 50 callbacks; §4's library

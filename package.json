@@ -9,7 +9,8 @@
     "build": "vue-tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "vue-tsc -b && pnpm --dir api run typecheck",
-    "test": "vitest",
+    "test": "vitest --dir src",
+    "test:api": "pnpm --dir api test",
     "generate-pwa-assets": "pwa-assets-generator"
   },
   "dependencies": {
