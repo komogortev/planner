@@ -7,6 +7,7 @@ import { useSettingsStore } from '@/stores/settings'
 import { useSyncStore } from '@/stores/sync'
 import { GitHubError } from '@/db/github'
 import type { SnapshotCounts } from '@/db/snapshot'
+import InstallButton from '@/components/InstallButton.vue'
 import ConfirmRestoreModal from '@/components/ConfirmRestoreModal.vue'
 import ConflictModal from '@/components/ConflictModal.vue'
 import { APP_ENV } from '@/env/applyEnvCue'
@@ -297,7 +298,10 @@ async function doDisconnect(): Promise<void> {
     <!-- Only way into sign-in until the real sign-in screen (S3). -->
     <section class="card">
       <h3 class="font-semibold mb-1">Account</h3>
-      <RouterLink to="/spike-auth" class="btn-ghost">Sign-in test</RouterLink>
+      <div class="flex flex-wrap gap-2 items-center">
+        <RouterLink to="/spike-auth" class="btn-ghost">Sign-in test</RouterLink>
+        <InstallButton />
+      </div>
     </section>
 
     <!-- ============================================================ -->
