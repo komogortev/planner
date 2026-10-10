@@ -9,7 +9,11 @@ import { useCategoriesStore } from './stores/categories'
 import { useCleanupStore } from './stores/cleanup'
 import { setupSyncDirtyTracking } from './db/syncTracking'
 import { dedupeCategoriesInDb } from './db/cleanup'
+import { applyEnvCue } from './env/applyEnvCue'
 import './style.css'
+
+// Local / preview builds get a coloured banner, tab title, favicon and status bar; prod is untouched.
+applyEnvCue()
 
 const app = createApp(App)
 

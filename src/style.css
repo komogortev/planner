@@ -10,6 +10,12 @@
   * {
     @apply box-border;
   }
+
+  /* Non-prod environment accent (src/env): the app bar's rule takes the env colour — the app bar only, so page and
+     modal <header>s keep prod's look. Prod has no data-env. */
+  html[data-env] .app-header {
+    border-bottom: 2px solid var(--env-accent);
+  }
 }
 
 @layer components {

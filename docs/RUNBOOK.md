@@ -2,6 +2,16 @@
 
 Commands run from `E:/Projects/apps/personal-planner`. There is no staging environment: **local** and **production**.
 
+## Which environment am I looking at?
+
+| | App | API tab (`/health`) |
+|---|---|---|
+| **Local dev** | amber `LOCAL DEV` banner, amber header rule + favicon + Android status bar, tab `[LOCAL DEV] …` | amber `API` favicon |
+| **Preview** (production build on localhost) | fuchsia `PREVIEW BUILD` banner, fuchsia rule + favicon + status bar, tab `[PREVIEW BUILD] …` | — none. Its API calls go to production, which refuses `localhost:4173` (CORS) — so sign-in does not work in preview. Use it for the built app itself: offline, install, deep links, bundle |
+| **Production** | the real look — no banner, real favicon, plain title | the app's real favicon |
+
+Decided at runtime from the host (`src/env/appEnv.ts`), so the exact build that ships is the one tested.
+
 ## Local
 
 | What | How | Link |
