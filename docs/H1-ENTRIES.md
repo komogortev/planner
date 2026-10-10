@@ -152,7 +152,10 @@ INDEX entries(user_id, server_version) ; INDEX entries(user_id, created_at)
   stored `serverVersion`; replaying a push never creates a second entry.
 - `rejected` (validation failure) carries a reason; the client keeps the row, marks it, and shows it — it never drops a
   rejected entry silently.
-- The client deletes an outbox row only on `applied` or `duplicate`, and writes back `serverVersion`.
+- The client deletes an outbox row only on `applied` or `duplicate`, and writes back `serverVersion`. A `retry` result
+  (S2 step 4) keeps the row and pushes it again.
+- Built in S2 step 4 — status values, request bounds (≤ 100 mutations, ≤ 1 MB), per-entity coalescing by the client, the
+  no-resurrection rule and `GET /entries`: [H1-S2-BACKEND.md](H1-S2-BACKEND.md) → *Protocol amendments*.
 
 ### 6.2 Pull
 

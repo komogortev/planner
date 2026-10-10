@@ -140,7 +140,7 @@ async function admit(db: D1Database, p: Provider, who: Identity): Promise<string
 }
 
 /** A new session for the account; its expired sessions are purged on the way (no cron needed for one user's rows). */
-async function createSession(db: D1Database, userId: string): Promise<string> {
+export async function createSession(db: D1Database, userId: string): Promise<string> {
   const token = randomToken()
   const now = Date.now()
   await db.batch([
@@ -151,21 +151,40 @@ async function createSession(db: D1Database, userId: string): Promise<string> {
   return token
 }
 
-function bearer(c: C): string | null {
-  return c.req.header('Authorization')?.match(/^Bearer (.+)$/)?.[1] ?? null
+const bearerOf = (header: string | undefined): string | null => header?.match(/^Bearer (.+)$/)?.[1] ?? null
+const bearer = (c: C): string | null => bearerOf(c.req.header('Authorization'))
+
+export type AuthedSession = { id: string; email: string; name: string | null; tokenHash: string; expiresAt: number }
+
+/** The signed-in account and its session for an `Authorization: Bearer <token>` header, or null. */
+export async function authenticate(db: D1Database, authorization: string | undefined): Promise<AuthedSession | null> {
+  const token = bearerOf(authorization)
+  if (!token) return null
+  const tokenHash = await sha256(token)
+  // A disabled (revoked) account is signed out everywhere at once, even if a session row survived.
+  const row = await db.prepare(
+    `SELECT u.id, u.email, u.name, s.expires_at AS expiresAt FROM sessions s JOIN users u ON u.id = s.user_id
+     WHERE s.token_hash = ? AND s.expires_at > ? AND u.disabled_at IS NULL`,
+  )
+    .bind(tokenHash, Date.now())
+    .first<{ id: string; email: string; name: string | null; expiresAt: number }>()
+  return row ? { ...row, tokenHash } : null
 }
 
 /** The signed-in user for a request's `Authorization: Bearer <token>`, or null. */
 export async function sessionUser(c: C): Promise<{ id: string; email: string; name: string | null } | null> {
-  const token = bearer(c)
-  if (!token) return null
-  // A disabled (revoked) account is signed out everywhere at once, even if a session row survived.
-  return c.env.DB.prepare(
-    `SELECT u.id, u.email, u.name FROM sessions s JOIN users u ON u.id = s.user_id
-     WHERE s.token_hash = ? AND s.expires_at > ? AND u.disabled_at IS NULL`,
-  )
-    .bind(await sha256(token), Date.now())
-    .first()
+  const s = await authenticate(c.env.DB, c.req.header('Authorization'))
+  return s ? { id: s.id, email: s.email, name: s.name } : null
+}
+
+// A sync that succeeds pushes the session out to a full 30 days (H1 §8) — but at most once a day, so a 60 s sync loop
+// costs one D1 write a day, not 1,440.
+const RENEW_AFTER_MS = 86_400_000
+
+export async function renewSession(db: D1Database, s: AuthedSession): Promise<void> {
+  const now = Date.now()
+  if (s.expiresAt - now > SESSION_DAYS * 86_400_000 - RENEW_AFTER_MS) return
+  await db.prepare('UPDATE sessions SET expires_at = ? WHERE token_hash = ?').bind(now + SESSION_DAYS * 86_400_000, s.tokenHash).run()
 }
 
 // ── routes ──────────────────────────────────────────────────────────────────

@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { auth, sessionUser } from './auth'
 import { appOrigins, appUrls } from './config'
+import { entriesApi, sync } from './sync'
 import { envIcon } from '../../src/env/appEnv'
 
 export interface Env {
@@ -39,6 +40,8 @@ app.get('/favicon.ico', async (c) => {
 })
 
 app.route('/auth', auth)
+app.route('/sync', sync)
+app.route('/entries', entriesApi)
 
 app.get('/me', async (c) => {
   const user = await sessionUser(c)
