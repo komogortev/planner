@@ -26,10 +26,7 @@ async function onClick() {
     <div class="flex items-center gap-1">
       <button
         type="button"
-        class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium
-               text-indigo-300 hover:text-indigo-200 hover:bg-slate-800/80
-               border border-slate-700 hover:border-indigo-500/60
-               transition-colors disabled:opacity-50"
+        class="install-btn"
         :disabled="busy"
         :title="canInstall ? 'Install Personal Planner as an app' : 'How to install on iOS'"
         @click="onClick"
@@ -85,3 +82,28 @@ async function onClick() {
     </div>
   </div>
 </template>
+
+<style scoped>
+/* The same outlined-glass button as the sign-in dialog: ink and outline come from the theme's --glass-* variables
+   (cream/warm on dark, deep navy-teal on light) instead of a fixed indigo. */
+.install-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--glass-btn-edge);
+  background: var(--glass-btn-bg);
+  color: var(--glass-text);
+  font-size: 0.75rem;
+  font-weight: 500;
+  transition: background-color 120ms;
+}
+.install-btn:hover,
+.install-btn:active {
+  background: color-mix(in srgb, var(--glass-text) 14%, transparent);
+}
+.install-btn:disabled {
+  opacity: 0.5;
+}
+</style>
