@@ -23,11 +23,14 @@ Entry ─────────────▶   Category · Theme · Tag ─�
 | A2 | **One composer.** A prompt is assembled only by `composeRun()`; both executors call it | `src/domain/compose.ts` | H2 |
 | A3 | **Deterministic slices.** Same slice + same data → same entries; a report stores the entry ids it saw | `src/domain/slice.ts` | H2 |
 | A4 | **One tool registry, many transports.** The same handlers serve the MCP server and, later, the in-app chat | `tools/registry` | H3 |
-| A5 | **Audit.** Every tool call and every model call is listed with what it read and what it caused | audit log (+ git history of the data repo) | H3 |
+| A5 | **Audit.** Every tool call and every model call is listed with what it read and what it caused | audit table in D1 | H3 |
 | A6 | **No destructive tool.** No delete, no bulk overwrite, no accepting own proposals, nothing that sends | the registry: such tools are never registered | H3 |
 | A7 | **One model gate.** Every in-app model call goes through `callAI(featureId, …)`; model and effort resolve from settings | `callAI` | H5 |
 | A8 | **One scheduler, one notifier.** Background runs are registry entries with a global pause; notifications are capped per day and silent by default | `SCHEDULES`, `sendNotification` | H5 |
 | A9 | **Frozen schema versions.** One per-row migration function serves Dexie upgrade and snapshot restore | `src/db/migrations.ts` | shipped |
+| A10 | **Capture is atomic and never waits on the network.** An entry and its outbox row commit in one Dexie transaction | `src/stores/entries.ts` write path | H1 |
+| A11 | **Tenant isolation.** The backend takes `user_id` from the session only, never from a request body; every query passes through one data-access helper that requires it | `api/src/db/` helper | H1 |
+| A12 | **The server orders changes.** A per-user `server_version` decides conflicts; device clocks never do; a replaced body is kept, not lost | `/sync/push` | H1 |
 
 ## 3. Module boundaries
 
@@ -38,45 +41,48 @@ Target:
 
 | Module | Contents | May import | Must not import |
 |---|---|---|---|
-| `src/domain/` (H2) | Record types re-exported from schema, `resolveSlice()`, `composeRun()`, report/citation validation | nothing but TS | Dexie, Vue, Pinia, DOM, `fetch` |
-| `src/db/` | Dexie tables, migrations, snapshot build/parse, GitHub client | `domain` | Vue |
-| `src/stores/` | Pinia stores, the only writers of Dexie from the UI | `db`, `domain` | — |
+| `src/domain/` (H1) | Record types, cleaning/validation rules (H1); `resolveSlice()`, `composeRun()`, report/citation validation (H2) | nothing but TS | Dexie, Vue, Pinia, DOM, `fetch` |
+| `src/db/` | Dexie tables, migrations; snapshot build/parse + GitHub client (frozen financial domain only after H1) | `domain` | Vue |
+| `src/auth/` (H1) | Session token, sign-in flow, token renewal | `db` | — |
+| `src/sync/` (H1) | Outbox flush, pull since cursor, backoff, storage budget, `persist()` | `db`, `domain`, `auth` | Vue |
+| `src/stores/` | Pinia stores, the only writers of Dexie from the UI | `db`, `domain`, `sync` | — |
 | `src/views/`, `src/components/` | UI | `stores`, `domain` | `db` directly (except existing L1 settings code) |
-| `mcp/` (H3, Node) | Local MCP server: tool registry, git-backed snapshot read/write, audit | `domain`, snapshot parse/build | Dexie, Vue |
+| `api/` (H1, Cloudflare Worker) | Auth, invites, `/sync/push`, `/sync/pull`, `/entries`, cleaning, D1 schema and migrations; H3 adds the tool registry and a remote MCP endpoint | `domain` | Dexie, Vue |
 
-The `domain` purity rule is what lets the browser app and the Node MCP server run identical slice and composer code
-(A2, A3). Placement of `mcp/` (same repo vs separate) is decided in H3-S0; the default is same repo, separate
-`package.json`.
+The `domain` purity rule is what lets the browser app and the Worker run identical cleaning, slice and composer code
+(A2, A3). `api/` lives in this repo with its own `package.json`; secrets live in Worker environment variables, never
+in the repo.
 
 ## 4. Storage and sync
 
-- **On device:** Dexie (IndexedDB). Current schema **v3**; H1 introduces **v4** (`entries` + `Category.rule`), H2 **v5**
-  (`lenses`, `reports`), H3 **v6** (`proposals`, `audit`), H4 **v7** (`tasks`). One version per tier, never edited once
-  shipped. *Version numbers are planned, not reserved: a tier that needs no schema change skips one.*
-- **Remote:** single `data.json` in the owner's private data repo, `schemaVersion` today **2**, bumped with each Dexie
-  version that changes the snapshot shape. sha token = optimistic concurrency; 409 opens the conflict modal (*shipped*).
-- **Agent writes (H3):** the MCP server reads `data.json` from a local clone, applies one tool's write, bumps
-  nothing but the arrays it touched, commits with a message naming the tool, and pushes. The app sees it as a remote
-  change through the shipped conflict/restore flow. One commit per write; whole-file merges are acceptable for one user.
-- **Growth — hard ceiling at 1 MB with the shipped client.** `getDataJson` uses the Contents API JSON wrapper, which
-  returns file content only up to 1 MB; above that `content` comes back empty and Restore fails. `data.json` is
-  8.4 KB today (2026-10-08). Entries alone stay far under the ceiling for years; **reports are AI prose and will not**
-  (a daily lens at a few KB per report is 1–2 MB a year). Decided in H2-S0 (H2-LENSES Q3): reports in their own file,
-  or the client moves to the raw media type / Git blobs API before reports ship.
+Changed 2026-10-09 (owner): entries live on a hosted backend, not in `data.json`. Detail: [H1-ENTRIES.md](H1-ENTRIES.md) §5–§6.
+
+- **On device:** Dexie (IndexedDB), a cache with a storage budget, not necessarily a full copy. Current schema **v3**;
+  H1 introduces **v4** (`entries`, `outbox`, `syncMeta`). Later tiers add their tables in their own version. One
+  version per tier, never edited once shipped. *Version numbers are planned, not reserved.*
+- **Backend:** Cloudflare Worker + D1 (SQLite). Every row keyed `(user_id, id)`. Per-record sync: the client pushes
+  outbox mutations (idempotent by client-generated id) and pulls changes after a per-user `server_version` cursor. Soft
+  deletes travel as rows. This replaces whole-snapshot sync for entries, and with it the 409 entry-loss hazard.
+- **Frozen financial domain:** stays on the shipped L1 path — single `data.json` in the owner's private data repo,
+  sha concurrency, conflict modal, 1 MB read ceiling (irrelevant at its frozen size).
+- **Owner-held copy:** a nightly Worker cron exports the owner's entries to the private data repo; D1 point-in-time
+  restore covers the backend itself.
+- **Agent writes (H3):** through the backend's tool registry, not git commits — the app receives them as ordinary
+  pulled changes. Reports (H2) are D1 rows, so the 1 MB `data.json` ceiling no longer bounds them.
 
 ## 5. AI execution modes
 
 | Mode | Who runs the model | Cost | Used for | Tier |
 |---|---|---|---|---|
-| **Outside** | Claude Code, reaching the data through the local MCP server | existing Claude subscription | curation sessions, on-demand lens runs | H2 trial (read-only), H3 |
+| **Outside** | Claude Code (desktop) or the Claude phone app, reaching the data through the backend's remote MCP endpoint | existing Claude subscription | curation sessions, on-demand lens runs | H2 trial (read-only), H3 |
 | **Inside** | the app, through `callAI` | API key, billed per token | runs with no session open: scheduled lenses, notifications | H5 |
 
 Environment facts that bound these choices:
 
 - The Claude subscription that powers Claude Code does not extend to an app's own model calls; inside mode needs a
   separate API key and its spend.
-- Claude's phone and web apps can reach only **remote** MCP servers. The H3 server is local, so chat works from the
-  desktop only. Phone chat needs a hosted endpoint or in-app chat; both are owner decisions, not defaults.
+- Claude's phone and web apps can reach only **remote** MCP servers. With the hosted backend (2026-10-09) the H3
+  endpoint can be remote, so phone chat no longer needs a separate hosting decision; it needs the MCP OAuth flow in H3.
 - Phone **capture** depends on neither: it is the PWA.
 
 ## 6. Run lifecycle
@@ -92,8 +98,14 @@ Steps 1–3 and 5 are `domain` code; only step 4 differs between executors.
 
 ## 7. Security and privacy
 
-- Code repo public; data repo private (Connect refuses a public data repo — *shipped*).
-- PAT in IndexedDB on the device, never logged, never sent outside `api.github.com` (*shipped*). The H3 server uses the
-  owner's local git credentials, not the app's PAT.
+- Code repo public; data repo private (Connect refuses a public data repo — *shipped*). Worker secrets (OAuth client
+  secrets, export token) live in Worker environment variables only.
+- Accounts are invite-only; sign-in is Google or GitHub OAuth, no passwords stored. The session token travels as
+  `Authorization: Bearer` (client and Worker are different sites; Safari blocks cross-site cookies) and is kept in
+  IndexedDB. Consequence: injected script is the main threat → entry bodies are plain text, escaped at render, and the
+  CSP limits `connect-src` to the Worker and `api.github.com`.
+- The backend reads entry content (owner decision B5, no end-to-end encryption); D1 encrypts at rest.
+- PAT in IndexedDB on the device, never logged, never sent outside `api.github.com` (*shipped*; frozen domain only
+  after H1).
 - A run sends only the slice's entries and the involved category rules to the model provider.
 - No real entries in fixtures, tests or docs in this repo.

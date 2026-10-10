@@ -6,7 +6,7 @@ Terms per [VOCABULARY.md](VOCABULARY.md); invariants per [ARCHITECTURE.md](ARCHI
 ## 1. Goal
 
 The owner saves instructions ("lenses") that read a slice of entries and report back in a declared shape. Lens value is
-tested **before** any lens UI is built: Claude Code runs lenses read-only over the synced snapshot for two weeks, and
+tested **before** any lens UI is built: Claude Code runs lenses read-only over the nightly entries export (H1 §9) for two weeks, and
 only lenses the owner keeps shape the records and screens.
 
 **Acceptance.** After the trial the owner keeps at least one lens. `composeRun()` reproduces the trial prompts from
@@ -91,19 +91,19 @@ Rules mean, lenses do: on apparent conflict the lens wins on the task, the rule 
 | Slice | Content |
 |---|---|
 | S0 | This doc; questions closed |
-| S1 **Trial** | Lens definitions as files, run by Claude Code read-only against the synced `data.json`; reports kept outside `data.json`; two weeks of real use; trial log of what was kept, changed, dropped |
+| S1 **Trial** | Lens definitions as files, run by Claude Code read-only against the nightly entries export in the private data repo; reports kept beside it; two weeks of real use; trial log of what was kept, changed, dropped |
 | S2 | `src/domain/` with `resolveSlice` + `composeRun` + validation, unit-tested against trial prompts (fixtures are synthetic, never real entries) |
-| S3 | Dexie v5 + snapshot: `lenses`, `reports` (storage per Q3) |
+| S3 | Backend D1 tables + Dexie version: `lenses`, `reports` (synced through the H1 protocol) |
 | S4 | Lens editor with slice preview; report history per lens; copy-prompt fallback executor until H3 |
 
 ## 8. Open questions
 
 | # | Question | Default |
 |---|---|---|
-| Q1 | Where trial lens files and trial reports live | **Lens files and reports in the private data repo under `trial/` (Recommended)**: private, versioned, outside `data.json`. Trial reports are files written by the agent, which the provenance invariant forbids for records; acceptable because they are not records and are discarded or imported at S3 |
+| Q1 | Where trial lens files and trial reports live | **Lens files and reports in the private data repo under `trial/`, next to the nightly export (Recommended)**: private, versioned. Trial reports are files written by the agent, which the provenance invariant forbids for records; acceptable because they are not records and are discarded or imported at S3 |
 | Q2 | Window semantics: which date, which time zone | **Event date when set, else capture date; device time zone stored in settings (Recommended)** |
-| Q3 | **Report storage vs the 1 MB read ceiling** (ARCHITECTURE §4) | **Reports in their own file `reports.json` (or one file per month) beside `data.json` (Recommended)**: keeps the hot snapshot small. Alternative: switch the client to the raw media type first |
+| Q3 | ~~Report storage vs the 1 MB read ceiling~~ | **Resolved 2026-10-09:** reports are backend D1 rows; the `data.json` ceiling no longer applies to them. Open part: whether old reports are evicted from the device cache like entries (H1 §9) |
 | Q4 | Editing a lens | **`version` +1 on every save of slice/instruction/output (Recommended)**; reports keep the version they ran |
 | Q5 | Output shapes in V1 | **markdown · checklist · table (Recommended)** |
-| Q6 | Lens name | **Lens** pending owner confirmation (VOCABULARY.md) |
+| Q6 | Lens name | **Lens — confirmed by the owner 2026-10-09** |
 | Q7 | Prompt-size guard | **`limit` on the slice + a hard cap in the composer that truncates oldest first and says so in the header (Recommended)** |
