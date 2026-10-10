@@ -45,7 +45,8 @@ Full log: PROJECT.md → Decisions log. Latest:
 
 - 2026-10-09 — Hosted backend (Workers + D1); accounts invite-only, multi-tenant, Google/GitHub sign-in; backend reads
   content; $0 now, $5 later; H1 narrowed to the core loop, organising → H1b; Lens confirmed; work entries = personal
-  obligations only.
+  obligations only. Frozen financial data stays frozen and is a deletion candidate (owner; delete only on his explicit
+  go, after a final export).
 
 - 2026-10-08 — Reopened as the personal helper (pivot, not a new repo); financial domain frozen, not deleted; H-tier
   prefix; lens trial over the real snapshot instead of a markdown spike; AI outside first (H3), inside later (H5).
