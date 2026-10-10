@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
-import { RouterLink } from 'vue-router'
+import { useRouter } from 'vue-router'
+import { fetchMe, signOutLocally, type Me } from '@/auth/signIn'
 import { getDbStats } from '@/db/seed'
 import { useOnline } from '@/composables/useOnline'
 import { useSettingsStore } from '@/stores/settings'
@@ -31,7 +32,21 @@ async function refreshStats(): Promise<void> {
   stats.value = await getDbStats()
 }
 
-onMounted(refreshStats)
+const router = useRouter()
+const me = ref<Me | { error: string } | null>(null)
+
+function signOut(): void {
+  signOutLocally()
+  void router.push({ name: 'signin' })
+}
+
+onMounted(async () => {
+  void refreshStats()
+  const r = await fetchMe()
+  // 'signed-out' here means the server rejected the stored token (401) — drop it and ask for a fresh sign-in.
+  if (r === 'signed-out') return signOut()
+  me.value = r
+})
 
 // --------------------------------------------------------------------------
 // L1 GitHub sync — Connect / Disconnect
@@ -295,11 +310,15 @@ async function doDisconnect(): Promise<void> {
       </div>
     </details>
 
-    <!-- Only way into sign-in until the real sign-in screen (S3). -->
     <section class="card">
-      <h3 class="font-semibold mb-1">Account</h3>
+      <h3 class="font-semibold mb-3">Account</h3>
+      <p class="text-sm text-slate-300 mb-4" data-test="account">
+        <template v-if="me === null">checking…</template>
+        <template v-else-if="typeof me === 'object' && 'email' in me">{{ me.name ?? '—' }} · {{ me.email }}</template>
+        <template v-else-if="typeof me === 'object'">Account unavailable ({{ me.error }})</template>
+      </p>
       <div class="flex flex-wrap gap-2 items-center">
-        <RouterLink to="/spike-auth" class="btn-ghost">Sign-in test</RouterLink>
+        <button class="btn-danger" @click="signOut">Sign out</button>
         <InstallButton />
       </div>
     </section>
