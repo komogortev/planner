@@ -6,9 +6,8 @@ import { appUrls } from './config'
 import type { Env } from './index'
 
 type Provider = 'github' | 'google'
-// `emails`: every verified address the provider vouches for. The account email is the first one on the allowlist.
+// `emails`: every verified address the provider vouches for, primary first. A new account takes the first invited one.
 type Identity = { providerUserId: string; emails: string[]; name: string | null }
-type Admitted = { providerUserId: string; email: string; name: string | null }
 type C = Context<{ Bindings: Env }>
 
 const SESSION_DAYS = 30
@@ -96,41 +95,74 @@ function googleIdentity(idToken: string, clientId: string): Identity | null {
 
 // ── account + session writes ────────────────────────────────────────────────
 
-async function upsertUser(db: D1Database, p: Provider, who: Admitted): Promise<string> {
-  const linked = await db
-    .prepare('SELECT user_id FROM identities WHERE provider = ? AND provider_user_id = ?')
-    .bind(p, who.providerUserId)
-    .first<{ user_id: string }>()
-  if (linked) return linked.user_id
+type UserRow = { id: string; email: string; disabled_at: number | null }
 
-  // Same verified email from another provider → same account.
-  const existing = await db.prepare('SELECT id FROM users WHERE email = ?').bind(who.email).first<{ id: string }>()
-  const userId = existing?.id ?? crypto.randomUUID()
-  const writes = [db.prepare('INSERT INTO identities (provider, provider_user_id, user_id) VALUES (?, ?, ?)').bind(p, who.providerUserId, userId)]
-  if (!existing) {
-    writes.unshift(db.prepare('INSERT INTO users (id, email, name, created_at) VALUES (?, ?, ?, ?)').bind(userId, who.email, who.name, Date.now()))
+/**
+ * Who may sign in, in order: an identity already linked to an account; an existing account with one of the verified
+ * emails (this provider gets linked to it); a new account, only through an open invite for a verified email.
+ * Returns the account id, or null when the caller is not invited or the account is disabled (revoked).
+ */
+async function admit(db: D1Database, p: Provider, who: Identity): Promise<string | null> {
+  const linked = await db
+    .prepare('SELECT u.id, u.email, u.disabled_at FROM identities i JOIN users u ON u.id = i.user_id WHERE i.provider = ? AND i.provider_user_id = ?')
+    .bind(p, who.providerUserId)
+    .first<UserRow>()
+  if (linked) return linked.disabled_at === null ? linked.id : null
+
+  // Same verified email from another provider → same account. Primary email first (who.emails is ordered).
+  const marks = who.emails.map(() => '?').join(', ')
+  const { results } = await db.prepare(`SELECT id, email, disabled_at FROM users WHERE email IN (${marks})`).bind(...who.emails).all<UserRow>()
+  const existing = who.emails.map((e) => results.find((u) => u.email === e)).find(Boolean)
+  if (existing) {
+    if (existing.disabled_at !== null) return null
+    // OR IGNORE: two first sign-ins with the same new identity (a double-clicked tab) would otherwise 500 on the PK.
+    await db.prepare('INSERT OR IGNORE INTO identities (provider, provider_user_id, user_id) VALUES (?, ?, ?)').bind(p, who.providerUserId, existing.id).run()
+    return existing.id
   }
-  await db.batch(writes)
-  return userId
+
+  // New account. One batch (one transaction) per candidate email: every write is conditional on an open invite, so a
+  // missing, expired or already-used invite writes nothing, and of two racing sign-ins only the first creates the user.
+  const now = Date.now()
+  for (const email of who.emails) {
+    const userId = crypto.randomUUID()
+    const open = 'SELECT 1 FROM invites WHERE email = ? AND used_by IS NULL AND expires_at > ?'
+    const [created] = await db.batch([
+      db.prepare(`INSERT INTO users (id, email, name, created_at) SELECT ?, ?, ?, ? WHERE EXISTS (${open})`)
+        .bind(userId, email, who.name, now, email, now),
+      db.prepare('INSERT INTO identities (provider, provider_user_id, user_id) SELECT ?, ?, id FROM users WHERE id = ?')
+        .bind(p, who.providerUserId, userId),
+      db.prepare(`UPDATE invites SET used_by = ?, used_at = ? WHERE email = ? AND used_by IS NULL AND EXISTS (SELECT 1 FROM users WHERE id = ?)`)
+        .bind(userId, now, email, userId),
+    ])
+    if (created.meta.changes === 1) return userId
+  }
+  return null
 }
 
+/** A new session for the account; its expired sessions are purged on the way (no cron needed for one user's rows). */
 async function createSession(db: D1Database, userId: string): Promise<string> {
   const token = randomToken()
   const now = Date.now()
-  await db
-    .prepare('INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)')
-    .bind(await sha256(token), userId, now, now + SESSION_DAYS * 86_400_000)
-    .run()
+  await db.batch([
+    db.prepare('DELETE FROM sessions WHERE user_id = ? AND expires_at <= ?').bind(userId, now),
+    db.prepare('INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)')
+      .bind(await sha256(token), userId, now, now + SESSION_DAYS * 86_400_000),
+  ])
   return token
+}
+
+function bearer(c: C): string | null {
+  return c.req.header('Authorization')?.match(/^Bearer (.+)$/)?.[1] ?? null
 }
 
 /** The signed-in user for a request's `Authorization: Bearer <token>`, or null. */
 export async function sessionUser(c: C): Promise<{ id: string; email: string; name: string | null } | null> {
-  const token = c.req.header('Authorization')?.match(/^Bearer (.+)$/)?.[1]
+  const token = bearer(c)
   if (!token) return null
+  // A disabled (revoked) account is signed out everywhere at once, even if a session row survived.
   return c.env.DB.prepare(
     `SELECT u.id, u.email, u.name FROM sessions s JOIN users u ON u.id = s.user_id
-     WHERE s.token_hash = ? AND s.expires_at > ?`,
+     WHERE s.token_hash = ? AND s.expires_at > ? AND u.disabled_at IS NULL`,
   )
     .bind(await sha256(token), Date.now())
     .first()
@@ -202,15 +234,21 @@ auth.get('/callback/:provider', async (c) => {
     : tokens.id_token ? googleIdentity(tokens.id_token, cred.id) : null
   if (!who) return c.text('no verified email from provider', 403)
 
-  const allowed = c.env.ALLOWED_EMAILS.split(',').map((e) => e.trim().toLowerCase())
-  const email = who.emails.find((e) => allowed.includes(e))
+  const userId = await admit(c.env.DB, p, who)
   // Shown only to whoever just proved they own these addresses — it names nothing they don't already know.
-  if (!email) return c.text(`not invited — ${p} reported: ${who.emails.join(', ')}`, 403)
+  if (!userId) return c.text(`not invited — ${p} reported: ${who.emails.join(', ')}`, 403)
 
-  const token = await createSession(c.env.DB, await upsertUser(c.env.DB, p, { ...who, email }))
+  const token = await createSession(c.env.DB, userId)
   // Fragment, not query: never sent to a server or written to access logs. Set via URL so a `#` already in
   // return_to is replaced, not appended to.
   const back = new URL(flow.returnTo)
   back.hash = new URLSearchParams({ token, nonce: flow.nonce }).toString()
   return c.redirect(back.href)
+})
+
+// POST /auth/logout — ends the calling session on the server (the app also forgets the token). Idempotent.
+auth.post('/logout', async (c) => {
+  const token = bearer(c)
+  if (token) await c.env.DB.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(await sha256(token)).run()
+  return c.body(null, 204)
 })

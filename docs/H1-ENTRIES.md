@@ -94,7 +94,8 @@ interface OutboxRow {
   entityId: string
   op: 'upsert' | 'delete'
   baseVersion: number | null  // serverVersion the edit was made against (§6.3)
-  payload: Partial<Entry>
+  payload: EntryInput         // the FULL entry at queue time; a missing field is refused, never read as "cleared"
+                              // (S2 review: a partial edit would wipe tags or undelete)
   attempts: number; lastError: string | null; queuedAt: string
 }
 
@@ -124,13 +125,14 @@ users           (id TEXT PK, email TEXT UNIQUE, name TEXT, created_at INTEGER,
                  version_seq INTEGER NOT NULL DEFAULT 0)          -- per-user change counter
 identities      (provider TEXT, provider_user_id TEXT, user_id TEXT, PK (provider, provider_user_id))
                                                                   -- S1: one user, many providers
-invites         (code TEXT PK, email TEXT, created_by TEXT, used_by TEXT, expires_at TEXT)
+invites         (email TEXT PK, created_at, expires_at, used_by, used_at)   -- S2: keyed by the verified email
+                -- users also gains disabled_at (revocation); full DDL: api/migrations/0004_entries_invites.sql
 sessions        (token_hash TEXT PK, user_id, created_at, expires_at)   -- S1: own table, SHA-256 of the token
 entries         (user_id TEXT, id TEXT, body TEXT, created_at TEXT, occurred_at TEXT, category_id TEXT,
                  tags TEXT /* JSON array */, updated_at TEXT, deleted_at TEXT,
-                 server_version INTEGER NOT NULL, received_at TEXT,
+                 server_version INTEGER NOT NULL, received_at INTEGER /* epoch ms, server-stamped */,
                  PRIMARY KEY (user_id, id))
-entry_revisions (user_id TEXT, id TEXT, server_version INTEGER, body TEXT, replaced_at TEXT)  -- §6.3
+entry_revisions (user_id TEXT, id TEXT, server_version INTEGER, body TEXT, deleted_at TEXT, replaced_at INTEGER)  -- §6.3
 INDEX entries(user_id, server_version) ; INDEX entries(user_id, created_at)
 ```
 
@@ -181,7 +183,11 @@ failure (cap 5 min). Estimated load for one user: ≤ 500 requests/day, under 1 
 
 Runs on the client before the outbox write (fast feedback) and again on the server (authority).
 
-- `body`: Unicode NFC; strip control characters except `\n` and `\t`; trim trailing whitespace; 1–20,000 characters.
+- `body`: strip control characters except `\n` and `\t`, then Unicode NFC (that order, or a stripped control leaves a
+  letter and its accent uncomposed); trim trailing whitespace; 1–20,000 characters; unpaired surrogates refused.
+  Cleaning is idempotent, so device and server store identical text.
+- Timestamps: exactly `toISOString()` output (UTC, milliseconds, `Z`) — they are indexed as text, so string order
+  must be time order. Every field is required on push.
   **Plain text only** — stored as written, never as HTML, escaped at render. The body is not otherwise changed.
 - `occurredAt`: `YYYY-MM-DD` or null. `tags`: ≤ 20, each ≤ 40 chars, lowercased, deduped. Unknown fields dropped.
 - Server-side only: `user_id` comes from the session, **never from the request body**; `server_version`,
@@ -193,8 +199,9 @@ Runs on the client before the outbox write (fast feedback) and again on the serv
 
 - **Sign-in:** OAuth 2 with Google or GitHub (B6). First sign-in with a valid invite creates the account; without one,
   the backend refuses and creates nothing.
-- **Invites:** single-use code bound to an email, expiring; created by the owner (a CLI script against D1 in H1; UI
-  later). The owner's account is seeded by the same script.
+- **Invites:** single-use, bound to an email the provider must verify, expiring — no code to hand around (S2). Created,
+  listed and revoked by the owner with `api/scripts/invite.mjs` (UI later). Revoking disables the account and ends its
+  sessions; its entries are kept. The owner's account predates invites (S1 allowlist) and signs in by its linked identity.
 - **Token transport: `Authorization: Bearer`, not cookies.** The client (`*.github.io`) and the Worker (`*.workers.dev`)
   are different sites, and Safari blocks cross-site cookies. Bearer tokens make injected script the main threat, hence
   plain-text bodies (§7) and a CSP that allows only the Worker origin for `connect-src`.
