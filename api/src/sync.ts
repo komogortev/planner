@@ -1,6 +1,7 @@
 // /sync/push, /sync/pull, /entries (H1-ENTRIES.md §6, §9). Thin: auth, bounds, parsing; the rules live in entries.ts.
 import { Hono } from 'hono'
 import { authenticate, renewSession, type AuthedSession } from './auth'
+import { overLimit, tooMany, byIp } from './ratelimit'
 import { getEntry, pullChanges, pushMutations, queryEntries, PULL_MAX, PUSH_MAX_BYTES, PUSH_MAX_MUTATIONS } from './entries'
 import type { Env } from './index'
 import { isIsoDate } from '../../src/domain/clean'
@@ -8,6 +9,9 @@ import { isIsoDate } from '../../src/domain/clean'
 type Vars = { session: AuthedSession }
 export const sync = new Hono<{ Bindings: Env; Variables: Vars }>()
 export const entriesApi = new Hono<{ Bindings: Env; Variables: Vars }>()
+
+// Before authentication: a flood from one address costs no D1 read.
+sync.use('/push', byIp('RL_PUSH_IP'))
 
 for (const r of [sync, entriesApi]) {
   r.use('*', async (c, next) => {
@@ -30,6 +34,7 @@ function int(v: string | undefined, fallback: number): number | null {
 }
 
 sync.post('/push', async (c) => {
+  if (await overLimit(c.env, 'RL_PUSH_USER', c.get('session').id)) return tooMany(c)
   const declared = Number(c.req.header('Content-Length') ?? 0)
   if (declared > PUSH_MAX_BYTES) return c.json({ error: `body over ${PUSH_MAX_BYTES} bytes` }, 413)
   const text = await c.req.text()

@@ -213,7 +213,8 @@ Runs on the client before the outbox write (fast feedback) and again on the serv
   asserts that account B reading account A's entry id gets 404 (negative control, §10).
 - **Offline:** a valid session lasts 30 days, renewed on each successful sync. An expired session never blocks capture —
   entries queue; sync shows "sign in again"; the outbox flushes after sign-in.
-- **Rate limit:** per user and per IP on `/auth/*` and `/sync/push`.
+- **Rate limit:** per IP on `/auth/*` (20/min) and `/sync/push` (60/min), per account on `/sync/push` (20/min) — Workers
+  rate-limiting binding, built S2 step 5 (details: [H1-S2-BACKEND.md](H1-S2-BACKEND.md)). A client that gets 429 waits `Retry-After`.
 
 ## 9. Local storage and backup
 

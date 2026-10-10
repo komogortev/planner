@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { auth, sessionUser } from './auth'
 import { appOrigins, appUrls } from './config'
+import { byIp } from './ratelimit'
 import { entriesApi, sync } from './sync'
 import { envIcon } from '../../src/env/appEnv'
 
@@ -13,6 +14,10 @@ export interface Env {
   GITHUB_CLIENT_SECRET: string
   GOOGLE_CLIENT_ID: string
   GOOGLE_CLIENT_SECRET: string
+  // Rate limits (src/ratelimit.ts); the numbers are in wrangler.toml.
+  RL_AUTH_IP: RateLimit
+  RL_PUSH_IP: RateLimit
+  RL_PUSH_USER: RateLimit
 }
 
 const app = new Hono<{ Bindings: Env }>()
@@ -20,7 +25,9 @@ const app = new Hono<{ Bindings: Env }>()
 app.use('*', async (c, next) => {
   const allowed = appOrigins(c.env)
   // Returning null leaves the allow-origin header off, so the browser refuses the response.
-  return cors({ origin: (origin) => (allowed.includes(origin) ? origin : null), allowHeaders: ['Authorization', 'Content-Type'] })(c, next)
+  return cors({ origin: (origin) => (allowed.includes(origin) ? origin : null), allowHeaders: ['Authorization', 'Content-Type'],
+    // Not CORS-safelisted: without this the app on another origin cannot read how long a 429 asks it to wait.
+    exposeHeaders: ['Retry-After'] })(c, next)
 })
 
 app.get('/health', (c) => c.json({ ok: true }))
@@ -39,6 +46,7 @@ app.get('/favicon.ico', async (c) => {
   return c.body(await res.arrayBuffer(), 200, { 'Content-Type': 'image/svg+xml', 'Cache-Control': 'public, max-age=86400' })
 })
 
+app.use('/auth/*', byIp('RL_AUTH_IP'))
 app.route('/auth', auth)
 app.route('/sync', sync)
 app.route('/entries', entriesApi)
