@@ -57,3 +57,15 @@ export function backdropShift(
   const pastEnd = (index === 0 && dragPx > 0) || (index === count - 1 && dragPx < 0)
   return { screens: -index * ratio, px: pastEnd ? 0 : dragPx * ratio }
 }
+
+/**
+ * "Cloth being pulled" (owner's test): while a page is dragged, the folds are shifted, stretched and sheared a little
+ * in the drag direction, then ease back — strong enough cloth to keep its folds. `p` is the drag as a fraction of the
+ * page width (clamped to ±1). At rest (p = 0) everything is the identity, so the folds sit exactly as designed.
+ */
+export const PULL = { shift: 0.06, stretch: 0.07, skewDeg: 2.5 } as const
+
+export function pullTransform(p: number): { shift: number; stretch: number; skewDeg: number } {
+  const c = Math.max(-1, Math.min(1, p))
+  return { shift: c * PULL.shift, stretch: 1 + Math.abs(c) * PULL.stretch, skewDeg: -c * PULL.skewDeg }
+}

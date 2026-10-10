@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { backdropShift, backdropWidth, dragOffset, pageIndex, settle } from '../pages'
+import { backdropShift, backdropWidth, dragOffset, pageIndex, pullTransform, settle } from '../pages'
 
 describe('settle', () => {
   it('changes page past 22% of the width, in the drag direction', () => {
@@ -60,5 +60,22 @@ describe('parallax backdrop', () => {
     expect(backdropShift(2, -120).px).toBe(0) // pulling left on the last page
     expect(backdropShift(0, -120).px).toBeCloseTo(-40) // towards a real page: moves
     expect(backdropShift(2, 120).px).toBeCloseTo(40)
+  })
+})
+
+describe('pullTransform (cloth being pulled)', () => {
+  it('is the identity at rest', () => {
+    expect(pullTransform(0)).toEqual({ shift: 0, stretch: 1, skewDeg: -0 })
+  })
+  it('follows the drag direction, stretches either way, and is bounded', () => {
+    const l = pullTransform(-0.5)
+    const r = pullTransform(0.5)
+    expect(l.shift).toBeCloseTo(-r.shift)
+    expect(l.skewDeg).toBeCloseTo(-r.skewDeg)
+    expect(l.stretch).toBeCloseTo(r.stretch)
+    expect(l.stretch).toBeGreaterThan(1)
+    const big = pullTransform(5) // a drag beyond a full page width is clamped
+    expect(big.stretch).toBeCloseTo(1.07)
+    expect(Math.abs(big.shift)).toBeCloseTo(0.06)
   })
 })

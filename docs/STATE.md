@@ -5,7 +5,7 @@
 - **Working:** prod: 3 swipe pages, page dots + hidden menu, coat-pocket gate, dictophone Home capture (entry + outbox in one Dexie v4 transaction; "N not synced yet" = persisted outbox). In #28 (preview-verified only): finger-following pager, warm textile backdrop with folds, Settings → Appearance light/dark, frosted-glass cards + sign-in dialog. `pnpm check` app 108 · worker 18.
 - **Broken:** captured entries do not leave the device — no flush until S2 step 4 + the client `sync/` loop. Not verified on a real Android phone: pager drag vs the browser's own scroll (fixed in #28 by `touch-action`), keyboard over the dictophone window, blur cost during swipes, a real provider sign-in through the gate.
 - **Blocker:** none. Local dev quirks: Tailwind reads its config at server start (restart after editing it); `planner-api` must be running for local sign-in, and it rejects a fake token (401 → signed out).
-- **Next:** merge + deploy #28 · S2 step 4 sync push/pull/query (§6; §10 idempotency · isolation · stale-base · no resurrection) → client flush/pull loop (entries list, storage usage, persist()) → steps 5–7. Test in flight: backdrop parallax (1/3 of the page movement).
+- **Next:** merge + deploy #28 · S2 step 4 sync push/pull/query (§6; §10 idempotency · isolation · stale-base · no resurrection) → client flush/pull loop (entries list, storage usage, persist()) → steps 5–7. Tests in flight (draft #29): backdrop parallax (1/3 of the page movement) and the cloth-pull on the folds.
 ---
 
 ## Context

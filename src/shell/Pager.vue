@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import HomeView from '@/views/HomeView.vue'
 import DashboardView from '@/views/DashboardView.vue'
 import SettingsView from '@/views/SettingsView.vue'
-import { PAGES, PARALLAX, backdropShift, backdropWidth, dragOffset, pageIndex, settle } from './pages'
+import { PAGES, PARALLAX, backdropShift, backdropWidth, dragOffset, pageIndex, pullTransform, settle } from './pages'
 
 // The three main pages sit side by side on one track. The track follows the finger while dragging and eases to the
 // settled page on release, so the next page pushes the current one away (native page-swap feel). The route is the
@@ -14,6 +14,7 @@ const router = useRouter()
 const index = computed(() => Math.max(0, pageIndex(route.path)))
 
 const dragPx = ref(0)
+const pull = ref(0) // the drag as a fraction of the page width, for the cloth-pull effect
 const dragging = ref(false)
 let start: { x: number; y: number; t: number; axis: 'x' | 'y' | null } | null = null
 let width = 1
@@ -40,7 +41,10 @@ function onTouchMove(e: TouchEvent): void {
     start.axis = Math.abs(dx) > Math.abs(dy) * 1.2 ? 'x' : 'y'
     dragging.value = start.axis === 'x'
   }
-  if (start.axis === 'x') dragPx.value = dragOffset(index.value, dx)
+  if (start.axis === 'x') {
+    dragPx.value = dragOffset(index.value, dx)
+    pull.value = dragPx.value / width
+  }
 }
 
 function onTouchEnd(e: TouchEvent): void {
@@ -56,6 +60,7 @@ function onTouchEnd(e: TouchEvent): void {
   const target = settle(index.value, dx, vx, width)
   dragging.value = false // re-enables the easing; the transform now animates to the settled position
   dragPx.value = 0
+  pull.value = 0 // the cloth relaxes back (elastic ease, see .pulled)
   if (target !== index.value) void router.push(PAGES[target]!.to)
 }
 
@@ -66,6 +71,12 @@ const backdropStyle = computed(() => {
     width: `${backdropWidth() * 100}%`,
     transform: `translate3d(calc(${screens * 100}cqw + ${px}px), 0, 0)`,
   }
+})
+
+// The folds + accents are pulled a little with the finger (shifted, stretched, sheared), and spring back on release.
+const pulledStyle = computed(() => {
+  const t = pullTransform(pull.value)
+  return { transform: `translate3d(${t.shift * 100}cqw, 0, 0) scaleX(${t.stretch}) skewX(${t.skewDeg}deg)` }
 })
 
 const trackStyle = computed(() => ({
@@ -81,7 +92,11 @@ const trackStyle = computed(() => ({
     @touchend.passive="onTouchEnd"
     @touchcancel.passive="onTouchEnd"
   >
-    <div class="backdrop textile" :class="{ 'track-dragging': dragging }" :style="backdropStyle" aria-hidden="true" />
+    <div class="backdrop t-base" :class="{ 'track-dragging': dragging }" :style="backdropStyle" aria-hidden="true">
+      <div class="t-folds pulled" :class="{ 'pulled-live': dragging }" :style="pulledStyle" />
+      <div class="t-accents pulled" :class="{ 'pulled-live': dragging }" :style="pulledStyle" />
+      <div class="t-weave" />
+    </div>
     <div class="track" :class="{ 'track-dragging': dragging }" :style="trackStyle">
       <!-- inert: an off-screen page is neither focusable nor read by a screen reader. -->
       <section class="slot" :inert="index !== 0"><div class="sheet"><HomeView /></div></section>
@@ -107,6 +122,14 @@ const trackStyle = computed(() => ({
   transition: transform 320ms cubic-bezier(0.22, 0.85, 0.28, 1);
   will-change: transform;
   pointer-events: none;
+}
+.pulled {
+  /* Springy: overshoots a touch on release, like cloth settling back into its folds. */
+  transition: transform 560ms cubic-bezier(0.3, 1.45, 0.5, 1);
+  will-change: transform;
+}
+.pulled-live {
+  transition: transform 80ms linear; /* follows the finger, lightly smoothed */
 }
 .track {
   position: relative; /* above the backdrop */
@@ -141,7 +164,8 @@ const trackStyle = computed(() => ({
 }
 @media (prefers-reduced-motion: reduce) {
   .track,
-  .backdrop {
+  .backdrop,
+  .pulled {
     transition-duration: 1ms;
   }
 }
