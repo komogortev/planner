@@ -1,21 +1,16 @@
 <script setup lang="ts">
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { computed } from 'vue'
-import CleanupBanner from '@/components/CleanupBanner.vue'
 import EnvBanner from '@/components/EnvBanner.vue'
 import VersionBadge from '@/components/VersionBadge.vue'
 import InstallButton from '@/components/InstallButton.vue'
 import OnlineIndicator from '@/components/OnlineIndicator.vue'
-import SyncStatusPill from '@/components/SyncStatusPill.vue'
 import UpdateBanner from '@/components/UpdateBanner.vue'
 
 const route = useRoute()
 
 const navItems = [
-  { to: '/', label: 'Dashboard' },
-  { to: '/commitments', label: 'Commitments' },
-  { to: '/intentions', label: 'Intentions' },
-  { to: '/market', label: 'Market Log' },
+  { to: '/', label: 'Home' },
   { to: '/settings', label: 'Settings' },
 ] as const
 
@@ -29,7 +24,6 @@ const currentPath = computed(() => route.path)
   <div class="h-dvh flex flex-col overflow-hidden">
     <EnvBanner />
     <UpdateBanner />
-    <CleanupBanner />
 
     <header
       class="app-header shrink-0 z-20 bg-slate-950 border-b border-slate-800"
@@ -58,7 +52,6 @@ const currentPath = computed(() => route.path)
           </nav>
         </div>
         <div class="flex items-center gap-3 shrink-0">
-          <SyncStatusPill />
           <InstallButton />
           <OnlineIndicator />
         </div>
