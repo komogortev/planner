@@ -13,4 +13,8 @@ sources/*/**
 # Cloudflare Worker (api/): local secrets and state — never commit
 .dev.vars
 .dev.vars.*
+.env
+.env.*
 .wrangler
+# wrangler tail captures hold IPs + request metadata
+*.jsonl

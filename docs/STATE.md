@@ -1,11 +1,11 @@
 # Personal Planner — STATE
 
 ## SNAPSHOT
-- **Phase/Last:** H1 S0 closed (2026-10-09) — spec v2 merged (#8, #10), §12 defaults confirmed. **Planner has workspace priority until further notice (owner).** Core loop: invite-only accounts (Google/GitHub), capture page as home, outbox sync to a Cloudflare Worker + D1 backend. Docs only.
-- **Working:** deployed app (https://komogortev.github.io/planner/) — L1 sync, L2-S1 categories, frozen financial domain. 54/54 vitest at last run (2026-06-01, not re-run).
-- **Broken:** sync's "unsynced" flag lives only in memory (`src/stores/sync.ts:55`) — offline write, close, reopen → status no longer says unsynced. Fixed by the H1 outbox.
-- **Blocker:** none. Owner setup done 2026-10-09: Cloudflare account (2FA), API host `planner-api.komogortev.workers.dev`, GitHub OAuth apps (dev + prod; secrets generated in-session), Google client (Testing).
-- **Next:** S1 spike per `docs/H1-S1-SPIKE.md` — free-tier CPU (10 ms), iPhone home-screen sign-in, CORS; 1–2 sessions.
+- **Phase/Last:** H1 S1 spike session 1 (2026-10-09) — steps 0–5 done, PR #13 **open, not merged**. **A ✅** (Worker + D1 from the Pages origin, CORS clean). **B ✅ on steady state** (owner): p50 1–5 ms; one 9 ms GitHub callback open. Results: `H1-S1-SPIKE.md` §6. Planner has workspace priority (owner).
+- **Working:** `api/` Worker deployed (`planner-api.komogortev.workers.dev`): GitHub + Google sign-in → one linked account, bearer token, `/me`. App unchanged: L1 sync, L2-S1, frozen financial domain.
+- **Broken:** prod runs the **pre-review** Worker (origin-wide `return_to`, localhost allowed, burn/note routes) until #13 merges + redeploy. Sync's "unsynced" flag is memory-only (`src/stores/sync.ts:55`), fixed by the H1 outbox.
+- **Blocker:** owner merges #13 and runs `wrangler deploy` (both blocked for Claude).
+- **Next:** S1 session 2 — step 6 test screen (fix :5176 vs :5173 dev port; add sign-in nonce), step 7 iPhone, step 8 cleanup. Then S2.
 ---
 
 ## Context
@@ -25,7 +25,7 @@
 |---|---|---|
 | L0 · Base · L1 · L2-S1 | ✅ shipped | PROJECT.md §Tiers |
 | H0 Pivot design | ✅ closed 2026-10-09 | VOCABULARY.md, ARCHITECTURE.md |
-| H1 Core loop | S0 ✅; S1 spike next | H1-ENTRIES.md · H1-S1-SPIKE.md |
+| H1 Core loop | S0 ✅; S1 spike: A ✅ B ✅, C next session | H1-ENTRIES.md · H1-S1-SPIKE.md |
 | H1b Organise | planned (categories/tags sync, Inbox, rules) | PROJECT.md §Tiers |
 | H2 Lenses | S0 draft, Q1–Q7 open; starts after H1 exits | H2-LENSES.md |
 | H3 Agent surface · H4 Curation & tasks · H5 In-app AI | planned | PROJECT.md §Tiers |
@@ -42,6 +42,11 @@
 ## Decision log
 
 Full log: PROJECT.md → Decisions log. Latest:
+
+- 2026-10-09 — S1 session 1: own OAuth code + Hono (Arctic deprecated by its maintainer 2026-07; Better Auth 210 KB
+  gz). B passes on steady state (owner) — the 9 ms GitHub callback re-enters at S2 over ≥ 50 callbacks; §4's library
+  switch doesn't fit a single outlier. Review: `return_to` is an exact app-URL prefix, since github.io hosts every
+  Pages site. Local secrets in `api/.env` (Claude never opens them); prod via `wrangler secret bulk`.
 
 - 2026-10-09 — Planner takes workspace priority until further notice (owner); H1 §12 defaults confirmed; eviction cut.
 
