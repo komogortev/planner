@@ -4,11 +4,11 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev --port 8787 --var ALLOWED_APP_URLS:http://localhost:5176/planner/",
-    "deploy": "wrangler deploy",
+    "deploy": "node scripts/deploy.mjs",
     "typecheck": "tsc --noEmit -p .",
     "test": "vitest run",
     "db:migrate:local": "wrangler d1 migrations apply planner --local",
-    "db:migrate:remote": "wrangler d1 migrations apply planner --remote"
+    "db:migrate:remote": "node scripts/deploy.mjs --migrate-only"
   },
   "dependencies": {
     "hono": "^4.13.13"

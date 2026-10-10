@@ -39,12 +39,20 @@ Local sign-in needs an invite in the **local** D1 (the `.wrangler/` state):
 
 ## Deploy
 
-The app and the Worker deploy separately. When an app change needs a new Worker, the Worker goes first.
+Production only ever runs what is on GitHub's `main`. The app builds from `main` on GitHub; the Worker and D1 deploy
+from this machine, so a guard enforces the same rule there.
 
-1. **D1 migrations** (if `api/migrations/` changed): `pnpm --dir api run db:migrate:remote`
-2. **Worker:** `pnpm --dir api run deploy` — prints the new version id. Roll back: `pnpm --dir api exec wrangler rollback`
-3. **App:** merge to `main` → GitHub Actions builds and publishes Pages (~1 min)
-4. `pnpm smoke`
+1. **Merge the PR** → GitHub Actions builds and publishes the app to Pages (~1 min).
+2. **`git switch main && git pull --ff-only`**, then **`pnpm --dir api run deploy`** — applies pending D1 migrations, then
+   uploads the Worker tagged with the commit (`wrangler deployments list` shows `abc1234 <subject>`). It **refuses**
+   on uncommitted or untracked files, a branch other than `main`, or `main` differing from `origin/main`.
+   Migrations alone: `pnpm --dir api run db:migrate:remote` (same guard).
+3. `pnpm smoke`
+
+Between steps 1 and 2 the new app runs against the old Worker for a minute or two. That is fine while every Worker
+change is backwards compatible with the app before it — keep it so (add, don't rename; the app tolerates a missing
+field). Roll back the Worker: `pnpm --dir api exec wrangler rollback`. D1 migrations have no down step; the undo is
+D1 Time Travel (point-in-time restore of the whole database), so migrations only add.
 
 Secrets: production via `pnpm --dir api exec wrangler secret bulk <file>` (then delete the file); local in `api/.env`,
 which only the owner edits.
