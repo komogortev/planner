@@ -137,14 +137,10 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   background: rgb(0 0 0 / 0.22);
 }
 .dialog {
-  --glass-bg: rgb(32 22 14 / 0.46);
-  --glass-edge: rgb(255 225 180 / 0.2);
   --glass-text: #f4e8d6;
   --glass-sub: rgb(244 232 214 / 0.62);
   --glass-btn-edge: rgb(236 200 150 / 0.5);
   --glass-btn-bg: rgb(255 220 170 / 0.08);
-  --glass-opacity: 0.8; /* the whole dialog, text included (owner, 2026-10-10) */
-  opacity: var(--glass-opacity);
   width: 100%;
   max-width: 24rem;
   margin: 0 12px 16px;
@@ -153,13 +149,11 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
   background: var(--glass-bg);
   border: 1px solid var(--glass-edge);
   box-shadow: 0 12px 40px rgb(0 0 0 / 0.35);
-  -webkit-backdrop-filter: blur(14px) saturate(1.1);
-  backdrop-filter: blur(14px) saturate(1.1);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
   color: var(--glass-text);
 }
 :global(html[data-theme='light']) .dialog {
-  --glass-bg: rgb(250 246 238 / 0.5);
-  --glass-edge: rgb(255 255 255 / 0.55);
   --glass-text: #2a2119;
   --glass-sub: rgb(42 33 25 / 0.62);
   --glass-btn-edge: rgb(42 33 25 / 0.4);
