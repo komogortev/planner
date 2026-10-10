@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import HomeView from '@/views/HomeView.vue'
 import DashboardView from '@/views/DashboardView.vue'
 import SettingsView from '@/views/SettingsView.vue'
-import { PAGES, dragOffset, pageIndex, settle } from './pages'
+import { PAGES, PARALLAX, backdropShift, backdropWidth, dragOffset, pageIndex, settle } from './pages'
 
 // The three main pages sit side by side on one track. The track follows the finger while dragging and eases to the
 // settled page on release, so the next page pushes the current one away (native page-swap feel). The route is the
@@ -59,6 +59,15 @@ function onTouchEnd(e: TouchEvent): void {
   if (target !== index.value) void router.push(PAGES[target]!.to)
 }
 
+// The backdrop rides along at PARALLAX of the pages' distance (same easing, so it stays locked to the drag).
+const backdropStyle = computed(() => {
+  const { screens, px } = backdropShift(index.value, dragPx.value)
+  return {
+    width: `${backdropWidth() * 100}%`,
+    transform: `translate3d(calc(${screens * 100}cqw + ${px}px), 0, 0)`,
+  }
+})
+
 const trackStyle = computed(() => ({
   transform: `translate3d(calc(${-index.value * 100}% + ${dragPx.value}px), 0, 0)`,
 }))
@@ -72,6 +81,7 @@ const trackStyle = computed(() => ({
     @touchend.passive="onTouchEnd"
     @touchcancel.passive="onTouchEnd"
   >
+    <div class="backdrop textile" :class="{ 'track-dragging': dragging }" :style="backdropStyle" aria-hidden="true" />
     <div class="track" :class="{ 'track-dragging': dragging }" :style="trackStyle">
       <!-- inert: an off-screen page is neither focusable nor read by a screen reader. -->
       <section class="slot" :inert="index !== 0"><div class="sheet"><HomeView /></div></section>
@@ -83,11 +93,23 @@ const trackStyle = computed(() => ({
 
 <style scoped>
 .pager {
+  position: relative;
+  container-type: inline-size; /* cqw = the pager's width, for the backdrop's parallax offset */
   height: 100%;
   overflow: hidden;
   touch-action: pan-y; /* the browser keeps vertical scroll; horizontal drags are ours */
 }
+.backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  transition: transform 320ms cubic-bezier(0.22, 0.85, 0.28, 1);
+  will-change: transform;
+  pointer-events: none;
+}
 .track {
+  position: relative; /* above the backdrop */
   display: flex;
   height: 100%;
   transition: transform 320ms cubic-bezier(0.22, 0.85, 0.28, 1);
@@ -118,7 +140,8 @@ const trackStyle = computed(() => ({
   padding: 24px 56px 56px;
 }
 @media (prefers-reduced-motion: reduce) {
-  .track {
+  .track,
+  .backdrop {
     transition-duration: 1ms;
   }
 }

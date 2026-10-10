@@ -56,8 +56,9 @@
 
   /* Warm wool backdrop: tinted fractal-noise grain over a base colour, plus a faint twill and a vignette. Pages hover
      over it as sheets. The grain is a data-URI SVG, so there is no image to load. */
-  body {
-    @apply text-slate-100 antialiased;
+  /* The textile, shared by the page (body, fixed) and the pager's parallax layer (.textile). */
+  body,
+  .textile {
     background-color: var(--backdrop);
     background-image:
       radial-gradient(120% 90% at 50% 30%, transparent 40%, var(--vignette) 100%),
@@ -72,8 +73,12 @@
     background-blend-mode: normal, normal, normal, normal, normal, var(--fold-blend);
     background-repeat: repeat, repeat, repeat, no-repeat, no-repeat, no-repeat;
     background-position: 0 0, 0 0, 0 0, 0 0, 0 0, center;
+  }
+  body {
+    @apply text-slate-100 antialiased;
     background-attachment: fixed;
   }
+
 
   * {
     @apply box-border;

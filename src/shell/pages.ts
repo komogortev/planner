@@ -29,3 +29,31 @@ export function dragOffset(index: number, dx: number, count = PAGES.length): num
   const pastEnd = index === count - 1 && dx < 0
   return pastStart || pastEnd ? dx * 0.3 : dx
 }
+
+/**
+ * Parallax (owner's test, 2026-10-10): the backdrop moves with the pages but only `PARALLAX` of their distance. With
+ * three pages the track travels 2 screen widths, the backdrop 2 * PARALLAX of one, so it is (1 + 2 * PARALLAX) screen
+ * widths wide: its left edge meets the screen's at the first page and its right edge at the last.
+ * (1/3 per page → a 5/3-screen-wide backdrop. The owner also described "200 vs 300 total", which is 1/2 per page —
+ * change this one number to try it.)
+ */
+export const PARALLAX = 1 / 3
+
+/** Backdrop width as a multiple of the screen width. */
+export function backdropWidth(ratio = PARALLAX, count = PAGES.length): number {
+  return 1 + (count - 1) * ratio
+}
+
+/**
+ * Backdrop left edge, in screen widths (≤ 0) plus the live drag in px, for page `index`. Past either end (the pages
+ * rubber-band) the backdrop stays put: it has no spare width there, so moving it would open a gap at its edge.
+ */
+export function backdropShift(
+  index: number,
+  dragPx: number,
+  ratio = PARALLAX,
+  count = PAGES.length,
+): { screens: number; px: number } {
+  const pastEnd = (index === 0 && dragPx > 0) || (index === count - 1 && dragPx < 0)
+  return { screens: -index * ratio, px: pastEnd ? 0 : dragPx * ratio }
+}
