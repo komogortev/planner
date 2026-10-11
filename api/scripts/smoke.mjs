@@ -14,6 +14,9 @@ const appArg = process.argv.find((a) => a.startsWith('--app='))?.slice(6)
 const APP = local ? 'http://localhost:5176/planner/' : appArg ?? 'https://komogortev.github.io/planner/'
 const API = local ? 'http://localhost:8787' : 'https://planner-api.komogortev.workers.dev'
 const ORIGIN = new URL(APP).origin
+// The FIRST entry of the Worker's ALLOWED_APP_URLS: where a refusal with no flow cookie is sent (docs/ORIGIN-MOVE.md §3).
+// Change it with the order of that list at cut-over.
+const FIRST_ENTRY = local ? APP : 'https://komogortev.github.io/planner/'
 const NONCE = 'smoketestnonce-0123456789'
 const enc = encodeURIComponent
 
@@ -49,14 +52,23 @@ const checks = [
     return r.status === 302 && new URL(r.headers.get('location')).host === 'github.com'
   }],
   ['sign-in start, no nonce → 400', async () => (await fetch(`${API}/auth/start/github?return_to=${enc(APP)}`, { redirect: 'manual' })).status === 400],
-  ['sign-in start, foreign return_to → 400', async () => {
-    const other = `${ORIGIN}/someone-else/`
+  // A sibling path counts as foreign only on the shared github.io origin; the dedicated Pages origin is allowed whole.
+  ['sign-in start, foreign host return_to → 400', async () => {
+    const other = `https://evil.example/someone-else/`
     return (await fetch(`${API}/auth/start/github?return_to=${enc(other)}&nonce=${NONCE}`, { redirect: 'manual' })).status === 400
   }],
+  ['sign-in start, lookalike of the app host → 400', async () => {
+    const other = `${ORIGIN}.evil.example/`
+    return (await fetch(`${API}/auth/start/github?return_to=${enc(other)}&nonce=${NONCE}`, { redirect: 'manual' })).status === 400
+  }],
+  ...(new URL(APP).pathname === '/' ? [] : [['sign-in start, sibling path on the shared origin → 400', async () => {
+    const other = `${ORIGIN}/someone-else/`
+    return (await fetch(`${API}/auth/start/github?return_to=${enc(other)}&nonce=${NONCE}`, { redirect: 'manual' })).status === 400
+  }]]),
   ['sign-in callback, no flow → 302 back to the app with #error=expired (D-57)', async () => {
     const r = await fetch(`${API}/auth/callback/github?code=x&state=${'a'.repeat(43)}`, { redirect: 'manual' })
     const to = r.headers.get('location') ?? ''
-    return r.status === 302 && to.startsWith(APP) && to.includes('#error=expired')
+    return r.status === 302 && (to.startsWith(APP) || to.startsWith(FIRST_ENTRY)) && to.includes('#error=expired')
   }],
   ['CORS admits the app origin', async () => {
     const r = await fetch(`${API}/health`, { headers: { Origin: ORIGIN } })
