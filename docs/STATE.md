@@ -5,7 +5,7 @@
 - **Working:** prod: finger-following 3-page pager (Home dictophone capture · Dashboard stub · Settings), page dots + hidden menu, coat-pocket gate with frosted-glass dialog, warm-wool dark theme and steel-blue light theme (Settings → Appearance), backdrop parallax (1/3) + cloth pull on the folds. `pnpm smoke` 13/13 · `pnpm check` app 115 · worker 107. Runbook: `RUNBOOK.md`.
 - **Broken:** captured entries do not leave the device — the server side exists (`/sync/push`, `/sync/pull`, `/entries`; worker 107) but the client `sync/` loop does not. Not verified on a real Android phone: pager drag vs browser scroll, parallax/pull/blur smoothness and feel, keyboard over the dictophone window, a real provider sign-in through the gate.
 - **Blocker:** none. Local dev: restart the dev server after editing `tailwind.config.ts`; `planner-api` must run for local sign-in and rejects a fake token (401).
-- **Next:** S3 client `sync/` loop (coalesce per entity; push ≤ 50 mutations / 100 KB, pull ≤ 100 rows, `/entries` ≤ 50, back off on 429; entries list, storage usage, persist()). Owner: one real GitHub sign-in on prod (PKCE, `token=` check, callback CPU); phone checks above. Off-palette indigo remains in: btn-primary (Legacy export), update banner, input focus ring, a Settings link, status pills.
+- **Next:** roadmap basis accepted 2026-10-10 ([DECISION-TREE.md](DECISION-TREE.md)). **S2b data rights** (`/me/export`, `DELETE /me`, two Settings buttons, tester notice) before the **S3 client sync loop** (rules in H1-ENTRIES §13; list = temporary Dashboard dialog). Owner: send the approved notice; one real GitHub sign-in on prod; phone checks above. Widgets get their own design session. Off-palette indigo remains (btn-primary, update banner, focus ring, a Settings link, status pills).
 ---
 
 ## Context
@@ -27,16 +27,17 @@
 |---|---|---|
 | L0 · Base · L1 · L2-S1 | ✅ shipped | PROJECT.md §Tiers |
 | H0 Pivot design | ✅ closed 2026-10-09 | VOCABULARY.md, ARCHITECTURE.md |
-| H1 Core loop | S0 ✅ · S1 ✅ (C deferred) · S2 ✅ (steps 0–7; 3 reads need real sign-ins) | H1-ENTRIES.md · H1-S1-SPIKE.md · H1-S2-BACKEND.md |
-| H1b Organise | planned (categories/tags sync, Inbox, rules) | PROJECT.md §Tiers |
+| H1 Core loop | S0 ✅ · S1 ✅ (C deferred) · S2 ✅ (steps 0–7; 3 reads need real sign-ins) · S2b data rights next · S3 client | H1-ENTRIES.md · H1-S1-SPIKE.md · H1-S2-BACKEND.md |
+| HW Widgets | design session pending (four-page pager, system widgets, notes widget as proof) | PROJECT.md §Tiers, DECISION-TREE §5.2 |
+| H1b Organise | **conditional** — built only if the lens trial shows the AI needs categories/tags | PROJECT.md §Tiers |
 | H2 Lenses | S0 draft, Q1–Q7 open; starts after H1 exits | H2-LENSES.md |
-| H3 Agent surface · H4 Curation & tasks · H5 In-app AI | planned | PROJECT.md §Tiers |
+| H3 Agent surface · H4 Curation & tasks · H5 In-app AI | each built only on named evidence (DECISION-TREE §5.2) | PROJECT.md §Tiers |
 
 ## Carried follow-ups (still relevant after the pivot)
 
 - **Version badge in prod** — shown on every page in every environment by owner rule (2026-10-10). Re-entry: **S4
   cut-over** — decide whether prod keeps it.
-- **Invitee data rights (H1-ENTRIES §12 Q6) — PARKED gate.** Per-user export + delete-account do not exist; the owner
+- **Invitee data rights (H1-ENTRIES §12 Q6) — gate, to be closed by slice S2b (2026-10-10 decision: build, not just notify; the owner approved the notice wording).** Earlier text: Per-user export + delete-account do not exist; the owner
   hand-edits D1 today. Tester `komogorteva@…` invited 2026-10-10 (expires 10-24). **Owner decision 2026-10-10:** the S2
   deploy (sync routes live, step 7) goes ahead — no client sends entries until S3, so nothing of the tester's can be
   stored. **Re-entry (moved):** before the S3 client build that first flushes entries ships — build both, or tell the
@@ -51,6 +52,8 @@
 ## Decision log
 
 Full log: PROJECT.md → Decisions log. Latest:
+
+- 2026-10-10 (s3) — Roadmap planning session (owner + Claude, no code): [DECISION-TREE.md](DECISION-TREE.md) walked section by section and accepted as the roadmap basis; docs pass applied to PROJECT (tiers, order, decision log), VOCABULARY (Widget family, Hook, parked terms), ARCHITECTURE (A13, A11 amendment for H5, widgets, copy-prompt executor, security notes) and H1-ENTRIES (S2b, S3 scope, Q6). Key rulings: typeless capture, hooks found at run time, widgets as the Dashboard surface (own design session), H1b conditional, H3/H4-Task/H5 on evidence, data-rights built before S3. Defaults for the six open items in the tree's §6.2 carry as accepted until contradicted. No code changed.
 
 - 2026-10-10 (s2) — First tester invited in production via `invite.mjs create --remote` (expires 10-24; D1 row only, no code change). No invitation-email mechanism built: the invite carries no credential, so a notification is optional; revisit (script `--send`, then Worker email + admin UI) at tester #4 or when a domain exists. Q6 export/delete parked as a gate (see follow-ups).
 

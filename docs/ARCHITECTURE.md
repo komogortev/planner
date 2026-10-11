@@ -14,6 +14,7 @@ Entry ─────────────▶   Category · Theme · Tag ─�
 - **Capture** never blocks on organising. An entry with no category is in the Inbox.
 - **Organise** is owner-only. The AI organises by proposing.
 - **Process** is the only layer that calls a model, and only inside a Run. Slices are deterministic.
+- **Widgets** (decision 2026-10-10, [DECISION-TREE.md](DECISION-TREE.md)) are the surface: the Dashboard shows the widgets the owner activated on the Widgets page. A **system widget** is a built-in view (notes list, search) and holds no lens; a **prompt widget** holds a lens and shows its last report. Capture itself is not a widget. Widgets are per account, one instance each; a different use is a clone with a lineage link.
 
 ## 2. Invariants — each enforced in exactly one place
 
@@ -29,8 +30,9 @@ Entry ─────────────▶   Category · Theme · Tag ─�
 | A8 | **One scheduler, one notifier.** Background runs are registry entries with a global pause; notifications are capped per day and silent by default | `SCHEDULES`, `sendNotification` | H5 |
 | A9 | **Frozen schema versions.** One per-row migration function serves Dexie upgrade and snapshot restore | `src/db/migrations.ts` | shipped |
 | A10 | **Capture is atomic and never waits on the network.** An entry and its outbox row commit in one Dexie transaction | `src/stores/entries.ts` write path | H1 |
-| A11 | **Tenant isolation.** The backend takes `user_id` from the session only, never from a request body; every query passes through one data-access helper that requires it | `api/src/db/` helper | H1 |
+| A11 | **Tenant isolation.** The backend takes `user_id` from the session only, never from a request body; every query passes through one data-access helper that requires it. **Amendment (H5, D-44, takes effect when H5 starts):** a scheduled run has no session, so its `user_id` may come from a schedule row created by that same user's own session; there is no cross-user system account | `api/src/db/` helper | H1 |
 | A12 | **The server orders changes.** A per-user `server_version` decides conflicts; device clocks never do; a replaced body is kept, not lost | `/sync/push` | H1 |
+| A13 | **Account data lifecycle.** Export and delete-account cover every per-account table; adding a table adds it to both in the same change, and a test fails if a table is missing | the `/me/export` and `DELETE /me` table list | H1 (S2b) |
 
 ## 3. Module boundaries
 
@@ -78,6 +80,8 @@ Changed 2026-10-09 (owner): entries live on a hosted backend, not in `data.json`
 | **Outside** | Claude Code (desktop) or the Claude phone app, reaching the data through the backend's remote MCP endpoint | existing Claude subscription | curation sessions, on-demand lens runs | H2 trial (read-only), H3 |
 | **Inside** | the app, through `callAI` | API key, billed per token | runs with no session open: scheduled lenses, notifications | H5 |
 
+First in-app executor (D-35, 2026-10-10): **copy-prompt**. A prompt widget's Run builds the prompt with the one composer, copies it, the owner pastes it into Claude and pastes the answer back, and the app checks citations against the slice before storing an immutable report. H3 (remote MCP) is built only on evidence that paste friction blocks lens use, for the owner's account only; H5 only when widgets go stale for lack of a manual run (D-37, D-42).
+
 Environment facts that bound these choices:
 
 - The Claude subscription that powers Claude Code does not extend to an app's own model calls; inside mode needs a
@@ -110,3 +114,6 @@ Steps 1–3 and 5 are `domain` code; only step 4 differs between executors.
   after H1).
 - A run sends only the slice's entries and the involved category rules to the model provider.
 - No real entries in fixtures, tests or docs in this repo.
+- **Local data follows the account** (D-50): sign-out is allowed only with an empty outbox and wipes the account's local tables; an "account deleted" signal does the same after offering an export. The legacy financial tables belong to the device and stay.
+- **The copy-prompt clipboard** holds a slice of the owner's notes: it is cleared after a short timeout while the app is open, best effort, because clipboard managers and keyboards can keep history (D-54).
+- **Error reports** (D-24): a capped `/log` route records error type, route and build id only, never entry text.
