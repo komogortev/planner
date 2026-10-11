@@ -16,6 +16,8 @@ chat with an AI), and asks for **lenses**: saved instructions that read a slice 
 the owner chose ("today's commitments from Work, as a checklist"). The AI reads, reports and proposes; only the owner
 changes records.
 
+The purpose in one line (owner, 2026-10-11): the way a team organises work in sprints, brought to a personal space — the daily loop is the whole vertical slice; wider horizons are parked drafts until it is validated (HW-HARNESS §10).
+
 Vocabulary is fixed in [VOCABULARY.md](VOCABULARY.md); structure in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Doc map
@@ -31,6 +33,7 @@ Vocabulary is fixed in [VOCABULARY.md](VOCABULARY.md); structure in [ARCHITECTUR
 | [H1-ENTRIES.md](H1-ENTRIES.md) | Core loop: accounts, capture page, outbox sync, backend (Worker + D1), schema v4 | S0 closed 2026-10-09 |
 | [H1-S1-SPIKE.md](H1-S1-SPIKE.md) | S1 spike kickoff: owner setup, steps, CPU known positive, decision rules | ready |
 | [H2-LENSES.md](H2-LENSES.md) | Slices, lenses, runs, reports, composer | S0 draft, questions open |
+| [HORIZON-YEARLY-DRAFT.md](HORIZON-YEARLY-DRAFT.md) | The yearly horizon loop: inputs, output shape, draft prompt, open points | PARKED draft 2026-10-11; re-entry: HW-HARNESS S4 acceptance |
 | [ORIGIN-MOVE.md](ORIGIN-MOVE.md) | Moving the client off the shared `komogortev.github.io` origin (H1 S4): options, order, risks, owner questions | S0 draft 2026-10-11; no code until answered |
 | [DECISION-TREE.md](DECISION-TREE.md) | Roadmap basis (accepted 2026-10-10): user-action branches, decision register D-03…D-54, critical path | live; supersedes the tier order below where they differ |
 | [SHEETS-STRUCTURE.md](SHEETS-STRUCTURE.md) | Deferred Sheets backend | historical reference |
