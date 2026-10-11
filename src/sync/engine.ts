@@ -8,6 +8,7 @@
 import type { PlannerDb } from '@/db'
 import type { OutboxRow } from '@/db/schema'
 import type { Entry, EntryInput } from '@/domain/entry'
+import type { CycleLock } from './lock'
 
 /** Measured limits (H1-S2-BACKEND.md, step 7): push ≤ 50 mutations and ≤ 100 KB, pull pages of 100. */
 export const PUSH_BATCH_MAX = 50
@@ -15,6 +16,8 @@ export const PUSH_BATCH_BYTES = 100_000
 export const PULL_PAGE = 100
 export const BACKOFF_FIRST_MS = 2_000
 export const BACKOFF_MAX_MS = 300_000
+export const REQUEST_TIMEOUT_MS = 60_000
+const CHANGED = 'the sign-in changed during the sync'
 const DEFAULT_RETRY_AFTER_MS = 60_000
 
 export type SyncPhase =
@@ -48,6 +51,10 @@ export interface EngineDeps {
   online?: () => boolean
   /** Lets a page yield between pull pages. Default: a macrotask. */
   yieldNow?: () => Promise<void>
+  /** Runs a cycle when it is this window's turn (D-59). Absent: no other window to take turns with. */
+  lock?: CycleLock
+  /** A request that has not answered by then is cut off, so it cannot hold the lock (or the cycle) for ever. Default 60 s. */
+  requestTimeoutMs?: number
 }
 
 /** The device was reset (sign-out, wipe) while a cycle was running: stop without touching the database or the state. */
@@ -117,7 +124,15 @@ export class SyncEngine {
   private running: Promise<void> | null = null
   private busy = false
   private again = false
-  private userId: string | null = null
+  /** The account the current token belongs to, remembered WITH that token: another window can change the token under this one. */
+  private identity: { token: string; id: string } | null = null
+  /**
+   * The token the running cycle began with (D-59). The token is shared by every window, so another one can replace it at any
+   * moment — before this window's own `storage` event arrives. A cycle acts under the token it learned the account with, or
+   * stops: the old account's notes are never sent under another account's token, and a page of the old account is never
+   * written onto a device the other window just cleared.
+   */
+  private pinned: string | null = null
   /** Bumped by `reset()`. A cycle that started under an older value writes nothing more (review finding B). */
   private generation = 0
   private readonly now: () => number
@@ -151,8 +166,13 @@ export class SyncEngine {
     this.busy = true
     this.running = (async () => {
       do {
-        this.again = false
-        await this.cycle()
+        // `again` is cleared when the cycle STARTS, not before the wait for the lock: a trigger that arrives during the wait is
+        // answered by the cycle that runs after it (it reads everything fresh), and must not earn a second round.
+        const cycle = async () => { this.again = false; await this.cycle() }
+        // Another window may be syncing the same database: wait for its turn (D-59), then read the outbox as it is by then.
+        // A wait given up means that window has been busy for a long while: leave it, the next trigger comes back.
+        const ran = this.d.lock ? await this.d.lock(cycle) : (await cycle(), true)
+        if (!ran) break
         // A request that arrived mid-cycle earns one more round only after a good one: after a 429, a failure or a 401 it
         // would walk straight past the backoff or the Retry-After (review finding A).
       } while (this.again && this.state.phase === 'idle')
@@ -167,7 +187,7 @@ export class SyncEngine {
   /** The session token changed (sign-in return, sign-out): forget what was learned about the account. */
   reset(): void {
     this.generation++
-    this.userId = null
+    this.identity = null
     this.set({ ...initialState(), lastSyncedAt: this.state.lastSyncedAt })
   }
 
@@ -175,6 +195,7 @@ export class SyncEngine {
     if (!this.d.token()) return this.set({ phase: 'idle' })
     if (this.d.online && !this.d.online()) return this.set({ phase: 'offline' })
     const gen = this.generation
+    this.pinned = this.d.token()
     this.set({ phase: 'syncing', retryAt: null })
     try {
       const userId = await this.who()
@@ -200,6 +221,8 @@ export class SyncEngine {
           retryAt: offline ? null : this.now() + backoffDelay(failures), initialPull: false,
         })
       }
+    } finally {
+      this.pinned = null
     }
   }
 
@@ -208,29 +231,50 @@ export class SyncEngine {
   private async call(path: string, init: RequestInit = {}): Promise<unknown> {
     const token = this.d.token()
     if (!token) throw new Stop('auth', 'signed out', undefined, false)
-    const res = await this.d.fetch(`${this.d.apiUrl}${path}`, { ...init, headers: { ...(init.headers as Record<string, string> | undefined), Authorization: `Bearer ${token}` } })
-    if (res.ok) return res.json()
-    const body = (await res.json().catch(() => ({}))) as { error?: string; reason?: string }
-    if (res.status === 401) {
-      if (body.reason === 'account-deleted') throw new Stop('account-deleted', 'this account was deleted', undefined, false)
-      throw new Stop('auth', 'the server did not accept the session — sign in again', undefined, false)
+    if (this.pinned !== null && token !== this.pinned) throw new Error(CHANGED)
+    // Bounded in time, body included: a request that hangs holds this window's cycle, and with it the lock every other window
+    // of the app is waiting for (D-59).
+    const limit = new AbortController()
+    const timer = setTimeout(() => limit.abort(), this.d.requestTimeoutMs ?? REQUEST_TIMEOUT_MS)
+    try {
+      const res = await this.d.fetch(`${this.d.apiUrl}${path}`, { ...init, signal: limit.signal, headers: { ...(init.headers as Record<string, string> | undefined), Authorization: `Bearer ${token}` } })
+      if (res.ok) return await res.json()
+      const body = (await res.json().catch(() => ({}))) as { error?: string; reason?: string }
+      if (res.status === 401) {
+        if (body.reason === 'account-deleted') throw new Stop('account-deleted', 'this account was deleted', undefined, false)
+        throw new Stop('auth', 'the server did not accept the session — sign in again', undefined, false)
+      }
+      if (res.status === 429) {
+        const secs = Number(res.headers.get('Retry-After'))
+        throw new Stop('waiting', 'too many requests — waiting', Number.isFinite(secs) && secs > 0 ? secs * 1000 : DEFAULT_RETRY_AFTER_MS)
+      }
+      throw new Error(body.error ?? `HTTP ${res.status}`)
+    } catch (err) {
+      if (limit.signal.aborted && !(err instanceof Stop)) throw new Error('the server did not answer in time')
+      throw err
+    } finally {
+      clearTimeout(timer)
     }
-    if (res.status === 429) {
-      const secs = Number(res.headers.get('Retry-After'))
-      throw new Stop('waiting', 'too many requests — waiting', Number.isFinite(secs) && secs > 0 ? secs * 1000 : DEFAULT_RETRY_AFTER_MS)
-    }
-    throw new Error(body.error ?? `HTTP ${res.status}`)
   }
 
   private async who(): Promise<string> {
-    if (this.userId) return this.userId
+    const token = this.d.token()
+    // Remembered only for the token it was learned with: the token can change in another window without this one being told.
+    if (token && this.identity?.token === token) return this.identity.id
     const me = (await this.call('/me')) as { id?: unknown }
     if (typeof me.id !== 'string') throw new Error('/me returned no account id')
-    return (this.userId = me.id)
+    // The answer belongs to the token that was sent, which may no longer be the one held: remember nothing then, and let the
+    // cycle start again under the token there is now.
+    if (this.d.token() !== token) throw new Error(CHANGED)
+    if (token) this.identity = { token, id: me.id }
+    return me.id
   }
 
   private live(gen: number): void {
     if (gen !== this.generation) throw new Cancelled()
+    // Not a reset (this window has not been told yet), but the token is no longer the one this cycle learned the account with.
+    // A plain error, not `Cancelled`: nothing resets the state afterwards, so the cycle must end with a phase of its own.
+    if (this.pinned !== null && this.d.token() !== this.pinned) throw new Error(CHANGED)
   }
 
   /**

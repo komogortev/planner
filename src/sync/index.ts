@@ -4,8 +4,14 @@ import { db } from '@/db'
 import { storedToken, API_URL } from '@/auth/signIn'
 import { reportError } from '@/log/report'
 import { SyncEngine, type SyncState } from './engine'
+import { createCycleLock } from './lock'
+import { handleTokenStorage } from './tokenWatch'
 
-export const syncEngine = new SyncEngine({ db, fetch: (...a) => fetch(...a), apiUrl: API_URL, token: storedToken, online: () => navigator.onLine })
+// One cycle at a time across the app's windows (D-59); no Web Locks API: no lock, the engine runs as it always did.
+export const syncEngine = new SyncEngine({
+  db, fetch: (...a) => fetch(...a), apiUrl: API_URL, token: storedToken, online: () => navigator.onLine,
+  lock: createCycleLock(typeof navigator === 'undefined' ? undefined : navigator.locks),
+})
 
 const POLL_MS = 60_000
 const AFTER_CAPTURE_MS = 2_000
@@ -42,8 +48,11 @@ function askPersist(s: SyncState): void {
   void navigator.storage?.persist?.().catch(() => undefined)
 }
 
-/** Idempotent. Call once the app is mounted. */
-export function startSync(): void {
+/**
+ * Idempotent. Call once the app is mounted. `onSessionChange` hears that ANOTHER window signed in or out (D-59): the app then
+ * decides what to show.
+ */
+export function startSync(opts: { onSessionChange?: (signedIn: boolean) => void } = {}): void {
   if (started) return
   started = true
   let reportedStuck = false
@@ -59,12 +68,18 @@ export function startSync(): void {
   document.addEventListener('visibilitychange', onVisible)
   window.addEventListener('online', onOnline)
   window.addEventListener('offline', onOffline)
+  // The token is shared by every window of the app. When another one changes it, this one must stop acting for the account
+  // it was signed in as — `storage` events fire in every window except the one that wrote.
+  const onStorage = (e: StorageEvent) =>
+    handleTokenStorage(e, { reset: () => syncEngine.reset(), syncNow, signedIn: () => storedToken() !== null, onSessionChange: opts.onSessionChange })
+  window.addEventListener('storage', onStorage)
   pollTimer = setInterval(() => { if (visible()) syncNow() }, POLL_MS)
   teardown = () => {
     unsubscribe()
     document.removeEventListener('visibilitychange', onVisible)
     window.removeEventListener('online', onOnline)
     window.removeEventListener('offline', onOffline)
+    window.removeEventListener('storage', onStorage)
   }
   syncNow()
 }

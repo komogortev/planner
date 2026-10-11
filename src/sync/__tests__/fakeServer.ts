@@ -34,7 +34,23 @@ export class FakeServer {
   static json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
     new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...headers } })
 
+  /** Requests being answered right now, and the most there ever were at once: two windows syncing at the same time show here. */
+  inFlight = 0
+  maxInFlight = 0
+  /** Hold every answer this many ms, so that overlapping requests can overlap. */
+  delayMs = 0
+
   fetch = async (input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> => {
+    this.maxInFlight = Math.max(this.maxInFlight, ++this.inFlight)
+    try {
+      if (this.delayMs > 0) await new Promise((r) => setTimeout(r, this.delayMs))
+      return await this.handle(input, init)
+    } finally {
+      this.inFlight--
+    }
+  }
+
+  private handle = async (input: RequestInfo | URL, init: RequestInit): Promise<Response> => {
     const url = new URL(String(input))
     const auth = new Headers(init.headers).get('Authorization')
     const body = init.body ? JSON.parse(String(init.body)) : undefined
