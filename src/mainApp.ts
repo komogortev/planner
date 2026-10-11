@@ -1,0 +1,70 @@
+// The app proper (see main.ts for why it is a separate module).
+// Must stay the first import: it may rewrite the URL, and the router captures the URL when its module loads.
+import './auth/consumeReturn'
+import { createApp } from 'vue'
+import { createPinia } from 'pinia'
+import App from './App.vue'
+import { router } from './router'
+import { useSyncStore } from './stores/sync'
+import { useCategoriesStore } from './stores/categories'
+import { useCleanupStore } from './stores/cleanup'
+import { setupSyncDirtyTracking } from './db/syncTracking'
+import { dedupeCategoriesInDb } from './db/cleanup'
+import { applyEnvCue } from './env/applyEnvCue'
+import { applyTheme } from './theme/theme'
+import { startSync } from './sync'
+import { routeAfterSessionChange } from './sync/tokenWatch'
+import { installErrorReporting } from './log/report'
+import './style.css'
+
+// Local / preview builds get a coloured banner, tab title, favicon and status bar; prod is untouched.
+applyEnvCue()
+// Light / dark (Settings → Appearance), applied before mount so the first paint is already in the right theme.
+applyTheme()
+
+const app = createApp(App)
+
+app.use(createPinia())
+app.use(router)
+
+// Wire Dexie hooks → useSyncStore.dirty. Must run AFTER Pinia is installed.
+setupSyncDirtyTracking(useSyncStore())
+
+// Ensure built-in L2 categories exist on first run.
+//
+// Dexie only fires version().upgrade() callbacks when an EXISTING database is
+// being upgraded — fresh installs skip straight to the highest declared
+// version, so the v2→v3 seed code in `db/index.ts` never runs for new devices.
+// `ensureBuiltIns` is idempotent (bulkGet check) so calling it always is safe
+// for upgraded devices too. Fire-and-forget; failures here are non-fatal and
+// the user can re-seed via Settings → "Load sample data".
+useCategoriesStore()
+  .ensureBuiltIns()
+  .then(() => dedupeCategoriesInDb())
+  .then((result) => {
+    if (result.mergedGroups > 0) {
+      // eslint-disable-next-line no-console
+      console.info(
+        `[main] dedupeCategoriesInDb merged ${result.mergedGroups} label group(s), removed ${result.removedRows} row(s):`,
+        result.mergedLabels,
+      )
+      useCleanupStore().record(result)
+    }
+  })
+  .catch((err) => {
+    // eslint-disable-next-line no-console
+    console.error('[main] category init / dedupe failed:', err)
+  })
+
+app.mount('#app')
+
+// Sync (H1-ENTRIES section 6.4): at start, when the tab is visible again, when back online, 2 s after a capture and every
+// 60 s. A signed-out device does nothing; capture never waits for any of it.
+startSync({
+  // Another window of the app signed out (or in): this one follows, instead of going on as the account it was (D-59).
+  onSessionChange: (signedIn) => {
+    const to = routeAfterSessionChange(signedIn, router.currentRoute.value.name)
+    if (to) void router.push({ name: to })
+  },
+})
+installErrorReporting()
