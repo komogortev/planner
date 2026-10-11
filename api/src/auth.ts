@@ -264,6 +264,46 @@ auth.get('/start/:provider', async (c) => {
   return c.redirect(url.toString())
 })
 
+// ── where the browser goes back to (D-57) ───────────────────────────────────
+
+/**
+ * The URL a finished sign-in sends the browser to: the page the app asked for, when it is still an allowed app URL — the
+ * flow cookie is written by this Worker but read back here, so it is checked again, after parsing — else the first allowed
+ * URL. A forged `returnTo` can therefore neither receive a token nor be the target of a refusal.
+ */
+function appReturn(c: C, flow: { returnTo?: unknown } | null): URL {
+  const urls = appUrls(c.env)
+  if (typeof flow?.returnTo === 'string') {
+    try {
+      // Parsed FIRST, then checked, and the parsed URL is what is returned (as /auth/start does): `…/planner/../x` starts with
+      // the allowed prefix as text and is another page once the dot-segments are resolved.
+      const asked = new URL(flow.returnTo)
+      if (asked.href.length <= 512 && urls.some((u) => asked.href.startsWith(u))) return asked
+    } catch { /* not a URL: the first allowed one */ }
+  }
+  return new URL(urls[0]!)
+}
+
+/** What a refusal may say about addresses: a few, short ones — it is a hint for the person, not a log. */
+const refusalList = (xs: string[]) => xs.filter((x) => x.length <= 120).slice(0, 3).join(',')
+
+type Refusal = 'expired' | 'cancelled' | 'provider' | 'no-verified-email' | 'disabled' | 'not-invited' | 'server'
+
+/**
+ * A refusal on the OAuth callback goes back to the app the way a success does: a redirect to the app's URL with `#error=<code>` in the fragment
+ * (and the nonce, when the flow's cookie is known). The app words it. A text page on this origin was a dead end: an
+ * installed app has no browser chrome to go back with, and the person never reached the app's own screen. Codes are a fixed
+ * list; the optional parameters are `p` (provider) and the addresses the provider reported, which the app renders as text.
+ */
+function refuse(c: C, flow: { returnTo?: unknown; nonce?: unknown } | null, error: Refusal, extra: Record<string, string> = {}): Response {
+  const back = appReturn(c, flow)
+  const params: Record<string, string> = { error }
+  if (typeof flow?.nonce === 'string' && NONCE_RE.test(flow.nonce)) params.nonce = flow.nonce
+  for (const [k, v] of Object.entries(extra)) if (v) params[k] = v
+  back.hash = new URLSearchParams(params).toString()
+  return c.redirect(back.href)
+}
+
 // GET /auth/callback/:provider?code&state — the provider redirects here.
 auth.get('/callback/:provider', async (c) => {
   const p = c.req.param('provider')
@@ -277,39 +317,50 @@ auth.get('/callback/:provider', async (c) => {
   let flow: { p: string; state: string; verifier: string; returnTo: string; nonce: string } | null = null
   try { flow = raw ? JSON.parse(raw) : null } catch { /* tampered → treated as expired */ }
   const code = c.req.query('code')
-  if (!flow || flow.p !== p || typeof flow.returnTo !== 'string' || typeof flow.nonce !== 'string' || !code || state !== flow.state) {
-    return c.text('sign-in expired, start again', 400)
+  // No usable flow: nothing here says where the app is or which nonce it holds, so the refusal goes to the first allowed URL.
+  if (!flow || flow.p !== p || typeof flow.returnTo !== 'string' || typeof flow.nonce !== 'string' || state !== flow.state) {
+    return refuse(c, null, 'expired')
+  }
+  if (!code) {
+    // The provider sends the person back without a code when they decline (`access_denied`); any other `error` it names
+    // (server_error, temporarily_unavailable, invalid_scope …) is its failure, not their choice.
+    const reported = c.req.query('error')
+    return refuse(c, flow, !reported || reported === 'access_denied' ? 'cancelled' : 'provider')
   }
 
-  const cred = credentials(c.env, p)
-  const body = new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: redirectUri(c, p), client_id: cred.id, client_secret: cred.secret })
-  if (flow.verifier) body.set('code_verifier', flow.verifier)
-  const tokenRes = await fetch(PROVIDERS[p].token, { method: 'POST', body, headers: { Accept: 'application/json' } })
-  // GitHub answers a bad or expired code with 200 + {error}, so check both.
-  const tokens = tokenRes.ok ? ((await tokenRes.json()) as { access_token?: string; id_token?: string; error?: string }) : null
-  if (!tokens || tokens.error) return c.text('provider refused the code', 502)
+  try {
+    const cred = credentials(c.env, p)
+    const body = new URLSearchParams({ grant_type: 'authorization_code', code, redirect_uri: redirectUri(c, p), client_id: cred.id, client_secret: cred.secret })
+    if (flow.verifier) body.set('code_verifier', flow.verifier)
+    const tokenRes = await fetch(PROVIDERS[p].token, { method: 'POST', body, headers: { Accept: 'application/json' } })
+    // GitHub answers a bad or expired code with 200 + {error}, so check both.
+    const tokens = tokenRes.ok ? ((await tokenRes.json()) as { access_token?: string; id_token?: string; error?: string }) : null
+    if (!tokens || tokens.error) return refuse(c, flow, 'provider')
 
-  const who = p === 'github'
-    ? tokens.access_token ? await githubIdentity(tokens.access_token) : null
-    : tokens.id_token ? googleIdentity(tokens.id_token, cred.id) : null
-  if (!who) return c.text('no verified email from provider', 403)
+    const who = p === 'github'
+      ? tokens.access_token ? await githubIdentity(tokens.access_token) : null
+      : tokens.id_token ? googleIdentity(tokens.id_token, cred.id) : null
+    if (!who) return refuse(c, flow, 'no-verified-email')
 
-  const admitted = await admit(c.env.DB, p, who)
-  // Shown only to whoever just proved they own these addresses — it names nothing they don't already know.
-  if ('refused' in admitted) {
-    if (admitted.refused === 'disabled') return c.text(`this account has been disabled — ${p} sign-in refused`, 403)
-    const why = who.unvouched.length
-      ? `${p} cannot vouch for ${who.unvouched.join(', ')} — sign in with GitHub, or a Gmail or Google Workspace account`
-      : `${p} reported: ${who.emails.join(', ')}`
-    return c.text(`not invited — ${why}`, 403)
+    const admitted = await admit(c.env.DB, p, who)
+    // Shown only to whoever just proved they own these addresses — it names nothing they don't already know.
+    if ('refused' in admitted) {
+      if (admitted.refused === 'disabled') return refuse(c, flow, 'disabled', { p })
+      return refuse(c, flow, 'not-invited', { p, ...(who.unvouched.length ? { unvouched: refusalList(who.unvouched) } : { emails: refusalList(who.emails) }) })
+    }
+
+    const token = await createSession(c.env.DB, admitted.userId)
+    // Fragment, not query: never sent to a server or written to access logs. Set via URL so a `#` already in
+    // return_to is replaced, not appended to.
+    const back = appReturn(c, flow)
+    back.hash = new URLSearchParams({ token, nonce: flow.nonce }).toString()
+    return c.redirect(back.href)
+  } catch (err) {
+    // A provider that cannot be reached, a malformed ID token, D1 failing: the person still goes back to the app, which
+    // says so, instead of ending on a bare "Internal Server Error" page with no way back.
+    console.error('sign-in callback failed', err instanceof Error ? err.message : err)
+    return refuse(c, flow, 'server')
   }
-
-  const token = await createSession(c.env.DB, admitted.userId)
-  // Fragment, not query: never sent to a server or written to access logs. Set via URL so a `#` already in
-  // return_to is replaced, not appended to.
-  const back = new URL(flow.returnTo)
-  back.hash = new URLSearchParams({ token, nonce: flow.nonce }).toString()
-  return c.redirect(back.href)
 })
 
 // POST /auth/logout — ends the calling session on the server (the app also forgets the token). Idempotent.

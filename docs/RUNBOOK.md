@@ -27,7 +27,7 @@ Decided at runtime from the host (`src/env/appEnv.ts`), so the exact build that 
 | Everything offline | `pnpm check` | typecheck (app + api) · app unit tests · Worker tests in workerd with a fresh D1 per test |
 | App tests only (watch) | `pnpm test` | `src/**` |
 | Worker tests only | `pnpm test:api` | `api/test/**` |
-| Smoke the running local stack | `pnpm smoke:local` | both launch configs running; same 11 checks as production |
+| Smoke the running local stack | `pnpm smoke:local` | both launch configs running; same 12 checks as production |
 
 **CI:** `.github/workflows/ci.yml` runs `pnpm check` on every PR and every push to `main` — the PR shows a green or red
 **CI / check**. Red is a stop: never merge over it.
@@ -55,7 +55,7 @@ allow-list); other ports can test UI with a planted token but cannot sign in. A 
 
 | Check | Command |
 |---|---|
-| Smoke production (read-only, 11 checks incl. refusals) | `pnpm smoke` |
+| Smoke production (read-only, 12 checks incl. refusals) | `pnpm smoke` |
 | Live Worker logs | `pnpm --dir api exec wrangler tail` |
 | Invites in production | `node api/scripts/invite.mjs list --remote` (`create` / `revoke` likewise) |
 

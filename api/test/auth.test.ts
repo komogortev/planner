@@ -7,7 +7,7 @@ const RETURN_TO = 'https://app.test/planner/'
 const NONCE = 'n'.repeat(24)
 const DAY = 86_400_000
 
-type GitHubUser = { id: number; emails: string[] }
+type GitHubUser = { id: number; emails: string[]; verified?: boolean }
 type GoogleUser = { sub: string; email: string; hd?: string }
 
 const b64url = (o: object) => btoa(JSON.stringify(o)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
@@ -19,7 +19,7 @@ function stubProviders(gh: GitHubUser | null, google: GoogleUser | null = null) 
     if (gh && url === 'https://github.com/login/oauth/access_token') return Response.json({ access_token: 'gh-access' })
     if (gh && url === 'https://api.github.com/user') return Response.json({ id: gh.id, login: 'octo', name: 'Octo' })
     if (gh && url === 'https://api.github.com/user/emails') {
-      return Response.json(gh.emails.map((email, i) => ({ email, primary: i === 0, verified: true })))
+      return Response.json(gh.emails.map((email, i) => ({ email, primary: i === 0, verified: gh.verified ?? true })))
     }
     if (google && url === 'https://oauth2.googleapis.com/token') {
       const claims = {
@@ -54,6 +54,19 @@ function tokenOf(res: Response): string {
   return frag.get('token')!
 }
 
+/**
+ * A refusal as the app receives it (D-57): a redirect back to the app with `#error=<code>&…` in the fragment — never a text
+ * page on the API origin, where an installed PWA has no way back. A refusal never carries a token.
+ */
+function refusalOf(res: Response) {
+  expect(res.status).toBe(302)
+  const to = new URL(res.headers.get('Location')!)
+  expect(`${to.origin}${to.pathname}`).toBe(RETURN_TO)
+  const frag = new URLSearchParams(to.hash.slice(1))
+  expect(frag.get('token')).toBeNull()
+  return { code: frag.get('error'), nonce: frag.get('nonce'), params: Object.fromEntries(frag) }
+}
+
 const me = (token: string) => app.fetch(new Request(`${API}/me`, { headers: { Authorization: `Bearer ${token}` } }), env)
 
 const count = async (table: string) =>
@@ -79,14 +92,15 @@ describe('invite gate', () => {
   it('refuses an email with no invite and writes nothing', async () => {
     await invite('owner@example.com')
     stubProviders({ id: 102, emails: ['stranger@example.com'] })
-    expect((await signIn()).status).toBe(403)
+    // The refusal names what the provider reported, so the person knows which address to ask an invite for.
+    expect(refusalOf(await signIn())).toMatchObject({ code: 'not-invited', nonce: NONCE, params: { p: 'github', emails: 'stranger@example.com' } })
     expect([await count('users'), await count('identities'), await count('sessions')]).toEqual([0, 0, 0])
   })
 
   it('refuses an expired invite and writes nothing', async () => {
     await invite('late@example.com', Date.now() - 1)
     stubProviders({ id: 103, emails: ['late@example.com'] })
-    expect((await signIn()).status).toBe(403)
+    expect(refusalOf(await signIn()).code).toBe('not-invited')
     expect(await count('users')).toBe(0)
   })
 
@@ -116,7 +130,8 @@ describe('invite gate', () => {
   it('rejects a callback with a malformed state', async () => {
     await invite('owner@example.com')
     stubProviders({ id: 101, emails: ['owner@example.com'] })
-    expect((await signIn('github', { state: 'forged-state' })).status).toBe(400)
+    // No flow cookie to read the nonce from: the refusal still goes back to the app (the first allowed URL), without one.
+    expect(refusalOf(await signIn('github', { state: 'forged-state' }))).toMatchObject({ code: 'expired', nonce: null })
     expect(await count('users')).toBe(0)
   })
 })
@@ -132,7 +147,7 @@ describe('sessions', () => {
     const token = await signedIn()
     await env.DB.prepare('UPDATE users SET disabled_at = ?').bind(Date.now()).run()
     expect((await me(token)).status).toBe(401)
-    expect((await signIn()).status).toBe(403)
+    expect(refusalOf(await signIn()).code).toBe('disabled')
   })
 
   // The email-link path must refuse a disabled account too: a new provider with the same email gets nothing.
@@ -141,7 +156,7 @@ describe('sessions', () => {
     stubProviders({ id: 101, emails: ['owner@gmail.com'] }, { sub: 'g-1', email: 'owner@gmail.com' })
     tokenOf(await signIn())
     await env.DB.prepare('UPDATE users SET disabled_at = ?').bind(Date.now()).run()
-    expect((await signIn('google')).status).toBe(403)
+    expect(refusalOf(await signIn('google')).code).toBe('disabled')
     expect([await count('identities'), await count('sessions')]).toEqual([1, 1])
   })
 
@@ -229,8 +244,8 @@ describe('two sign-ins at once (flow cookie per state)', () => {
     const jar: Jar = new Map()
     await startFlow(jar)
     const other = 'x'.repeat(43)
-    expect((await finishFlow(jar, other)).status).toBe(400)
-    expect((await finishFlow(jar, 'short')).status).toBe(400)
+    expect(refusalOf(await finishFlow(jar, other)).code).toBe('expired')
+    expect(refusalOf(await finishFlow(jar, 'short')).code).toBe('expired')
     expect(await count('users')).toBe(0)
   })
 
@@ -271,7 +286,7 @@ describe('two sign-ins at once (flow cookie per state)', () => {
     }
     expect(flowCookies(jar)).toHaveLength(5)
     expect(flowCookies(jar).sort()).toEqual(states.slice(2).map((s) => `oauth_flow_${s}`).sort())
-    expect((await finishFlow(jar, states[0])).status).toBe(400) // dropped
+    expect(refusalOf(await finishFlow(jar, states[0])).code).toBe('expired') // dropped
     tokenOf(await finishFlow(jar, states[6])) // the newest still works
   })
 })
@@ -333,8 +348,8 @@ describe('Google email linking', () => {
         tokenOf(res)
         expect(await count('identities')).toBe(2)
       } else {
-        expect(res.status).toBe(403)
-        expect(await res.text()).toContain('cannot vouch for')
+        // Google reported an address it cannot vouch for: the app is told which one, and to use another provider.
+        expect(refusalOf(res)).toMatchObject({ code: 'not-invited', params: { p: 'google', unvouched: email.toLowerCase() } })
         expect([await count('identities'), await count('sessions')]).toEqual([1, 0])
       }
     })
@@ -351,7 +366,7 @@ describe('Google email linking', () => {
   it('an invite for a non-Gmail address is not redeemed by a Google account that cannot vouch for it', async () => {
     await invite('new@corp.example')
     stubProviders(null, { sub: 'g-2', email: 'new@corp.example' })
-    expect((await signIn('google')).status).toBe(403)
+    expect(refusalOf(await signIn('google')).code).toBe('not-invited')
     expect([await count('users'), await count('identities')]).toEqual([0, 0])
     expect(await env.DB.prepare('SELECT used_by FROM invites').first()).toEqual({ used_by: null })
   })
@@ -371,11 +386,130 @@ describe('refusal reasons', () => {
       env.DB.prepare("INSERT INTO identities (provider, provider_user_id, user_id) VALUES ('google', 'g-1', 'u1')"),
     ])
     stubProviders(null, { sub: 'g-1', email: 'owner@corp.example' })
-    const res = await signIn('google')
-    expect(res.status).toBe(403)
-    const text = await res.text()
-    expect(text).toContain('disabled')
-    expect(text).not.toContain('cannot vouch')
+    const r = refusalOf(await signIn('google'))
+    expect(r.code).toBe('disabled')
+    expect(r.params.unvouched).toBeUndefined() // not "sent to another provider": the account is revoked, whatever the address
     expect(await count('sessions')).toBe(0)
+  })
+
+  it('a provider that will not take the code is reported as such', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json({ error: 'bad_verification_code' }))
+    expect(refusalOf(await signIn()).code).toBe('provider')
+  })
+
+  // The provider sends the person back without a code when they decline on its consent screen.
+  it('a person who declines at the provider is told so, with the nonce so the app can trust it', async () => {
+    stubProviders({ id: 108, emails: ['owner@example.com'] })
+    const jar: Jar = new Map()
+    const { state } = await startFlow(jar)
+    const res = await app.fetch(new Request(`${API}/auth/callback/github?error=access_denied&state=${state}`, { headers: { Cookie: cookieHeader(jar) } }), env)
+    expect(refusalOf(res)).toMatchObject({ code: 'cancelled', nonce: NONCE })
+    expect(await count('sessions')).toBe(0)
+    // The flow's cookie is used up by a refusal too, not only by a success.
+    const del = res.headers.getSetCookie().find((c: string) => c.startsWith(`oauth_flow_${state}=`) && /Max-Age=0/i.test(c))
+    expect(del).toBeTruthy()
+  })
+
+  // Review finding: every provider-side failure used to read "cancelled".
+  it('a provider error that is not a decline is a provider failure; no code and no error is a decline', async () => {
+    stubProviders({ id: 108, emails: ['owner@example.com'] })
+    const jar: Jar = new Map()
+    const { state } = await startFlow(jar)
+    const go = (qs: string) => app.fetch(new Request(`${API}/auth/callback/github?${qs}state=${state}`, { headers: { Cookie: cookieHeader(jar) } }), env)
+    expect(refusalOf(await go('error=server_error&')).code).toBe('provider')
+    const again = await startFlow(jar)
+    const bare = await app.fetch(new Request(`${API}/auth/callback/github?state=${again.state}`, { headers: { Cookie: cookieHeader(jar) } }), env)
+    expect(refusalOf(bare).code).toBe('cancelled')
+  })
+
+  // What the provider reports is the person's own address, but it passes through a URL: it must stay one parameter.
+  it('an address with URL syntax in it stays inside its own parameter', async () => {
+    const evil = 'x&token=evil&nonce=zz#y@example.com'
+    stubProviders({ id: 109, emails: [evil] })
+    const r = refusalOf(await signIn()) // refusalOf also fails if the fragment carries a token
+    expect(r.params.emails).toBe(evil)
+    expect(r.params.token).toBeUndefined()
+    expect(r.nonce).toBe(NONCE)
+  })
+
+  it('a failure on our side still goes back to the app (not a bare error page)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => { throw new TypeError('network down') })
+    vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    expect(refusalOf(await signIn())).toMatchObject({ code: 'server', nonce: NONCE })
+    expect(await count('sessions')).toBe(0)
+  })
+
+  it('a provider with no verified address is reported as such', async () => {
+    await invite('owner@example.com')
+    stubProviders({ id: 105, emails: ['owner@example.com'], verified: false })
+    expect(refusalOf(await signIn()).code).toBe('no-verified-email')
+    expect(await count('users')).toBe(0)
+  })
+
+  it('what the refusal carries is bounded: at most three addresses, none over 120 characters', async () => {
+    const long = `${'x'.repeat(150)}@example.com`
+    stubProviders({ id: 106, emails: ['a@example.com', 'b@example.com', 'c@example.com', 'd@example.com', long] })
+    const r = refusalOf(await signIn())
+    expect(r.params.emails!.split(',')).toEqual(['a@example.com', 'b@example.com', 'c@example.com'])
+    stubProviders({ id: 107, emails: [long] })
+    expect(refusalOf(await signIn()).params.emails ?? '').toBe('')
+  })
+})
+
+describe('where the browser is sent back to', () => {
+  // The flow cookie is httpOnly and written by this Worker, but its returnTo is read back on the callback: it is checked
+  // against the allow-list again, so a forged one can neither receive the token nor be the target of a refusal.
+  async function callbackWithCookie(returnTo: string) {
+    const state = 'a'.repeat(43)
+    const flow = { p: 'github', state, verifier: 'v'.repeat(43), returnTo, nonce: NONCE, at: Date.now() }
+    return app.fetch(
+      new Request(`${API}/auth/callback/github?code=c0de&state=${state}`, { headers: { Cookie: `oauth_flow_${state}=${encodeURIComponent(JSON.stringify(flow))}` } }),
+      env,
+    )
+  }
+
+  // Known positive: a legitimate deeper path under the allowed prefix is kept, so the two refusals below are not just "always the first URL".
+  it('keeps the page the app asked to come back to', async () => {
+    await invite('owner@example.com')
+    stubProviders({ id: 101, emails: ['owner@example.com'] })
+    const res = await callbackWithCookie(`${RETURN_TO}signin`)
+    expect(res.headers.get('Location')!.startsWith(`${RETURN_TO}signin#`)).toBe(true)
+  })
+
+  it('a forged returnTo does not receive the token: the first allowed app URL does', async () => {
+    await invite('owner@example.com')
+    stubProviders({ id: 101, emails: ['owner@example.com'] })
+    const res = await callbackWithCookie('https://evil.example/steal')
+    const to = new URL(res.headers.get('Location')!)
+    expect(`${to.origin}${to.pathname}`).toBe(RETURN_TO)
+    expect(new URLSearchParams(to.hash.slice(1)).get('nonce')).toBe(NONCE) // the app checks it, and rejects a token it did not ask for
+  })
+
+  it('a forged returnTo is not the target of a refusal either', async () => {
+    stubProviders({ id: 102, emails: ['stranger@example.com'] })
+    expect(refusalOf(await callbackWithCookie('https://evil.example/steal')).code).toBe('not-invited')
+  })
+
+  // Review finding: the allow-list check ran on the raw string and the redirect on the parsed one — `…/planner/../x` starts
+  // with the allowed prefix as text and is another page once parsed (on a shared Pages host, another site).
+  const BS = String.fromCharCode(92) // a backslash: URL parsers treat it as a slash
+  for (const climb of ['../other/', '%2e%2e/other/', `..${BS}other${BS}`, '.%2E/other/']) {
+    it(`a returnTo that climbs out of the allowed path (${climb}) is not followed, token or refusal`, async () => {
+      await invite('owner@example.com')
+      stubProviders({ id: 101, emails: ['owner@example.com'] })
+      const signedIn = await callbackWithCookie(`${RETURN_TO}${climb}`)
+      const to = new URL(signedIn.headers.get('Location')!)
+      expect(`${to.origin}${to.pathname}`).toBe(RETURN_TO)
+      expect(new URLSearchParams(to.hash.slice(1)).get('token')).toBeTruthy() // exercised: it is the sign-in that was redirected
+      stubProviders({ id: 102, emails: ['stranger@example.com'] })
+      expect(refusalOf(await callbackWithCookie(`${RETURN_TO}${climb}`)).code).toBe('not-invited')
+    })
+  }
+
+  // Known positive for the refusal path: it is not simply "always the first URL".
+  it('a refusal goes back to the page the app asked for, when that is allowed', async () => {
+    stubProviders({ id: 102, emails: ['stranger@example.com'] })
+    const res = await callbackWithCookie(`${RETURN_TO}signin`)
+    expect(res.headers.get('Location')!.startsWith(`${RETURN_TO}signin#error=`)).toBe(true)
   })
 })

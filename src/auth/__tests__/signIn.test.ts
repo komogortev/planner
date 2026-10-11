@@ -103,3 +103,76 @@ describe('revokeSession', () => {
     expect(await revokeSession('tok', down, 'https://api.test')).toBe(false)
   })
 })
+
+// D-57: the Worker sends a refusal back to the app the way it sends a token — `#error=<code>&…`. The app words it.
+describe('checkReturn: a refusal from the Worker', () => {
+  const frag = (o: Record<string, string>) => `#${new URLSearchParams(o).toString()}`
+  const reason = (hash: string, p: typeof pending | null = pending, at = pending.at + 5_000) => {
+    const r = checkReturn(hash, p, at)
+    expect(r).toMatchObject({ ok: false })
+    return (r as { reason: string }).reason
+  }
+
+  // Known positive: the refusal reaches the person, so the "ignored" cases below cannot pass on a parser that drops everything.
+  it('names the address the provider reported, so the person knows which one to ask an invite for', () => {
+    const text = reason(frag({ error: 'not-invited', nonce: pending.nonce, p: 'github', emails: 'a@example.com,b@example.com' }))
+    expect(text).toContain('Not invited')
+    expect(text).toContain('GitHub')
+    expect(text).toContain('a@example.com, b@example.com')
+  })
+
+  it('an address Google cannot vouch for says to use another provider', () => {
+    const text = reason(frag({ error: 'not-invited', nonce: pending.nonce, p: 'google', unvouched: 'me@corp.example' }))
+    expect(text).toContain('Google cannot vouch for me@corp.example')
+    expect(text).toContain('Gmail')
+  })
+
+  it('every code has its own wording, and an unknown one is a generic refusal', () => {
+    const words = ['expired', 'cancelled', 'provider', 'no-verified-email', 'disabled', 'server', 'not-invited'].map((error) =>
+      reason(frag({ error, nonce: pending.nonce, p: 'github' })))
+    expect(new Set(words).size).toBe(words.length)
+    expect(reason(frag({ error: 'something-new', nonce: pending.nonce }))).toBe('The sign-in was refused — try again.')
+  })
+
+  it('an expired flow arrives without a nonce and is still shown (the pending sign-in is the check)', () => {
+    expect(reason(frag({ error: 'expired' }))).toContain('took too long')
+  })
+
+  // Review finding: a link with no nonce could put any code, and the addresses it carries, on the sign-in screen.
+  it('a refusal without a nonce is shown only when it is "expired"', () => {
+    expect(checkReturn(frag({ error: 'not-invited', p: 'google', unvouched: 'whatever text a link carries' }), pending, pending.at + 1)).toBeNull()
+    expect(checkReturn(frag({ error: 'disabled' }), pending, pending.at + 1)).toBeNull()
+  })
+
+  // Negative controls: a link nobody asked for must not put words on the sign-in screen.
+  it('is ignored when no sign-in was started from this app', () => {
+    expect(checkReturn(frag({ error: 'not-invited', p: 'github', emails: 'a@example.com' }), null, pending.at)).toBeNull()
+  })
+
+  it('is refused when its nonce is not the one this app issued', () => {
+    expect(reason(frag({ error: 'disabled', nonce: 'attacker-chosen-value' }))).toContain('nonce mismatch')
+  })
+
+  it('a refusal after the 10-minute window says the sign-in took too long, not what the link claims', () => {
+    expect(reason(frag({ error: 'disabled', nonce: pending.nonce }), pending, pending.at + 10 * 60_000 + 1)).toContain('took over 10 minutes')
+  })
+
+  it('a token wins over an error in the same fragment (a refusal never signs anyone in, a token needs its nonce)', () => {
+    expect(checkReturn(frag({ token: 'abc', error: 'disabled', nonce: pending.nonce }), pending, pending.at + 1)).toMatchObject({ ok: true, token: 'abc' })
+  })
+
+  // What the Worker passes on is shown as text. It is bounded here too, because the fragment is whatever the link says.
+  // (That the text is escaped when it is shown is the sign-in screen's `{{ }}`; here it is only passed through unchanged.)
+  it('shows at most three addresses, none over 120 characters', () => {
+    const long = `${'x'.repeat(130)}@example.com`
+    // `long` comes FIRST: it would survive the three-entry cut, so only the length filter can keep it out.
+    const text = reason(frag({ error: 'not-invited', nonce: pending.nonce, p: 'github', emails: `${long},a@example.com,<img src=x onerror=alert(1)>,c@example.com,d@example.com` }))
+    expect(text).toContain('a@example.com, <img src=x onerror=alert(1)>, c@example.com')
+    expect(text).not.toContain('d@example.com')
+    expect(text).not.toContain('xxxxxxxxxx')
+  })
+
+  it('a provider name outside the list falls back to the one this app started with', () => {
+    expect(reason(frag({ error: 'provider', nonce: pending.nonce, p: 'evil' }))).toContain('GitHub')
+  })
+})
