@@ -5,7 +5,7 @@
 - **Working:** prod: 4-page pager, sync loop, 401 keeps notes + banner, sign-out guard, Dashboard notes dialog, Settings → Sync, export/delete account, `/log` error route (Worker `e529129`, D1 `0001`–`0007`). S3 signed off 2026-10-11: owner account 6 notes on production in versions 1–6, no gaps, 0 revisions; a fresh sign-in at 01:47:58Z (Android; provider not recorded). Smoke 12/12. `pnpm check` app 176 · worker 134.
 - **Broken:** nothing known. Not verified: the feel checks on a real phone (swipe, parallax, keyboard — DEVICE-CHECKS 1–3), which provider the Android sign-in used, a second device pulling in production, the tester first sync (their account still has 0 entries).
 - **Blocker:** none.
-- **Next:** (1) own session: client origin off `komogortev.github.io`; (2) exit week (H1-ENTRIES §1 acceptance, item by item); widgets design session separate; nightly export when its re-entry fires. Off-palette indigo remains (btn-primary, update banner, focus ring, a Settings link, status pills).
+- **Next:** (1) client origin off `komogortev.github.io` — design in [ORIGIN-MOVE.md](ORIGIN-MOVE.md), waiting on the owner's Q1–Q6; (2) exit week (H1-ENTRIES §1 acceptance, item by item); widgets design session separate; nightly export when its re-entry fires. Off-palette indigo remains (btn-primary, update banner, focus ring, a Settings link, status pills).
 ---
 
 ## Context
