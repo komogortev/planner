@@ -13,9 +13,9 @@ until it does (a new version loads on the second open), or tap Reload on the upd
 | 1 | Pager vs browser scroll | Swipe between pages with the finger; scroll the Dashboard list and Settings vertically | A sideways drag moves pages and follows the finger; a vertical drag scrolls the page, never both; no pull-to-refresh fires | not run on a phone |
 | 2 | Feel: parallax, cloth pull, blur | Drag slowly and flick, at the first and last page | Smooth, no stutter; the backdrop moves less than the page; the folds spring back | not run on a phone |
 | 3 | Keyboard over the dictophone | Tap the cassette window, type three lines | The keyboard does not hide the window or the key; Capture is reachable; the page does not zoom | not run on a phone |
-| 4 | Sign in with Google | Signed out, tap the ring, Continue with Google | Returns to the app signed in, the URL fragment is gone | not run |
-| 5 | Sign in with GitHub | Same, GitHub | Same | not run |
-| 6 | Capture → server | Capture a note with the connection on | Home status clears within ~10 s; Settings → Sync says up to date, 0 not on the server yet; the note is in the Dashboard list | **2026-10-11 `ccca2cf`: desktop Chrome in iPhone emulation only** — real phone not run |
+| 4 | Sign in with Google | Signed out, tap the ring, Continue with Google | Returns to the app signed in, the URL fragment is gone | not run per provider; **2026-10-11 Android: a sign-in reached production (session 01:47:58Z), provider not recorded** |
+| 5 | Sign in with GitHub | Same, GitHub | Same | see row 4 |
+| 6 | Capture → server | Capture a note with the connection on | Home status clears within ~10 s; Settings → Sync says up to date, 0 not on the server yet; the note is in the Dashboard list | **2026-10-11:** desktop Chrome in iPhone emulation (3 notes), then Android devices per the owner (3 more notes at 01:48:16Z; server versions 1–6) |
 | 7 | Offline capture | Airplane mode, capture two notes, close and reopen the app, then switch the connection back on | Status says "2 not synced yet · offline" across the reopen; within ~a minute of reconnecting both are on the server | not run |
 | 8 | Second device | Open the app on another device signed in to the same account | The first device's notes appear in the Dashboard list | not run in production |
 | 9 | Signed-out with notes waiting | (Local only: delete the session row.) Capture, wait | Banner "Signed out of the server… kept on this device"; Sign out in Settings is refused with the count; after signing in again the notes upload | local dev only, 2026-10-11 |
