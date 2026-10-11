@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { fetchMe, signOutLocally, type Me } from '@/auth/signIn'
+import { AccountError, deleteMyAccount, exportAccount, unsyncedCount } from '@/auth/account'
+import { fetchMe, signOutLocally, storedToken, type Me } from '@/auth/signIn'
 import { getDbStats } from '@/db/seed'
 import { useOnline } from '@/composables/useOnline'
 import { useSettingsStore } from '@/stores/settings'
@@ -44,6 +45,59 @@ const me = ref<Me | { error: string } | null>(null)
 function signOut(): void {
   signOutLocally()
   void router.push({ name: 'signin' })
+}
+
+// Data rights (S2b): export everything the server holds for this account, or delete the account and this device's copy.
+const accountEmail = computed(() => (me.value && 'email' in me.value ? me.value.email : null))
+const exporting = ref(false)
+const exportError = ref<string | null>(null)
+const exportedAt = ref<string | null>(null)
+const deleteOpen = ref(false)
+const deleteConfirm = ref('')
+const deleting = ref(false)
+const deleteError = ref<string | null>(null)
+const unsynced = ref(0)
+
+async function exportMyData(): Promise<void> {
+  const token = storedToken()
+  if (!token) return signOut()
+  exporting.value = true
+  exportError.value = null
+  try {
+    const data = await exportAccount(token)
+    const day = new Date().toISOString().slice(0, 10)
+    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }))
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `planner-export-${day}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+    exportedAt.value = new Date().toLocaleTimeString()
+  } catch (err) {
+    exportError.value = err instanceof AccountError && err.status === 401 ? 'Signed out — sign in again to export.' : err instanceof Error ? err.message : String(err)
+  } finally {
+    exporting.value = false
+  }
+}
+
+async function openDelete(): Promise<void> {
+  unsynced.value = await unsyncedCount()
+  deleteConfirm.value = ''
+  deleteError.value = null
+  deleteOpen.value = true
+}
+
+async function deleteMyData(): Promise<void> {
+  deleting.value = true
+  deleteError.value = null
+  try {
+    await deleteMyAccount(deleteConfirm.value)
+    void router.push({ name: 'signin' })
+  } catch (err) {
+    deleteError.value = err instanceof Error ? err.message : String(err)
+  } finally {
+    deleting.value = false
+  }
 }
 
 onMounted(async () => {
@@ -326,6 +380,51 @@ async function doDisconnect(): Promise<void> {
       <div class="flex flex-wrap gap-2 items-center">
         <button class="btn-danger" @click="signOut">Sign out</button>
         <InstallButton />
+      </div>
+    </section>
+
+    <section class="card" data-test="your-data">
+      <h3 class="font-semibold mb-3">Your data</h3>
+      <p class="text-sm text-slate-300 mb-4">
+        Export downloads everything the server holds for this account as one file, including notes you deleted and earlier
+        versions of edited ones. Deleting the account removes all of it from the server at once.
+      </p>
+      <div class="flex flex-wrap gap-2 items-center">
+        <button class="btn-ghost" data-test="export" :disabled="exporting || !online" @click="exportMyData">
+          {{ exporting ? 'Exporting…' : 'Export my data' }}
+        </button>
+        <button class="btn-danger" data-test="delete-open" :disabled="!online || accountEmail === null" @click="openDelete">
+          Delete my account…
+        </button>
+      </div>
+      <p v-if="!online" class="text-xs text-slate-400 mt-2">Both need a connection.</p>
+      <p v-if="exportedAt" class="text-xs text-slate-400 mt-2" data-test="export-done">Exported at {{ exportedAt }}.</p>
+      <p v-if="exportError" class="text-sm text-red-400 mt-2" role="alert" data-test="export-error">{{ exportError }}</p>
+
+      <div v-if="deleteOpen" class="mt-4 border-t border-slate-700 pt-4" data-test="delete-panel">
+        <p class="text-sm mb-2">
+          This cannot be undone. Your notes, their earlier versions and your sign-in are removed from the server, and this
+          device is cleared. Export first if you want a copy.
+          <strong v-if="unsynced > 0" data-test="delete-unsynced">
+            {{ unsynced }} {{ unsynced === 1 ? 'note has' : 'notes have' }} not reached the server and will be lost.
+          </strong>
+        </p>
+        <label class="block text-sm mb-2">
+          Type your email, <span class="font-mono">{{ accountEmail }}</span>, to confirm
+          <input v-model="deleteConfirm" class="input mt-1 w-full" data-test="delete-confirm" autocomplete="off" autocapitalize="off" spellcheck="false" />
+        </label>
+        <div class="flex gap-2">
+          <button
+            class="btn-danger"
+            data-test="delete-go"
+            :disabled="deleting || !online || deleteConfirm.trim().toLowerCase() !== (accountEmail ?? '').toLowerCase()"
+            @click="deleteMyData"
+          >
+            {{ deleting ? 'Deleting…' : 'Delete everything' }}
+          </button>
+          <button class="btn-ghost" :disabled="deleting" @click="deleteOpen = false">Cancel</button>
+        </div>
+        <p v-if="deleteError" class="text-sm text-red-400 mt-2" role="alert" data-test="delete-error">{{ deleteError }}</p>
       </div>
     </section>
 
