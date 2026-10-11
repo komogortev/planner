@@ -1,11 +1,11 @@
 # Personal Planner — STATE
 
 ## SNAPSHOT
-- **Phase/Last:** H1 S4 done bar device checks. **2026-10-11 hardening scan: 6 PRs (#50–#55), all deployed** (app `bcb59ec`, Worker `f25af83`, D1 `0001`–`0007`): no wipe without a user gesture (D-55), an unsent note survives a reload and is captured once (D-56), sign-in refusals return to the app (D-57), a device notices a restored server (D-58), two windows take turns (D-59), a cancelled touch snaps the pager back. Vibe-code mode.
-- **Working:** prod as before plus the above; smoke 13/13; `pnpm check` app 316 · worker 147. Sync, sign-out guard, export/delete, `/log`, 4-page pager, Dashboard notes dialog unchanged.
-- **Broken:** nothing known. **Not verified:** every new behaviour on a real phone (DEVICE-CHECKS 10, 13–17); the first real D1 restore (D-58 is tested, never run live); the tester's first sync (0 entries).
-- **Blocker:** none.
-- **Next:** (1) S2 PR (Dexie v5 + D1 `0008`, records sync) merged → **deploy the Worker + `0008` before any client writes records** (RUNBOOK). (2) HW-HARNESS S3 UI, gates in the spec. (3) DEVICE-CHECKS 10, 13–17 fold into S3/S4; the exit week is S4 (D-60). **Origin move closed 2026-10-11** ([ORIGIN-MOVE.md](ORIGIN-MOVE.md), #57–#66): app at `koplanner.pages.dev` (CF Pages, `main` only, CSP), old address = moved notice, Worker `a50f00b` allows one origin, smoke 16/16. Rollback: restore the entry in `wrangler.toml`, redeploy. Parked items with re-entry conditions: Carried follow-ups below.
+- **Phase/Last:** H1 built. **2026-10-11: HW-HARNESS (harness + Daily task journal widget) S1 domain (#68) and S2 records sync (#69) merged** (D-60…D-64, [HW-HARNESS.md](HW-HARNESS.md)). Same day, deployed earlier: hardening scan (#50–#55), origin move (#57–#66, app at `koplanner.pages.dev`). Vibe-code mode.
+- **Working:** prod = Worker `a50f00b`, D1 `0001`–`0007` (unchanged); the local D1 has `0008`; `pnpm check` app 453 · Worker 169; note sync, sign-out guard, export/delete, `/log`, pager unchanged.
+- **Broken:** nothing known. **Not deployed: the Worker + D1 `0008`**: the guarded deploy got Cloudflare 403 / 7403 on the D1 query (saved wrangler login refused). **Not verified:** DEVICE-CHECKS 10, 13–17 on a phone; a live D1 restore; the tester's first sync.
+- **Blocker:** owner runs `pnpm --dir api exec wrangler login`; then the deploy. S3 must not merge before it (an older Worker rejects every record push).
+- **Next:** (1) deploy Worker + `0008`, `pnpm smoke` a minute later. (2) S3 UI, gates in HW-HARNESS §9. (3) Phone checks fold into S3/S4; exit week = S4 (D-60). Parked items: Carried follow-ups below.
 ---
 
 ## Context
@@ -59,6 +59,8 @@
 ## Decision log
 
 Full log: PROJECT.md → Decisions log. Latest:
+
+- 2026-10-11 (s6c) — Session close (Claude, vibe-code): S1 (#68) and S2 (#69) merged on green. Production deploy of the Worker stopped at the first step (`d1 migrations apply --remote` → 403 / 7403); `wrangler whoami` showed a valid login with `d1 (write)`, so the saved OAuth token is the suspect, unconfirmed. Nothing in production changed; the merged client writes no records until S3. Local D1 migrated to `0008` for the dev stack. Review lesson: the A13 guard covers a new table, not the code that reads it: the account export read only entries and was caught by reading, not by the guard.
 
 - 2026-10-11 (s6b) — HW-HARNESS S2 built (Claude, vibe-code): records sync end to end. D-64: ONE server `records` table, typed Dexie tables per kind (a deviation from D-62's wording, recorded). Worker: migration `0008`, `records.ts` (CAS push, revisions, merged pull under one cursor), account export/delete cover it (the A13 guard caught the table; the export reading only entries was NOT caught by it and was fixed by reading the code). Client: Dexie v5 with a cursor-reset upgrade, record-aware engine (ack, pull, D-58 sweep, discard), `writeRecords`, clear/copy/export/delete cover records. 453 app + 169 Worker tests, 37/38 guards mutated red; entry path unchanged. CodeReview: 0 critical, 4 improvements (v5 cursor reset fixed; skipped-record trace added; discard label shows the text; Worker-before-client order is a gate on S3). Not deployed.
 
