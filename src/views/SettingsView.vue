@@ -1,8 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { AccountError, deleteMyAccount, exportAccount, unsyncedCount } from '@/auth/account'
-import { fetchMe, signOutLocally, storedToken, type Me } from '@/auth/signIn'
+import { AccountError, deleteMyAccount, exportAccount, signOutSafely, unsyncedCount } from '@/auth/account'
+import { fetchMe, storedToken, type Me } from '@/auth/signIn'
+import { db } from '@/db'
+import type { OutboxRow } from '@/db/schema'
+import { useLiveQuery } from '@/composables/useLiveQuery'
+import { useSyncState } from '@/composables/useSyncState'
+import { storageUsage, syncEngine, syncNow, type StorageUsage } from '@/sync'
 import { getDbStats } from '@/db/seed'
 import { useOnline } from '@/composables/useOnline'
 import { useSettingsStore } from '@/stores/settings'
@@ -42,10 +47,35 @@ const themeOptions: { value: ThemeChoice; label: string }[] = [
 ]
 const me = ref<Me | { error: string } | null>(null)
 
-function signOut(): void {
-  signOutLocally()
+// D-28: signing out clears this device's notes (D-50), so it is refused while some have not reached the server.
+const signOutBlocked = ref<number | null>(null)
+async function signOut(): Promise<void> {
+  const r = await signOutSafely()
+  if (!r.ok) {
+    signOutBlocked.value = r.unsynced
+    return
+  }
+  syncEngine.reset()
   void router.push({ name: 'signin' })
 }
+
+// Sync status (S3): what the loop is doing, what stands in its way, and what the owner can do about a rejected note (D-27).
+const sync = useSyncState()
+const unsyncedNow = useLiveQuery(() => db.outbox.count(), 0)
+const rejected = useLiveQuery(() => db.outbox.toArray().then((rows) => rows.filter((r) => r.rejectedAt)), [] as OutboxRow[])
+const usage = ref<StorageUsage | null>(null)
+const phaseText = computed(() => {
+  switch (sync.value.phase) {
+    case 'syncing': return sync.value.initialPull ? `Fetching your notes… ${sync.value.pulled}` : 'Syncing…'
+    case 'offline': return 'Offline — notes upload when you are back.'
+    case 'waiting': return sync.value.retryAt ? `Will retry at ${new Date(sync.value.retryAt).toLocaleTimeString()}${sync.value.lastError ? ` (${sync.value.lastError})` : ''}.` : 'Will retry.'
+    case 'auth': return 'Signed out of the server — sign in again.'
+    case 'account-deleted': return 'This account was deleted.'
+    case 'foreign-account': return 'This device holds another account’s notes.'
+    default: return sync.value.lastSyncedAt ? `Up to date · last synced ${new Date(sync.value.lastSyncedAt).toLocaleTimeString()}` : 'Not synced yet.'
+  }
+})
+const mb = (n: number | null) => (n === null ? '—' : n >= 1e9 ? `${(n / 1e9).toFixed(1)} GB` : `${(n / 1e6).toFixed(1)} MB`)
 
 // Data rights (S2b): export everything the server holds for this account, or delete the account and this device's copy.
 const accountEmail = computed(() => (me.value && 'email' in me.value ? me.value.email : null))
@@ -102,9 +132,15 @@ async function deleteMyData(): Promise<void> {
 
 onMounted(async () => {
   void refreshStats()
+  void storageUsage().then((u) => { usage.value = u })
   const r = await fetchMe()
-  // 'signed-out' here means the server rejected the stored token (401) — drop it and ask for a fresh sign-in.
-  if (r === 'signed-out') return signOut()
+  // 'signed-out': the server rejected the stored token (401). With nothing waiting to upload, sign out and ask for a fresh
+  // sign-in; with notes waiting, keep everything — the banner offers "Sign in" and they upload afterwards (D-04).
+  if (r === 'signed-out') {
+    await signOut()
+    if (signOutBlocked.value !== null) me.value = { error: 'signed out of the server' }
+    return
+  }
   me.value = r
 })
 
@@ -378,9 +414,41 @@ async function doDisconnect(): Promise<void> {
         <template v-else-if="typeof me === 'object'">Account unavailable ({{ me.error }})</template>
       </p>
       <div class="flex flex-wrap gap-2 items-center">
-        <button class="btn-danger" @click="signOut">Sign out</button>
+        <button class="btn-danger" data-test="sign-out" @click="signOut">Sign out</button>
         <InstallButton />
       </div>
+      <p v-if="signOutBlocked !== null" class="text-sm text-amber-300 mt-3" role="alert" data-test="sign-out-blocked">
+        {{ signOutBlocked }} {{ signOutBlocked === 1 ? 'note has' : 'notes have' }} not reached the server. Signing out clears this
+        device, so they would be lost. Let them sync first{{ rejected.length ? ', or retry or discard the refused ones below' : '' }}.
+      </p>
+    </section>
+
+    <section class="card" data-test="sync-card">
+      <h3 class="font-semibold mb-3">Sync</h3>
+      <p class="text-sm text-slate-300" data-test="sync-status">{{ phaseText }}</p>
+      <p class="text-xs text-slate-400 mt-1" data-test="sync-unsynced">{{ unsyncedNow }} not on the server yet</p>
+      <div class="flex flex-wrap gap-2 items-center mt-3">
+        <button class="btn-ghost" data-test="sync-now" :disabled="!online || sync.phase === 'syncing'" @click="syncNow(true)">Sync now</button>
+      </div>
+      <div v-if="rejected.length" class="mt-4 border-t border-slate-700 pt-3" data-test="rejected-list">
+        <p class="text-sm mb-2">The server refused {{ rejected.length === 1 ? 'this note' : 'these notes' }}; everything else was sent.</p>
+        <ul class="text-sm space-y-2">
+          <li v-for="r in rejected" :key="r.seq" class="flex items-start gap-2" data-test="rejected-row">
+            <div class="flex-1 min-w-0">
+              <div class="truncate">{{ r.payload.body.slice(0, 80) }}</div>
+              <div class="text-xs text-amber-300">{{ r.lastError }}</div>
+            </div>
+            <button class="btn-ghost" data-test="rejected-discard" @click="syncEngine.discardRejected([r.seq!])">Discard</button>
+          </li>
+        </ul>
+        <button class="btn-ghost mt-2" data-test="rejected-retry" @click="syncEngine.retryRejected().then(() => syncNow(true))">Retry all</button>
+      </div>
+      <p class="text-xs text-slate-400 mt-4" data-test="storage">
+        Storage on this device: {{ mb(usage?.usedBytes ?? null) }} of {{ mb(usage?.quotaBytes ?? null) }}
+        <template v-if="usage?.persisted !== null && usage?.persisted !== undefined">
+          · {{ usage.persisted ? 'protected from automatic clean-up' : 'the browser may clear it under storage pressure' }}
+        </template>
+      </p>
     </section>
 
     <section class="card" data-test="your-data">
