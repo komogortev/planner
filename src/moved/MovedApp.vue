@@ -54,7 +54,7 @@ async function clearDevice(): Promise<void> {
       <h1 class="text-xl font-semibold">Planner moved</h1>
       <p>
         The app now lives at
-        <a :href="to" class="underline break-all" data-test="moved-link">{{ to }}</a>.
+        <a :href="to" class="underline [overflow-wrap:anywhere]" data-test="moved-link">{{ to }}</a>.
         Open it, sign in, and your notes are there. This old address no longer syncs anything.
       </p>
 
