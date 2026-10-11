@@ -12,6 +12,7 @@ import { dedupeCategoriesInDb } from './db/cleanup'
 import { applyEnvCue } from './env/applyEnvCue'
 import { applyTheme } from './theme/theme'
 import { startSync } from './sync'
+import { installErrorReporting } from './log/report'
 import './style.css'
 
 // Local / preview builds get a coloured banner, tab title, favicon and status bar; prod is untouched.
@@ -58,3 +59,4 @@ app.mount('#app')
 // Sync (H1-ENTRIES section 6.4): at start, when the tab is visible again, when back online, 2 s after a capture and every
 // 60 s. A signed-out device does nothing; capture never waits for any of it.
 startSync()
+installErrorReporting()

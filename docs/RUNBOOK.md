@@ -70,3 +70,13 @@ D1 Time Travel (point-in-time restore of the whole database), so migrations only
 
 Secrets: production via `pnpm --dir api exec wrangler secret bulk <file>` (then delete the file); local in `api/.env`,
 which only the owner edits.
+
+## Error log (S4, D-24)
+
+The app reports `js-error`, `promise-rejected` and `sync-stuck` (a sync failing three times in a row) to `POST /log`:
+error kind, app route, build id, time — no message, no text, no account. Production builds only, one report per kind per
+minute, per-address rate limit, newest 500 kept. Read it:
+
+```
+pnpm --dir api exec wrangler d1 execute planner --remote --command "SELECT datetime(at/1000,'unixepoch') AS utc, kind, route, build FROM error_log ORDER BY id DESC LIMIT 50"
+```

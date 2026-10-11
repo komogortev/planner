@@ -24,6 +24,7 @@ export const ACCOUNT_TABLES: readonly { table: string; delete: string; exported:
 export const ACCOUNT_EXEMPT: Record<string, string> = {
   d1_migrations: 'Wrangler migration bookkeeping',
   deleted_tokens: 'SHA-256 of bearer tokens of deleted accounts, no user id (0006)',
+  error_log: 'app-reported error kind, route and build; no user id, no text (0007)',
 }
 
 /** User tables in the database that neither list covers. Empty when A13 holds. */
