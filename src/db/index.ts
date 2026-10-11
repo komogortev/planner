@@ -49,8 +49,9 @@ export class PlannerDb extends Dexie {
   outbox!: Table<OutboxRow, number>
   syncMeta!: Table<SyncMeta, string>
 
-  constructor() {
-    super('personal-planner')
+  /** `name` is only ever overridden by tests that need a second device. */
+  constructor(name = 'personal-planner') {
+    super(name)
     this.version(1).stores({
       // Indices — first field is primary key, subsequent are secondary indices
       commitments: 'id, type, startDate, updatedAt',

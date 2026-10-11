@@ -3,6 +3,7 @@ import { RouterView, useRoute } from 'vue-router'
 import EnvBanner from '@/components/EnvBanner.vue'
 import VersionBadge from '@/components/VersionBadge.vue'
 import UpdateBanner from '@/components/UpdateBanner.vue'
+import SyncBanner from '@/components/SyncBanner.vue'
 import BottomNav from '@/shell/BottomNav.vue'
 import Pager from '@/shell/Pager.vue'
 import { pageIndex } from '@/shell/pages'
@@ -17,6 +18,7 @@ const route = useRoute()
   <div class="h-dvh flex flex-col overflow-hidden">
     <EnvBanner />
     <UpdateBanner />
+    <SyncBanner v-if="!route.meta.public" />
     <Pager v-if="pageIndex(route.path) >= 0" class="flex-1 min-h-0" />
     <main v-else class="flex-1 min-h-0 overflow-y-auto pb-8">
       <RouterView />

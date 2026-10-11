@@ -3,6 +3,8 @@ import { ref } from 'vue'
 import { captureEntry } from '@/capture/capture'
 import { db } from '@/db'
 import { useLiveQuery } from '@/composables/useLiveQuery'
+import { useSyncState } from '@/composables/useSyncState'
+import { syncSoon } from '@/sync'
 import dictophone from '@/assets/dictophone.webp'
 
 // Home = quickdraw (owner notes 10-11): ONE input expressing one intent — write it down. The prop is a dictophone:
@@ -14,6 +16,7 @@ const error = ref<string | null>(null)
 const saved = ref(false)
 const box = ref<HTMLTextAreaElement | null>(null)
 const unsynced = useLiveQuery(() => db.outbox.count(), 0)
+const sync = useSyncState()
 let savedTimer: number | undefined
 
 async function capture(): Promise<void> {
@@ -25,6 +28,7 @@ async function capture(): Promise<void> {
   }
   error.value = null
   text.value = ''
+  syncSoon() // two seconds from now, not at once: a burst of captures is one request
   saved.value = true
   window.clearTimeout(savedTimer)
   savedTimer = window.setTimeout(() => (saved.value = false), 1800)
@@ -63,7 +67,11 @@ function onKey(e: KeyboardEvent): void {
     <p v-if="error" class="text-sm text-rose-300 px-5 mt-2" data-test="capture-error">{{ error }}</p>
     <p class="text-xs text-slate-500 mt-2 h-4" data-test="capture-status">
       <template v-if="saved">Saved ✓</template>
-      <template v-else-if="unsynced > 0">{{ unsynced }} not synced yet</template>
+      <template v-else-if="unsynced > 0">
+        {{ unsynced }} not synced yet<template v-if="sync.phase === 'offline'"> · offline</template
+        ><template v-else-if="sync.phase === 'syncing'"> · syncing…</template>
+      </template>
+      <template v-else-if="sync.initialPull && sync.phase === 'syncing'">Fetching your notes… {{ sync.pulled }}</template>
     </p>
   </div>
 </template>

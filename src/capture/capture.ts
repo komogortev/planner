@@ -2,13 +2,13 @@
 // Sync is later and never gates capture — a failed or absent sync leaves the outbox row, nothing is lost.
 import { cleanEntry } from '@/domain/clean'
 import type { Entry } from '@/domain/entry'
-import { db } from '@/db'
+import { db, type PlannerDb } from '@/db'
 import { nowISO } from '@/utils/dates'
 import { uuid } from '@/utils/uuid'
 
 export type CaptureResult = { ok: true; entry: Entry } | { ok: false; error: string }
 
-export async function captureEntry(rawBody: string): Promise<CaptureResult> {
+export async function captureEntry(rawBody: string, database: PlannerDb = db): Promise<CaptureResult> {
   const now = nowISO()
   const cleaned = cleanEntry({
     id: uuid(),
@@ -24,9 +24,9 @@ export async function captureEntry(rawBody: string): Promise<CaptureResult> {
   if (!cleaned.ok) return { ok: false, error: cleaned.errors.join('; ') }
   const input = cleaned.value
   const entry: Entry = { ...input, serverVersion: null }
-  await db.transaction('rw', db.entries, db.outbox, async () => {
-    await db.entries.add(entry)
-    await db.outbox.add({
+  await database.transaction('rw', database.entries, database.outbox, async () => {
+    await database.entries.add(entry)
+    await database.outbox.add({
       entityId: entry.id,
       op: 'upsert',
       baseVersion: null,

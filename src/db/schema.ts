@@ -193,6 +193,8 @@ export interface OutboxRow {
   attempts: number
   lastError: string | null
   queuedAt: string
+  /** Set when the server refused this change (D-27): the row stays, is skipped by the loop, and is shown with retry / discard. */
+  rejectedAt?: string | null
 }
 
 /** One row per signed-in account: where the pull left off. */

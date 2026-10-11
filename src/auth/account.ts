@@ -1,6 +1,7 @@
 // Account data rights, the app half (H1-ENTRIES S2b; api/src/account.ts): export everything the server holds for the
 // signed-in person, delete the account, and wipe the account's tables on this device.
 import { db } from '@/db'
+import { syncEngine } from '@/sync'
 import { API_URL, signOutLocally, storedToken } from './signIn'
 
 export type AccountExport = {
@@ -78,6 +79,7 @@ export async function deleteAccountRemote(token: string, confirm: string, fetchI
  * device. Entries still in the outbox are lost with it — callers say so first.
  */
 export async function wipeAccountTables(): Promise<void> {
+  syncEngine.reset() // a cycle in flight must not write this account rows back after the wipe
   await db.transaction('rw', db.entries, db.outbox, db.syncMeta, async () => {
     await Promise.all([db.entries.clear(), db.outbox.clear(), db.syncMeta.clear()])
   })
@@ -85,6 +87,30 @@ export async function wipeAccountTables(): Promise<void> {
 
 /** Entries on this device the server has not acknowledged: what a wipe would lose. */
 export const unsyncedCount = (): Promise<number> => db.outbox.count()
+
+/**
+ * Sign out (D-28): refused while notes have not reached the server — they exist only on this device, and clearing the
+ * account's tables is part of signing out (D-50). The count says what stands in the way.
+ */
+export async function signOutSafely(): Promise<{ ok: true } | { ok: false; unsynced: number }> {
+  // The count and the clear are one transaction: a capture that lands between them is counted, not cleared. The engine is
+  // reset inside it, so no cycle that started earlier can write after the clear.
+  const unsynced = await db.transaction('rw', db.entries, db.outbox, db.syncMeta, async () => {
+    const n = await db.outbox.count()
+    if (n > 0) return n
+    syncEngine.reset()
+    await Promise.all([db.entries.clear(), db.outbox.clear(), db.syncMeta.clear()])
+    return 0
+  })
+  if (unsynced > 0) return { ok: false, unsynced }
+  signOutLocally()
+  return { ok: true }
+}
+
+/** Everything this device holds for the account, as a plain object: the copy offered before a device is cleared (D-50). */
+export async function localCopy(): Promise<{ exportedAt: string; entries: unknown[]; notSynced: unknown[] }> {
+  return { exportedAt: new Date().toISOString(), entries: await db.entries.toArray(), notSynced: await db.outbox.toArray() }
+}
 
 /** Export (done by the caller first), delete on the server, then this device: tables and token. */
 export async function deleteMyAccount(confirm: string, fetchImpl: Fetch = fetch, apiUrl = API_URL): Promise<void> {
