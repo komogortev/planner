@@ -31,6 +31,7 @@ Vocabulary is fixed in [VOCABULARY.md](VOCABULARY.md); structure in [ARCHITECTUR
 | [H1-ENTRIES.md](H1-ENTRIES.md) | Core loop: accounts, capture page, outbox sync, backend (Worker + D1), schema v4 | S0 closed 2026-10-09 |
 | [H1-S1-SPIKE.md](H1-S1-SPIKE.md) | S1 spike kickoff: owner setup, steps, CPU known positive, decision rules | ready |
 | [H2-LENSES.md](H2-LENSES.md) | Slices, lenses, runs, reports, composer | S0 draft, questions open |
+| [ORIGIN-MOVE.md](ORIGIN-MOVE.md) | Moving the client off the shared `komogortev.github.io` origin (H1 S4): options, order, risks, owner questions | S0 draft 2026-10-11; no code until answered |
 | [DECISION-TREE.md](DECISION-TREE.md) | Roadmap basis (accepted 2026-10-10): user-action branches, decision register D-03…D-54, critical path | live; supersedes the tier order below where they differ |
 | [SHEETS-STRUCTURE.md](SHEETS-STRUCTURE.md) | Deferred Sheets backend | historical reference |
 
