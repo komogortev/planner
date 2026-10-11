@@ -65,6 +65,17 @@ function onTouchEnd(e: TouchEvent): void {
   if (target !== index.value) void router.push(PAGES[target]!.to)
 }
 
+/**
+ * The system took the gesture away — an edge swipe, a pulled notification shade, a call. That is not a release at the last
+ * finger position: it must not turn a half-finished drag into a page change. Snap back to the page the drag started on.
+ */
+function onTouchCancel(): void {
+  start = null
+  dragging.value = false
+  dragPx.value = 0
+  pull.value = 0
+}
+
 // The backdrop rides along at PARALLAX of the pages' distance (same easing, so it stays locked to the drag).
 const backdropStyle = computed(() => {
   const { screens, px } = backdropShift(index.value, dragPx.value)
@@ -98,7 +109,7 @@ const trackStyle = computed(() => ({
     @touchstart.passive="onTouchStart"
     @touchmove.passive="onTouchMove"
     @touchend.passive="onTouchEnd"
-    @touchcancel.passive="onTouchEnd"
+    @touchcancel.passive="onTouchCancel"
   >
     <div class="backdrop t-base" :class="{ 'track-dragging': dragging }" :style="backdropStyle" aria-hidden="true">
       <div class="t-folds pulled" :class="{ 'pulled-live': dragging }" :style="foldsStyle" />
