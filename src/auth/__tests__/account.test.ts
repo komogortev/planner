@@ -1,8 +1,9 @@
 import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { AccountError, clearDeviceSafely, deleteAccountRemote, deleteMyAccount, exportAccount, signOutSafely, unsyncedCount } from '../account'
+import { AccountError, clearDeviceSafely, deleteAccountRemote, deleteMyAccount, exportAccount, localCopy, signOutSafely, unsyncedCount } from '../account'
 import { db } from '@/db'
 import { captureEntry } from '@/capture/capture'
+import { recordTables, writeRecords } from '@/db/records'
 
 const API = 'https://api.test'
 
@@ -25,7 +26,7 @@ function page(over: Record<string, unknown>) {
 
 beforeEach(async () => {
   localStorage.clear()
-  await Promise.all([db.entries.clear(), db.outbox.clear(), db.syncMeta.clear(), db.commitments.clear()])
+  await Promise.all([db.entries.clear(), db.outbox.clear(), db.syncMeta.clear(), db.commitments.clear(), ...recordTables(db).map((t) => t.clear())])
 })
 
 describe('exportAccount', () => {
@@ -193,5 +194,105 @@ describe('signOutSafely (D-28)', () => {
     expect(await db.entries.count()).toBe(0)
     expect(localStorage.getItem('planner.signIn.token')).toBeNull()
     expect(await db.commitments.count()).toBe(1)
+  })
+})
+
+// ── HW-HARNESS S2: records are part of what a person owns, so they export, copy, clear and delete with the notes ──
+
+const NOW = '2026-10-11T18:00:00.000Z'
+const asked = (id: string, over: Record<string, unknown> = {}) => ({
+  id, entryId: 'n1', text: 'Which shop?', state: 'open', answer: null, createdAt: NOW, answeredAt: null, runId: 'run-1', deletedAt: null, serverVersion: 3, ...over,
+})
+
+describe('records in the account export', () => {
+  it('joins records across pages; keeps the newest copy per kind AND id; an entryState and its entry are not confused', async () => {
+    const pages = [
+      page({ account: { id: 'u1' }, entries: [{ id: 'x' }], records: [{ recordKind: 'question', id: 'q1', serverVersion: 4, text: 'old' }, { recordKind: 'entryState', id: 'x', serverVersion: 5 }], cursor: 5, more: true }),
+      page({ records: [{ recordKind: 'question', id: 'q1', serverVersion: 9, text: 'new' }, { recordKind: 'assessment', id: 'q1', serverVersion: 10 }], cursor: 10, more: false }),
+    ]
+    let n = 0
+    const out = await exportAccount('tok', async () => json(pages[n++]), API)
+    expect(out.records).toHaveLength(3) // q1 question (newest), x entryState, q1 assessment: same id, different kinds
+    expect((out.records as { recordKind: string; id: string; text?: string }[]).find((r) => r.recordKind === 'question')?.text).toBe('new')
+  })
+
+  it('keeps one copy of a record revision that two pages both carried', async () => {
+    const rev = { recordKind: 'question', id: 'q1', replacedVersion: 4, data: {} }
+    const pages = [page({ account: {}, recordRevisions: [rev], cursor: 4, more: true }), page({ recordRevisions: [rev, { ...rev, replacedVersion: 6 }], cursor: 6, more: false })]
+    let n = 0
+    expect((await exportAccount('tok', async () => json(pages[n++]), API)).recordRevisions).toHaveLength(2)
+  })
+
+  it('an older Worker that sends no records gives an export with empty record lists, not a crash', async () => {
+    const out = await exportAccount('tok', async () => json(page({ account: { id: 'u1' } })), API)
+    expect(out.records).toEqual([])
+    expect(out.recordRevisions).toEqual([])
+  })
+})
+
+describe('records on this device', () => {
+  beforeEach(async () => {
+    await Promise.all(recordTables(db).map((t) => t.clear()))
+  })
+
+  it('the saved copy holds every record, by table', async () => {
+    await db.questions.put(asked('q1') as never)
+    await db.entryStates.put({ id: 'n1', state: 'done', followUpOn: null, by: 'owner', updatedAt: NOW, deletedAt: null, serverVersion: 4 })
+    const copy = await localCopy()
+    expect(Object.keys(copy.records).sort()).toEqual(['assessments', 'entryStates', 'links', 'questions', 'reports', 'runs', 'widgets'])
+    expect(copy.records.questions).toMatchObject([{ id: 'q1', text: 'Which shop?' }])
+    expect(copy.records.entryStates).toHaveLength(1)
+  })
+
+  it('sign-out is refused while a record has not reached the server, and counts it', async () => {
+    expect(await writeRecords(db, [{ recordKind: 'question', row: asked('q-unsent') }], NOW)).toMatchObject({ ok: true })
+    localStorage.setItem('planner.signIn.token', 'tok')
+    expect(await signOutSafely(async () => new Response(null, { status: 204 }), API)).toEqual({ ok: false, unsynced: 1 })
+    expect(await db.questions.count()).toBe(1)
+    expect(localStorage.getItem('planner.signIn.token')).toBe('tok')
+  })
+
+  // Negative control for the test above: with the outbox empty the same call clears the record tables too.
+  it('sign-out clears the record tables when everything is on the server', async () => {
+    await db.questions.put(asked('q-synced') as never)
+    await db.assessments.put({ id: 'a1', entryId: 'n1', harnessVersion: 1, runId: 'run-1', at: NOW, deletedAt: null, serverVersion: 5 })
+    expect(await db.questions.count()).toBe(1) // exercised: there is something to clear
+    localStorage.setItem('planner.signIn.token', 'tok')
+    expect(await signOutSafely(async () => new Response(null, { status: 204 }), API)).toEqual({ ok: true })
+    for (const t of recordTables(db)) expect(await t.count(), t.name).toBe(0)
+  })
+
+  it('"Clear this device" with only synced records still asks, names them, and saves a copy of them first', async () => {
+    await db.questions.put(asked('q-only') as never)
+    let message = ''
+    let copy: Awaited<ReturnType<typeof localCopy>> | null = null
+    const res = await clearDeviceSafely({ confirm: (m) => ((message = m), true), saveCopy: (c) => void (copy = c) })
+    expect(res).toBe('cleared')
+    expect(message).toContain('1 saved item')
+    expect(copy!.records.questions).toMatchObject([{ id: 'q-only' }])
+    expect(await db.questions.count()).toBe(0)
+  })
+
+  it('declining the question clears no record', async () => {
+    await db.questions.put(asked('q-keep') as never)
+    expect(await clearDeviceSafely({ confirm: () => false, saveCopy: () => { throw new Error('no copy when declined') } })).toBe('declined')
+    expect(await db.questions.count()).toBe(1)
+  })
+
+  it('a record that arrives while the owner is deciding is not cleared unseen: the clear reports "changed" and removes nothing', async () => {
+    await db.questions.put(asked('q-shown') as never)
+    // The write starts inside `confirm`, before the clear's transaction is created; IndexedDB runs overlapping transactions in
+    // creation order, so it has landed when the clear re-counts. The owner was shown 1 item, the device now holds 2.
+    const res = await clearDeviceSafely({ confirm: () => (void db.questions.put(asked('q-arrived-meanwhile') as never), true), saveCopy: () => undefined })
+    expect(res).toBe('changed')
+    expect(await db.questions.count()).toBe(2)
+  })
+
+  it('deleteMyAccount clears the record tables with the notes', async () => {
+    await db.questions.put(asked('q-del') as never)
+    await db.widgets.put({ id: 'w1', name: 'W', kind: 'system', active: true, lens: null, lineage: null, createdAt: NOW, updatedAt: NOW, deletedAt: null, serverVersion: 6 })
+    localStorage.setItem('planner.signIn.token', 'tok')
+    await deleteMyAccount('me@example.com', async () => json({ deleted: true }), API)
+    for (const t of recordTables(db)) expect(await t.count(), t.name).toBe(0)
   })
 })

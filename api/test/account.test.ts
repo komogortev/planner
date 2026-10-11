@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 import { ACCOUNT_TABLES, uncoveredTables } from '../src/account'
 import { createSession } from '../src/auth'
 import { pushMutations } from '../src/entries'
+import { pushRecords } from '../src/records'
 import app from '../src/index'
 
 const API = 'https://api.test'
@@ -27,6 +28,10 @@ const entry = (over: Record<string, unknown> = {}) => ({
   id: uuid(), body: 'hello', createdAt: iso(), occurredAt: null, categoryId: null, tags: [], origin: 'author', updatedAt: iso(), deletedAt: null, ...over,
 })
 const upsert = (p: ReturnType<typeof entry>, baseVersion: number | null = null) => ({ entityId: p.id, op: 'upsert', baseVersion, payload: p })
+const question = (over: Record<string, unknown> = {}): Record<string, unknown> & { id: string } => ({
+  id: `q-${++n}`, entryId: 'n1', text: 'Which shop?', state: 'open', answer: null, createdAt: iso(), answeredAt: null, runId: 'run-1', deletedAt: null, ...over,
+})
+const recUpsert = (p: ReturnType<typeof question>, baseVersion: number | null = null) => ({ recordKind: 'question', entityId: p.id, op: 'upsert', baseVersion, payload: p })
 
 const call = (token: string | null, path: string, init: RequestInit = {}) =>
   app.fetch(new Request(`${API}${path}`, { ...init, headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(init.headers ?? {}) } }), env)
@@ -37,13 +42,15 @@ const count = async (sql: string, ...args: unknown[]) => ((await env.DB.prepare(
 const COUNT_BY_ACCOUNT: Record<string, string> = {
   entry_revisions: 'SELECT COUNT(*) AS n FROM entry_revisions WHERE user_id = ?',
   entries: 'SELECT COUNT(*) AS n FROM entries WHERE user_id = ?',
+  record_revisions: 'SELECT COUNT(*) AS n FROM record_revisions WHERE user_id = ?',
+  records: 'SELECT COUNT(*) AS n FROM records WHERE user_id = ?',
   sessions: 'SELECT COUNT(*) AS n FROM sessions WHERE user_id = ?',
   identities: 'SELECT COUNT(*) AS n FROM identities WHERE user_id = ?',
   invites: 'SELECT COUNT(*) AS n FROM invites WHERE used_by = ?',
   users: 'SELECT COUNT(*) AS n FROM users WHERE id = ?',
 }
 
-/** An account holding a row in every table of ACCOUNT_TABLES: two entries (one deleted) and a stale-edit revision. */
+/** An account holding a row in every table of ACCOUNT_TABLES: two entries (one deleted), a stale-edit revision, and a record with its own. */
 async function populated(email: string) {
   const a = await account(email)
   const keep = entry({ body: `kept by ${email}` })
@@ -52,7 +59,11 @@ async function populated(email: string) {
   await pushMutations(env.DB, a.id, [upsert(keep), upsert(gone), upsert(edited)])
   await pushMutations(env.DB, a.id, [{ entityId: gone.id, op: 'delete', baseVersion: 2, payload: { ...gone, deletedAt: iso(5), updatedAt: iso(5) } }])
   await pushMutations(env.DB, a.id, [upsert({ ...edited, body: 'second text' }, null)]) // stale base: the first text goes to revisions
-  return { a, keep, gone, edited }
+  const asked = question({ text: `Asked of ${email}?` })
+  const [first] = await pushRecords(env.DB, a.id, [recUpsert(asked)]) // versions are the account's one counter, shared with entries
+  await pushRecords(env.DB, a.id, [recUpsert({ ...asked, state: 'answered', answer: `Answer by ${email}`, answeredAt: iso(6) }, first!.serverVersion!)])
+  await pushRecords(env.DB, a.id, [recUpsert({ ...asked, state: 'dismissed' }, first!.serverVersion!)]) // stale base: the answer goes to record_revisions
+  return { a, keep, gone, edited, asked }
 }
 
 describe('A13 — every table is covered', () => {
@@ -74,12 +85,13 @@ describe('A13 — every table is covered', () => {
 
 describe('GET /me/export', () => {
   it('returns every entry (deleted ones too), the revision, the account and its providers', async () => {
-    const { a, keep, gone, edited } = await populated('a@example.com')
+    const { a, keep, gone, edited, asked } = await populated('a@example.com')
     const res = await call(a.token, '/me/export')
     expect(res.status).toBe(200)
     const out = (await res.json()) as {
       format: number; account: { id: string; email: string }; identities: { provider: string }[]
       entries: { id: string; body: string; deletedAt: string | null }[]; revisions: { id: string; body: string }[]; more: boolean
+      records: { recordKind: string; id: string; state: string }[]; recordRevisions: { recordKind: string; id: string; data: { answer: string } }[]
     }
     expect(out.format).toBe(1)
     expect(out.account).toMatchObject({ id: a.id, email: 'a@example.com' })
@@ -89,6 +101,9 @@ describe('GET /me/export', () => {
     expect(out.entries.find((e) => e.id === edited.id)?.body).toBe('second text')
     expect(out.revisions.map((r) => r.body)).toContain('first text')
     expect(out.more).toBe(false)
+    // Records ride the same export: an export that read only entries would leave the owner's answers out of their own copy.
+    expect(out.records).toMatchObject([{ recordKind: 'question', id: asked.id, state: 'dismissed' }])
+    expect(out.recordRevisions).toMatchObject([{ recordKind: 'question', id: asked.id, data: { answer: 'Answer by a@example.com' } }])
   })
 
   it('never carries session tokens or their hashes', async () => {

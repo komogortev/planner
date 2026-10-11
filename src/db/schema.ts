@@ -189,7 +189,13 @@ export interface OutboxRow {
   entityId: string
   op: 'upsert' | 'delete'
   baseVersion: number | null // serverVersion the edit was made against
-  payload: import('@/domain/entry').EntryInput
+  /** An entry's full input, or — when `recordKind` is set — a harness record's full wire form (`{ id, ...fields, deletedAt }`). */
+  payload: import('@/domain/entry').EntryInput | (Record<string, unknown> & { id: string })
+  /**
+   * Set for a harness / widget record (HW-HARNESS.md §5). Such a row's `entityId` is `${recordKind}/${id}`, never the bare id: an
+   * entryState has its entry's id, and the outbox is grouped and re-based by `entityId`. Absent = an entry, as before.
+   */
+  recordKind?: import('@/domain/records').RecordKind
   attempts: number
   lastError: string | null
   queuedAt: string

@@ -25,19 +25,19 @@ export type PushResult = {
 }
 
 type Row = Omit<Entry, 'serverVersion'> & { version: number }
-type Raw = {
+export type Raw = {
   id: string; body: string; created_at: string; occurred_at: string | null; category_id: string | null
   tags: string; origin: 'author'; updated_at: string; deleted_at: string | null; server_version: number
 }
 
-const COLS = 'id, body, created_at, occurred_at, category_id, tags, origin, updated_at, deleted_at, server_version'
+export const COLS = 'id, body, created_at, occurred_at, category_id, tags, origin, updated_at, deleted_at, server_version'
 
 const toRow = (r: Raw): Row => ({
   id: r.id, body: r.body, createdAt: r.created_at, occurredAt: r.occurred_at, categoryId: r.category_id,
   tags: JSON.parse(r.tags) as string[], origin: r.origin, updatedAt: r.updated_at, deletedAt: r.deleted_at, version: r.server_version,
 })
 
-const toEntry = (r: Raw): Entry => {
+export const toEntry = (r: Raw): Entry => {
   const { version, ...rest } = toRow(r)
   return { ...rest, serverVersion: version }
 }

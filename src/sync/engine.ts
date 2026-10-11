@@ -7,7 +7,9 @@
 // D-29 pull pages of 100 and capture never waits for them · D-50 a foreign account's data is never pushed.
 import type { PlannerDb } from '@/db'
 import type { OutboxRow } from '@/db/schema'
-import type { Entry, EntryInput } from '@/domain/entry'
+import type { Entry } from '@/domain/entry'
+import { cleanRecord, flatten, RECORD_KINDS, RECORD_TABLE, type RecordKind } from '@/domain/records'
+import { outboxKey, recordIdOf, recordTables } from '@/db/records'
 import type { CycleLock } from './lock'
 
 /** Measured limits (H1-S2-BACKEND.md, step 7): push ≤ 50 mutations and ≤ 100 KB, pull pages of 100. */
@@ -69,9 +71,21 @@ class Stop extends Error {
 
 type PushResult = { entityId: string; status: 'applied' | 'duplicate' | 'rejected' | 'retry'; serverVersion?: number; conflict?: boolean; error?: string }
 /** `head`: the account's newest version on the server (D-58). Absent from an older Worker. */
-type PullResponse = { changes: Entry[]; cursor: number; more: boolean; head?: number }
+type PullResponse = { changes: Entry[]; records?: RecordWire[]; cursor: number; more: boolean; head?: number }
+/** A record as the Worker sends it: `{ recordKind, id, ...fields, deletedAt, serverVersion }`. Absent from an older Worker. */
+type RecordWire = { recordKind: string; id: string; serverVersion: number } & Record<string, unknown>
 
-export type Group = { entityId: string; seqs: number[]; mutation: { entityId: string; op: 'upsert' | 'delete'; baseVersion: number | null; payload: EntryInput } }
+/**
+ * `entityId` is the OUTBOX key (a record's is `kind/id`, so it cannot meet an entry's); `id` is the bare id; the mutation sent
+ * carries the bare id and, for a record, its `recordKind` — an entry's mutation has no such key, exactly as before.
+ */
+export type Group = {
+  entityId: string
+  id: string
+  recordKind?: RecordKind
+  seqs: number[]
+  mutation: { entityId: string; op: 'upsert' | 'delete'; baseVersion: number | null; payload: OutboxRow['payload']; recordKind?: RecordKind }
+}
 
 /**
  * Pending outbox rows → one mutation per entity (H1-S2-BACKEND, "Client contract"): payloads are full entries, so the
@@ -88,10 +102,14 @@ export function coalesce(rows: OutboxRow[]): Group[] {
   return [...groups.values()].map((g) => {
     const first = g[0]!
     const last = g[g.length - 1]!
+    const kind = first.recordKind
+    const id = kind ? recordIdOf(kind, first.entityId) : first.entityId
     return {
       entityId: first.entityId,
+      id,
+      ...(kind ? { recordKind: kind } : {}),
       seqs: g.map((r) => r.seq!),
-      mutation: { entityId: first.entityId, op: last.op, baseVersion: first.baseVersion, payload: last.payload },
+      mutation: { entityId: id, op: last.op, baseVersion: first.baseVersion, payload: last.payload, ...(kind ? { recordKind: kind } : {}) },
     }
   })
 }
@@ -344,12 +362,18 @@ export class SyncEngine {
   /** The server has this change: drop its outbox rows, record the version, and re-base what was queued meanwhile. */
   private async acknowledge(g: Group, serverVersion: number | undefined, gen: number): Promise<void> {
     const { db } = this.d
-    await db.transaction('rw', db.entries, db.outbox, async () => {
+    await db.transaction('rw', [db.entries, db.outbox, ...recordTables(db)], async () => {
       this.live(gen) // a wiped device must not get this account version stamped back onto it
       await db.outbox.bulkDelete(g.seqs)
       if (typeof serverVersion !== 'number') return
-      const entry = await db.entries.get(g.entityId)
-      if (entry && (entry.serverVersion === null || entry.serverVersion < serverVersion)) await db.entries.update(g.entityId, { serverVersion })
+      if (g.recordKind) {
+        const table = db.table(RECORD_TABLE[g.recordKind])
+        const row = await table.get(g.id)
+        if (row && (row.serverVersion === null || row.serverVersion < serverVersion)) await table.update(g.id, { serverVersion })
+      } else {
+        const entry = await db.entries.get(g.entityId)
+        if (entry && (entry.serverVersion === null || entry.serverVersion < serverVersion)) await db.entries.update(g.entityId, { serverVersion })
+      }
       // An edit queued while this push was in flight was made on top of THIS version, not the older one it recorded.
       await db.outbox.where('entityId').equals(g.entityId).modify((row) => { row.baseVersion = serverVersion })
     })
@@ -367,6 +391,7 @@ export class SyncEngine {
     let rewound = known?.reconcile === true
     if (rewound) cursor = 0
     const seen = new Set<string>()
+    const seenRecords = new Set<string>() // `kind/id`: the sweep must account for records as well as notes
     this.set({ initialPull: cursor === 0 })
     for (;;) {
       const page = (await this.call(`/sync/pull?since=${cursor}&limit=${PULL_PAGE}`)) as PullResponse
@@ -382,9 +407,13 @@ export class SyncEngine {
         this.set({ initialPull: true })
         continue
       }
-      if (rewound) for (const c of page.changes) if (typeof c?.id === 'string') seen.add(c.id)
+      const incoming = Array.isArray(page.records) ? page.records : []
+      if (rewound) {
+        for (const c of page.changes) if (typeof c?.id === 'string') seen.add(c.id)
+        for (const r of incoming) if (typeof r?.id === 'string' && typeof r.recordKind === 'string') seenRecords.add(`${r.recordKind}/${r.id}`)
+      }
       const next = Math.max(cursor, page.cursor)
-      await db.transaction('rw', db.entries, db.outbox, db.syncMeta, async () => {
+      await db.transaction('rw', [db.entries, db.outbox, db.syncMeta, ...recordTables(db)], async () => {
         this.live(gen) // a device cleared while the page was in flight must not receive it
         // A change to an entity with a queued local edit is not applied: the local edit wins locally until it is
         // pushed, and the server decides then (§6.2). The cursor still moves past it.
@@ -395,11 +424,23 @@ export class SyncEngine {
           id: c.id, body: c.body, createdAt: c.createdAt, occurredAt: c.occurredAt ?? null, categoryId: c.categoryId ?? null,
           tags: Array.isArray(c.tags) ? c.tags : [], origin: 'author', updatedAt: c.updatedAt, deletedAt: c.deletedAt ?? null, serverVersion: c.serverVersion,
         })))
+        // Records: the same rule as notes (a queued local edit wins until it is pushed), through the shared validator so a
+        // malformed row from the server is skipped, never stored.
+        for (const kind of RECORD_KINDS) {
+          const rows = []
+          for (const r of incoming) {
+            if (r?.recordKind !== kind || typeof r.id !== 'string' || queued.has(outboxKey(kind, r.id))) continue
+            const c = cleanRecord(kind, r)
+            if (c.ok) rows.push({ ...flatten(c.value), serverVersion: typeof r.serverVersion === 'number' ? r.serverVersion : null })
+            else console.warn(`sync: a ${kind} record from the server was not stored (${c.errors.join('; ')})`) // dropped, cursor moves on: leave a trace
+          }
+          if (rows.length > 0) await db.table(RECORD_TABLE[kind]).bulkPut(rows)
+        }
         await db.syncMeta.put({ userId, cursor: next, lastPushAt: known?.lastPushAt ?? null, lastPullAt: new Date(this.now()).toISOString(), ...(rewound ? { reconcile: true } : {}) })
       })
-      this.set({ pulled: this.state.pulled + page.changes.length })
+      this.set({ pulled: this.state.pulled + page.changes.length + incoming.length })
       if (!page.more) {
-        if (rewound) await this.requeueLost(userId, seen, gen)
+        if (rewound) await this.requeueLost(userId, seen, seenRecords, gen)
         return
       }
       if (next <= cursor) throw new Error('pull: the cursor did not advance')
@@ -428,10 +469,10 @@ export class SyncEngine {
    * one the server LOST. Its acknowledged version belongs to a history that no longer exists, so it goes back into the outbox
    * as a new note (base null; a deleted one as a delete) and is uploaded again. Clears the marker in the same transaction.
    */
-  private async requeueLost(userId: string, seen: Set<string>, gen: number): Promise<void> {
+  private async requeueLost(userId: string, seen: Set<string>, seenRecords: Set<string>, gen: number): Promise<void> {
     const { db } = this.d
     let requeued = 0
-    await db.transaction('rw', db.entries, db.outbox, db.syncMeta, async () => {
+    await db.transaction('rw', [db.entries, db.outbox, db.syncMeta, ...recordTables(db)], async () => {
       this.live(gen)
       const waiting = new Set((await db.outbox.toArray()).map((r) => r.entityId))
       this.live(gen) // the read waited for any clear queued ahead of this transaction; a reset it made must win
@@ -446,6 +487,21 @@ export class SyncEngine {
         })
         await db.entries.update(e.id, { serverVersion: null })
         requeued++
+      }
+      // The same for every record the server did not return: its acknowledged version belongs to a history that is gone.
+      for (const kind of RECORD_KINDS) {
+        const table = db.table(RECORD_TABLE[kind])
+        const ids = (await table.toCollection().primaryKeys()) as string[]
+        const rows = (await table.bulkGet(ids.filter((id) => !seenRecords.has(outboxKey(kind, id)) && !waiting.has(outboxKey(kind, id))))).filter(Boolean)
+        for (const row of rows) {
+          const { serverVersion: _version, ...payload } = row
+          await db.outbox.add({
+            entityId: outboxKey(kind, row.id), recordKind: kind, op: row.deletedAt ? 'delete' : 'upsert', baseVersion: null, payload, attempts: 0, lastError: null,
+            queuedAt: new Date(this.now()).toISOString(),
+          })
+          await table.update(row.id, { serverVersion: null })
+          requeued++
+        }
       }
       await db.syncMeta.update(userId, { reconcile: false })
     })
@@ -465,20 +521,23 @@ export class SyncEngine {
   async discardRejected(seqs?: number[]): Promise<number> {
     const { db } = this.d
     const rows = (await db.outbox.toArray()).filter((r) => r.rejectedAt && (!seqs || seqs.includes(r.seq!)))
-    await db.transaction('rw', db.entries, db.outbox, db.syncMeta, async () => {
+    await db.transaction('rw', [db.entries, db.outbox, db.syncMeta, ...recordTables(db)], async () => {
       await db.outbox.bulkDelete(rows.map((r) => r.seq!))
       let refetch = false
       for (const r of rows) {
         const stillQueued = await db.outbox.where('entityId').equals(r.entityId).count()
         if (stillQueued > 0) continue
-        const entry = await db.entries.get(r.entityId)
+        // A record is looked up in its own table under its bare id; a note as before.
+        const table = r.recordKind ? db.table(RECORD_TABLE[r.recordKind]) : db.entries
+        const id = r.recordKind ? recordIdOf(r.recordKind, r.entityId) : r.entityId
+        const entry = await table.get(id)
         if (!entry) continue
         if (r.baseVersion === null && entry.serverVersion === null) {
-          await db.entries.delete(r.entityId) // a note the server never had: nowhere else it lives
+          await table.delete(id) // a note the server never had: nowhere else it lives
         } else if (r.baseVersion !== null) {
           // A discarded EDIT: the local copy holds the refused text, and a pull skipped the server version while the row
           // existed. Drop the local copy and pull again from the start so the server version comes back (finding D).
-          await db.entries.delete(r.entityId)
+          await table.delete(id)
           refetch = true
         }
       }

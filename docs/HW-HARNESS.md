@@ -61,7 +61,7 @@ A **prompt widget** holds a lens (D-32). *Daily task journal* ships as the first
 
 ## 5. Data (Dexie v5 · D1 `0008`)
 
-All rows keyed `(user_id, id)`, carry `serverVersion` and soft delete, and travel through the **existing outbox and per-account cursor** (the cursor is `users.version_seq`, already shared by every table, so one cursor covers all kinds).
+**Server (D-64): one `records` table** keyed `(user_id, kind, id)`, the kind's own fields as one JSON text in a fixed key order (`record_revisions` keeps what a stale edit replaced). **Device: one Dexie table per kind.** Every row carries `serverVersion` and soft delete and travels through the **existing outbox and per-account cursor** (the cursor is `users.version_seq`, already shared by every table, so one cursor covers all kinds). A mutation names its kind in `recordKind`; without it, it is a note, exactly as before. The column list below describes the fields each kind holds, wherever they are stored. Validation is one rule set shared by app and Worker (`src/domain/records.ts`).
 
 | Table | Columns (beyond the common ones) |
 |---|---|
@@ -102,7 +102,8 @@ The prompt is built only from the signed-in account's on-device notes. The run h
 |---|---|---|
 | **S0** | This doc; D-60…D-63 and the VOCABULARY rows recorded | owner reads §9 |
 | **S1 Domain** ✅ (CodeReview round 1 fixed: 8 findings, 7 confirmed and fixed, 1 low-impact accepted with a test) | `src/domain/{uuid5,harness,journal}.ts`: selection, compose, `parseHarnessOutput`, `applyHarness`, the owner's transitions, journal slice + compose + `validateReport`. Pure, no UI, no sync | 85 tests incl. replay ×2 → nothing written, two devices → same ids, foreign id / 4th question / repeated question / past date / foreign or invented citation dropped, acceptance (a)(b)(c) end to end on synthetic notes; each of 32 guards removed in turn turns the suite red |
-| **S2 Schema + sync** | Dexie v5, D1 `0008`, kind-aware push/pull | per-kind replay + isolation tests; all pre-existing tests unchanged and green; smoke on prod |
+| **S2 Schema + sync** ✅ (CodeReview: 0 critical, 4 improvements, all handled or gated below) | Dexie v5, D1 `0008`, kind-aware push/pull, merged pull under one cursor, account export/delete/clear/copy cover records, `writeRecords` | the 316/147 pre-existing tests unchanged and green (now 453 app / 169 Worker); 37 of 38 guards removed in turn turn the suite red (16 Worker, 22 client; the 38th is redundant with the validator); replay, isolation, same-id-two-kinds, stale-edit revision, CAS race, rewind sweep, rejected + discard, v4→v5 upgrade proven. **Not run: production smoke (the Worker is not deployed).** |
+| **S3 gates (from the S2 review)** | **Step 0: deploy the S2 Worker (and `0008`) BEFORE any client that writes records is merged** — Pages builds from `main` on its own, the Worker does not, and an older Worker rejects every record push, which the client then keeps as refused until the owner presses Retry. Records are never deleted and re-created under the same id (a deleted id stays deleted on the server): use `state`. Surface the count of server records a device could not store (today a console warning only). A rejected record's Discard deletes the owner's text: the label shows it, and the saved copy should hold discarded payloads. Pull pages of 100 can carry up to 64 KB per record: watch the size once reports exist | — |
 | **S3 UI** | Run harness (copy → paste box → preview of what will be stored), questions on the note, done / carry-to-date taps, Widgets page create + activate, Dashboard shows the journal | DEVICE-CHECKS rows written, then run on the phone |
 | **S4 Use** | The exit week, now measuring a loop (H1 §1 acceptance plus §1 above) | §1 true on three days |
 
