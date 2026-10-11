@@ -19,21 +19,65 @@ export type ReturnResult =
   | { ok: true; token: string; provider: Provider }
   | { ok: false; reason: string }
 
+const PROVIDER_NAME = { github: 'GitHub', google: 'Google' } as const
+
+/** A short list from a comma-separated fragment parameter: a few entries, none long. Rendered as text, never as markup. */
+function listParam(params: URLSearchParams, key: string): string {
+  return (params.get(key) ?? '').split(',').map((s) => s.trim()).filter((s) => s !== '' && s.length <= 120).slice(0, 3).join(', ')
+}
+
 /**
- * Decide whether a `#token=…&nonce=…` fragment is the answer to a sign-in this app started.
- * Returns null when the fragment carries no token (not a sign-in return at all).
+ * The wording of a refusal the Worker sent back (D-57). The code is one of a fixed list — anything else reads as a
+ * generic refusal; the parameters are `p` (the provider) and the addresses it reported, which the person needs in order
+ * to ask for an invite for the right one. The Worker's own text is never shown.
+ */
+export function refusalMessage(code: string | null, params: URLSearchParams, fallback: Provider): string {
+  const asked = params.get('p')
+  const who = PROVIDER_NAME[asked === 'github' || asked === 'google' ? asked : fallback]
+  switch (code) {
+    case 'expired': return 'The sign-in took too long or was interrupted — start again.'
+    case 'cancelled': return 'The sign-in was cancelled — start again when you are ready.'
+    case 'provider': return `${who} would not complete the sign-in — try again.`
+    case 'no-verified-email': return `${who} gave no verified email address — verify one with ${who}, or sign in with the other provider.`
+    case 'disabled': return 'This account has been disabled.'
+    case 'server': return 'Something went wrong while signing in — try again in a moment.'
+    case 'not-invited': {
+      const unvouched = listParam(params, 'unvouched')
+      if (unvouched) return `${who} cannot vouch for ${unvouched} — sign in with GitHub, or a Gmail or Google Workspace account.`
+      const emails = listParam(params, 'emails')
+      return emails ? `Not invited. ${who} reported ${emails} — ask for an invite for one of these addresses.` : 'Not invited — ask for an invite.'
+    }
+    default: return 'The sign-in was refused — try again.'
+  }
+}
+
+/**
+ * Decide whether a `#token=…&nonce=…` fragment is the answer to a sign-in this app started — or, since the Worker sends a
+ * refusal back the same way, a `#error=<code>&…` one (D-57).
+ * Returns null when the fragment is not a sign-in return at all. A refusal nobody asked for (no sign-in pending) is ignored
+ * quietly: nothing was attempted, so there is nothing to report. A refusal carries the nonce when the Worker could read it
+ * from the flow's cookie; when it could not (an expired flow) there is none, and the pending sign-in is the only check.
  */
 export function checkReturn(hash: string, pending: Pending | null, now: number): ReturnResult | null {
   const params = new URLSearchParams(hash.replace(/^#/, ''))
   const token = params.get('token')
-  if (!token) return null
+  const error = params.get('error')
+  if (!token && !error) return null
   // Shape-checked: a stored `nonce: null` would match a link with no nonce, and a NaN `at` would skip the window.
   if (!pending || typeof pending.nonce !== 'string' || !Number.isFinite(pending.at)) {
-    return { ok: false, reason: 'no sign-in was started from this app — token ignored' }
+    return token ? { ok: false, reason: 'no sign-in was started from this app — token ignored' } : null
   }
   if (now - pending.at > PENDING_TTL_MS) return { ok: false, reason: 'sign-in took over 10 minutes — start again' }
-  if (params.get('nonce') !== pending.nonce) return { ok: false, reason: 'nonce mismatch — token ignored' }
-  return { ok: true, token, provider: pending.provider }
+  const nonce = params.get('nonce')
+  if (token) {
+    if (nonce !== pending.nonce) return { ok: false, reason: 'nonce mismatch — token ignored' }
+    return { ok: true, token, provider: pending.provider }
+  }
+  // Only an expired flow has no nonce to carry (the Worker could not read the flow's cookie). Any other refusal without one is
+  // just a link: its text is not shown.
+  if (nonce === null && error !== 'expired') return null
+  if (nonce !== null && nonce !== pending.nonce) return { ok: false, reason: 'nonce mismatch — refusal ignored' }
+  return { ok: false, reason: refusalMessage(error, params, pending.provider) }
 }
 
 function randomNonce(): string {

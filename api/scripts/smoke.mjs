@@ -51,6 +51,11 @@ const checks = [
     const other = `${ORIGIN}/someone-else/`
     return (await fetch(`${API}/auth/start/github?return_to=${enc(other)}&nonce=${NONCE}`, { redirect: 'manual' })).status === 400
   }],
+  ['sign-in callback, no flow → 302 back to the app with #error=expired (D-57)', async () => {
+    const r = await fetch(`${API}/auth/callback/github?code=x&state=${'a'.repeat(43)}`, { redirect: 'manual' })
+    const to = r.headers.get('location') ?? ''
+    return r.status === 302 && to.startsWith(APP) && to.includes('#error=expired')
+  }],
   ['CORS admits the app origin', async () => {
     const r = await fetch(`${API}/health`, { headers: { Origin: ORIGIN } })
     return r.headers.get('access-control-allow-origin') === ORIGIN

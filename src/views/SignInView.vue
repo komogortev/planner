@@ -25,7 +25,9 @@ const open = ref(false)
 
 // Only a rejection from the attempt that just brought the user back here (not a stale one from days ago).
 const result = lastResult()
-const rejected = result && result.text.startsWith('rejected') && Date.now() - result.at < 5 * 60_000 ? result.text : null
+// The text is either a refusal the Worker sent back, worded by the app (D-57), or a check the app made itself; it is shown
+// without the "rejected: " the log line carries. Interpolated, so whatever it quotes (an email address) is text, not markup.
+const rejected = result && result.text.startsWith('rejected') && Date.now() - result.at < 5 * 60_000 ? result.text.replace(/^rejected: ?/, '') : null
 
 function onKey(e: KeyboardEvent): void {
   if (e.key === 'Escape') open.value = false
