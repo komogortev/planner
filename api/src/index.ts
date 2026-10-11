@@ -3,6 +3,7 @@ import { cors } from 'hono/cors'
 import { meApi, signedOutBody } from './account'
 import { auth, sessionUser } from './auth'
 import { appOrigins, appUrls } from './config'
+import { logApi } from './log'
 import { byIp } from './ratelimit'
 import { entriesApi, sync } from './sync'
 import { envIcon } from '../../src/env/appEnv'
@@ -52,6 +53,7 @@ app.route('/auth', auth)
 app.route('/sync', sync)
 app.route('/entries', entriesApi)
 app.route('/me', meApi)
+app.route('/log', logApi)
 
 app.get('/me', async (c) => {
   const user = await sessionUser(c)

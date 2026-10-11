@@ -2,6 +2,7 @@
 // belong to being signed in. No Vue here (ARCHITECTURE §3) — `useSyncState` in composables/ adapts it.
 import { db } from '@/db'
 import { storedToken, API_URL } from '@/auth/signIn'
+import { reportError } from '@/log/report'
 import { SyncEngine, type SyncState } from './engine'
 
 export const syncEngine = new SyncEngine({ db, fetch: (...a) => fetch(...a), apiUrl: API_URL, token: storedToken, online: () => navigator.onLine })
@@ -45,7 +46,13 @@ function askPersist(s: SyncState): void {
 export function startSync(): void {
   if (started) return
   started = true
-  const unsubscribe = syncEngine.subscribe((s) => { scheduleRetry(s); askPersist(s) })
+  let reportedStuck = false
+  const unsubscribe = syncEngine.subscribe((s) => {
+    scheduleRetry(s); askPersist(s)
+    // A sync that keeps failing is reported once per episode, by kind only (no message: it could quote a note).
+    if (s.failures >= 3 && !reportedStuck) { reportedStuck = true; void reportError('sync-stuck') }
+    if (s.failures === 0) reportedStuck = false
+  })
   const onVisible = () => { if (visible()) syncNow() }
   const onOnline = () => syncNow(true) // back online: the wait is over
   const onOffline = () => syncNow() // the cycle notices and says so
