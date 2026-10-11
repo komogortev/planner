@@ -94,3 +94,13 @@ minute, per-address rate limit, newest 500 kept. Read it:
 ```
 pnpm --dir api exec wrangler d1 execute planner --remote --command "SELECT datetime(at/1000,'unixepoch') AS utc, kind, route, build FROM error_log ORDER BY id DESC LIMIT 50"
 ```
+
+## Cloudflare Pages project `koplanner` (the app's host)
+
+Settings that matter (dashboard → Workers & Pages → `koplanner` → Settings → Build): command `pnpm build`, output `dist`,
+`NODE_VERSION=20`, `PNPM_VERSION=10`. **Branch control: production branch `main`, "Enable automatic production branch
+deployments" ON, preview branch NONE** (owner, 2026-10-11) — so PRs get no `*.koplanner.pages.dev` URL and no Cloudflare
+check; the required check is CI (`check`) only. Turning the production box off silently stops `main` from deploying: if the app
+is stale after a merge, look there first (`version.json` on the app vs `git rev-parse --short origin/main`; smoke checks it).
+A Cloudflare-only build problem (the kind a branch preview used to catch, e.g. a `404.html` disabling the SPA fallback) now
+first shows on `main`: after a build-related change, run smoke against production before calling it done.
