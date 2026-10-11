@@ -27,7 +27,7 @@ Decided at runtime from the host (`src/env/appEnv.ts`), so the exact build that 
 | Everything offline | `pnpm check` | typecheck (app + api) · app unit tests · Worker tests in workerd with a fresh D1 per test |
 | App tests only (watch) | `pnpm test` | `src/**` |
 | Worker tests only | `pnpm test:api` | `api/test/**` |
-| Smoke the running local stack | `pnpm smoke:local` | both launch configs running; same 12 checks as production |
+| Smoke the running local stack | `pnpm smoke:local` | both launch configs running; same 13 checks as production |
 
 **CI:** `.github/workflows/ci.yml` runs `pnpm check` on every PR and every push to `main` — the PR shows a green or red
 **CI / check**. Red is a stop: never merge over it.
@@ -40,7 +40,8 @@ Local sign-in needs an invite in the **local** D1 (the `.wrangler/` state):
 One session, one worktree off `origin/main` (`git worktree add E:/Projects/apps/planner-wt-<tag> origin/main`, a short
 path). Never `git switch` in the shared checkout. After creating one, run `pnpm install --frozen-lockfile` and
 `pnpm --dir api install --frozen-lockfile`. Sign-in works only from `http://localhost:5176/planner/` (the API's
-allow-list); other ports can test UI with a planted token but cannot sign in. A worktree cannot be deleted while
+allow-list); other ports can test UI with a planted token but cannot sign in. The Browser pane allows five dev servers per
+folder: stop the ones whose branch has merged. A worktree cannot be deleted while
 `planner-api` runs (a hardlinked `workerd.exe`).
 
 ## Production
@@ -55,7 +56,7 @@ allow-list); other ports can test UI with a planted token but cannot sign in. A 
 
 | Check | Command |
 |---|---|
-| Smoke production (read-only, 12 checks incl. refusals) | `pnpm smoke` |
+| Smoke production (read-only, 13 checks incl. refusals) | `pnpm smoke` |
 | Live Worker logs | `pnpm --dir api exec wrangler tail` |
 | Invites in production | `node api/scripts/invite.mjs list --remote` (`create` / `revoke` likewise) |
 
@@ -69,7 +70,7 @@ from this machine, so a guard enforces the same rule there.
    uploads the Worker tagged with the commit (`wrangler deployments list` shows `abc1234 <subject>`). It **refuses**
    on uncommitted or untracked files, a branch other than `main`, or `main` differing from `origin/main`.
    Migrations alone: `pnpm --dir api run db:migrate:remote` (same guard).
-3. `pnpm smoke`
+3. `pnpm smoke` — a minute after the Worker deploy, not at once: on 2026-10-11 the new check failed seconds after `deploy` and passed about a minute later (the new version taking a moment to reach the edge). Run it again before calling it red.
 
 Between steps 1 and 2 the new app runs against the old Worker for a minute or two. That is fine while every Worker
 change is backwards compatible with the app before it — keep it so (add, don't rename; the app tolerates a missing
@@ -78,6 +79,10 @@ D1 Time Travel (point-in-time restore of the whole database), so migrations only
 
 Secrets: production via `pnpm --dir api exec wrangler secret bulk <file>` (then delete the file); local in `api/.env`,
 which only the owner edits.
+
+## After a D1 restore (Time Travel) or a hand edit of the version counter
+
+The clients notice (D-58): a pull whose `head` is below the device's cursor — or a push given a version at or below it — starts a sweep from 0, and the notes the server lost are uploaded again from the devices that still hold them. A restore needs nothing else from you. Two things do not heal on their own: if you edit `users.version_seq` by hand, set it to **at least `max(server_version)` of that account** (below it, every device sweeps again on every poll); and edits or deletes that were acknowledged inside the lost window are not reconciled (notes are create-only today; re-entry: before an edit or delete UI ships).
 
 ## Error log (S4, D-24)
 
