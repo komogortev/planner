@@ -27,5 +27,8 @@ until it does (a new version loads on the second open), or tap Reload on the upd
 | 15 | Two windows | With the installed app AND a Chrome tab open on the same account: type in one, capture in the other, then sign out in one | The other box shows what was typed; a capture empties the other box; sign-out sends the other window to the sign-in screen; Settings → Sync stays "Up to date" in both (D-56, D-59) | not run |
 | 16 | A refused sign-in | Sign in with a GitHub or Google account that has no invite | The sign-in screen says "Not invited" and names the address the provider reported; you are never left on a text page (D-57) | not run |
 | 17 | Clear this device | (Needs an account deleted from another device, or a throwaway account.) Banner → Clear this device | The question counts the notes; a file downloads and opens from Files; then the device is cleared (D-55) | not run |
+| 18 | Evening pass | In the evening, with two of today's notes open and one carried from an earlier day: open the pass, tap done on one, carry one to tomorrow, drop one | All three listed before the taps; after them none is open today; tomorrow's journal shows the carried one only; the dropped one never returns (D-65, D-67) | not run |
+| 19 | Untapped note resurfaces | Leave one of today's notes open with no tap; open the pass the next evening | That note is listed in the next evening's pass (D-65) | not run |
+| 20 | Lead-time question | Capture a note with a due date three days ahead in its text; run the harness | The preview shows a follow-up to the due date and one question asking which earlier day; answering moves `followUpOn` to that day (D-66) | not run |
 
 An iPhone round trip of the sign-in (H1-ENTRIES Q2) is separate and deferred until an invitee uses one.
