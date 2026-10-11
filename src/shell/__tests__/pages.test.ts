@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { PAGES, backdropShift, backdropWidth, dragOffset, pageIndex, pullCss, pullTransform, settle } from '../pages'
+import {
+  LAYER_RATE,
+  PAGES,
+  PARALLAX,
+  backdropShift,
+  backdropWidth,
+  dragOffset,
+  layerShift,
+  layerShiftCss,
+  pageIndex,
+  pullCss,
+  pullTransform,
+  settle,
+} from '../pages'
 
 const LAST = PAGES.length - 1
 
@@ -71,7 +84,6 @@ describe('pullTransform (cloth being pulled)', () => {
   it('is the identity at rest, for both layers', () => {
     for (const layer of ['folds', 'accents'] as const) {
       const t = pullTransform(0, layer)
-      expect(t.shift).toBeCloseTo(0)
       expect(t.scaleX).toBe(1)
       expect(t.scaleY).toBe(1)
       expect(t.skewDeg).toBeCloseTo(0)
@@ -82,7 +94,6 @@ describe('pullTransform (cloth being pulled)', () => {
   it('mirrors left/right, stretches while squeezing, and saturates at full strength', () => {
     const l = pullTransform(-0.3)
     const r = pullTransform(0.3)
-    expect(l.shift).toBeCloseTo(-r.shift)
     expect(l.skewDeg).toBeCloseTo(-r.skewDeg)
     expect(l.rotateDeg).toBeCloseTo(-r.rotateDeg)
     expect(l.scaleX).toBeCloseTo(r.scaleX)
@@ -94,14 +105,54 @@ describe('pullTransform (cloth being pulled)', () => {
     expect(full.scaleX).toBeCloseTo(1.2)
     expect(full.scaleY).toBeCloseTo(0.93)
   })
-  it('the accent folds move further and twist the other way (shape changes, not just position)', () => {
+  it('the accent folds twist the other way (the shape changes relative to the folds)', () => {
     const f = pullTransform(0.4, 'folds')
     const a = pullTransform(0.4, 'accents')
-    expect(Math.abs(a.shift)).toBeGreaterThan(Math.abs(f.shift))
     expect(Math.sign(a.rotateDeg)).toBe(-Math.sign(f.rotateDeg))
   })
-  it('the CSS string carries every part, and the rest state is neutral', () => {
+  it('the CSS string carries every shape part and no position (that is the separate translate)', () => {
     const css = pullCss(pullTransform(0.25))
-    for (const part of ['translate3d', 'perspective', 'rotateY', 'rotate(', 'skewX', 'scale(']) expect(css).toContain(part)
+    for (const part of ['perspective', 'rotateY', 'rotate(', 'skewX', 'scale(']) expect(css).toContain(part)
+    expect(css).not.toContain('translate')
+  })
+})
+
+describe('layerShift (the cloth keeps where the swipe ended)', () => {
+  it('a completed swipe ends exactly where the next page rests: nothing to scroll back to', () => {
+    for (const layer of ['folds', 'accents'] as const) {
+      for (let i = 0; i < LAST; i++) {
+        expect(layerShift(i, -1, layer)).toBeCloseTo(layerShift(i + 1, 0, layer)) // forward
+        expect(layerShift(i + 1, 1, layer)).toBeCloseTo(layerShift(i, 0, layer)) // and back
+      }
+    }
+  })
+  it('moves with the finger, the same way as the pages, and the accents move further', () => {
+    expect(layerShift(1, -0.3)).toBeLessThan(layerShift(1, 0)) // dragging left → the layer goes left
+    expect(layerShift(1, 0.3)).toBeGreaterThan(layerShift(1, 0))
+    const step = (l: 'folds' | 'accents') => layerShift(0, 0, l) - layerShift(1, 0, l)
+    expect(step('accents')).toBeGreaterThan(step('folds'))
+    expect(step('folds')).toBeCloseTo(LAYER_RATE.folds)
+  })
+  it('a swipe that springs back returns to the same rest position (negative control: it is a function of the page)', () => {
+    expect(layerShift(2, 0)).toBe(layerShift(2, -0)) // no hidden state
+    expect(layerShift(2, -0.1)).not.toBeCloseTo(layerShift(2, 0)) // the drag does move it
+  })
+  it('is symmetric about the middle of the pager', () => {
+    expect(layerShift(0, 0)).toBeCloseTo(-layerShift(LAST, 0))
+  })
+  it('never lets a layer edge into the screen, at any page, leaving room for the 6° shear (~0.1 of a page)', () => {
+    const bw = backdropWidth()
+    const spare = 0.16 * bw // `.t-folds` / `.t-accents`: inset -16% of the backdrop's width
+    for (const layer of ['folds', 'accents'] as const) {
+      for (let i = 0; i < PAGES.length; i++) {
+        const t = layerShift(i, 0, layer)
+        const left = i * PARALLAX // the screen's left edge, in backdrop coordinates
+        const room = Math.min(left - (-spare + t), bw + spare + t - (left + 1))
+        expect(room).toBeGreaterThan(0.1)
+      }
+    }
+  })
+  it('the CSS is a translate in pager widths', () => {
+    expect(layerShiftCss(-0.25)).toBe('-25cqw 0')
   })
 })
