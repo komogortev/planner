@@ -38,6 +38,9 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build
+        # The old address becomes a "moved" notice (docs/ORIGIN-MOVE.md phase 4); the app itself builds on Cloudflare Pages.
+        env:
+          VITE_MOVED_TO: https://koplanner.pages.dev/
         run: pnpm build
 
       - name: Configure Pages
