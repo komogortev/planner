@@ -3,16 +3,20 @@
 // is in neither this list nor ACCOUNT_EXEMPT, so a new per-account table cannot ship without export and delete cover.
 import { Hono } from 'hono'
 import { authenticate, sha256, type AuthedSession } from './auth'
-import { PULL_MAX, pullChanges, revisionsFor } from './entries'
+import { PULL_MAX, revisionsFor } from './entries'
+import { pullAll, recordRevisionsFor } from './records'
 import type { Env } from './index'
 
 /**
  * Children first, `users` last (foreign keys). `delete` uses the numbered parameter ?1 = the account id. `exported`
  * says where the table's content reaches the export (sessions never do: they hold only token hashes).
  */
-export const ACCOUNT_TABLES: readonly { table: string; delete: string; exported: 'entries' | 'revisions' | 'account' | 'identities' | 'no' }[] = [
+export const ACCOUNT_TABLES: readonly { table: string; delete: string; exported: 'entries' | 'revisions' | 'records' | 'recordRevisions' | 'account' | 'identities' | 'no' }[] = [
   { table: 'entry_revisions', delete: 'DELETE FROM entry_revisions WHERE user_id = ?1', exported: 'revisions' },
   { table: 'entries', delete: 'DELETE FROM entries WHERE user_id = ?1', exported: 'entries' },
+  // The harness and widget records (0008): the owner's answers and instructions are theirs, so they export and delete too.
+  { table: 'record_revisions', delete: 'DELETE FROM record_revisions WHERE user_id = ?1', exported: 'recordRevisions' },
+  { table: 'records', delete: 'DELETE FROM records WHERE user_id = ?1', exported: 'records' },
   { table: 'sessions', delete: 'DELETE FROM sessions WHERE user_id = ?1', exported: 'no' },
   { table: 'identities', delete: 'DELETE FROM identities WHERE user_id = ?1', exported: 'identities' },
   // The invite is keyed by the person's email, so it goes with the account (re-inviting is a new row).
@@ -47,8 +51,12 @@ export const EXPORT_FORMAT = 1
  * carries the account itself. Deleted entries are included — the export is everything the server holds for the person.
  */
 export async function exportPage(db: D1Database, s: AuthedSession, since: number, limit: number) {
-  const page = await pullChanges(db, s.id, since, limit)
+  // `pullAll`, not the entry-only pull: records ride the same pages and the same cursor, so an export that read only entries
+  // would silently leave every answer, link and report out of the person's copy.
+  const page = await pullAll(db, s.id, since, limit)
+  const records = page.records ?? []
   const revisions = await revisionsFor(db, s.id, page.changes.map((e) => e.id))
+  const recordRevisions = await recordRevisionsFor(db, s.id, records.map((r) => ({ kind: r.recordKind, id: r.id })))
   const first = since === 0
   const account = first
     ? await db.prepare('SELECT id, email, name, created_at AS createdAt FROM users WHERE id = ?').bind(s.id).first()
@@ -56,7 +64,7 @@ export async function exportPage(db: D1Database, s: AuthedSession, since: number
   const identities = first
     ? (await db.prepare('SELECT provider FROM identities WHERE user_id = ? ORDER BY provider').bind(s.id).all<{ provider: string }>()).results
     : undefined
-  return { format: EXPORT_FORMAT, exportedAt: Date.now(), ...(first ? { account, identities } : {}), entries: page.changes, revisions, cursor: page.cursor, more: page.more }
+  return { format: EXPORT_FORMAT, exportedAt: Date.now(), ...(first ? { account, identities } : {}), entries: page.changes, revisions, records, recordRevisions, cursor: page.cursor, more: page.more }
 }
 
 /** Deletes every row of the account in one batch, after remembering its session tokens so its devices can be told. */

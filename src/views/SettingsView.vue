@@ -73,6 +73,13 @@ async function signOut(): Promise<void> {
 const sync = useSyncState()
 const unsyncedNow = useLiveQuery(() => db.outbox.count(), 0)
 const rejected = useLiveQuery(() => db.outbox.toArray().then((rows) => rows.filter((r) => r.rejectedAt)), [] as OutboxRow[])
+/** What a refused row is called in the list: the text a Discard would delete, prefixed by its kind for a harness record. */
+const rejectedLabel = (r: OutboxRow): string => {
+  const p = r.payload as Record<string, unknown>
+  // Discarding deletes the text, so the row shows the text it would delete: a note's body, else an answer, a question, a name.
+  const text = [p.body, p.answer, p.text, p.name].find((v): v is string => typeof v === 'string' && v !== '')
+  return r.recordKind ? `${r.recordKind}: ${(text ?? '').slice(0, 80)}` : (text ?? '').slice(0, 80)
+}
 const usage = ref<StorageUsage | null>(null)
 const phaseText = computed(() => {
   switch (sync.value.phase) {
@@ -442,7 +449,7 @@ async function doDisconnect(): Promise<void> {
         <ul class="text-sm space-y-2">
           <li v-for="r in rejected" :key="r.seq" class="flex items-start gap-2" data-test="rejected-row">
             <div class="flex-1 min-w-0">
-              <div class="truncate">{{ r.payload.body.slice(0, 80) }}</div>
+              <div class="truncate">{{ rejectedLabel(r) }}</div>
               <div class="text-xs text-amber-300">{{ r.lastError }}</div>
             </div>
             <button class="btn-ghost" data-test="rejected-discard" @click="syncEngine.discardRejected([r.seq!])">Discard</button>

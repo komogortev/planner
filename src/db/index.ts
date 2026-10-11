@@ -12,6 +12,9 @@ import type {
   SyncMeta,
 } from './schema'
 import type { Entry } from '@/domain/entry'
+import type { Assessment, EntryState, Link, Question } from '@/domain/harness'
+import type { Report } from '@/domain/journal'
+import type { RunRecord, SyncFields, WidgetRecord } from '@/domain/records'
 import { BUILT_IN_CATEGORIES, USER_CATEGORY_SORT_ORDER } from './categorySeed'
 import {
   backfillCommitmentRow,
@@ -33,6 +36,7 @@ import { nowISO } from '@/utils/dates'
  *               - `intentions.category` free-text → `categoryId` foreign key
  *
  * Version 4 — H1 entries: `entries`, `outbox`, `syncMeta` (2026-10-10). Additive; the financial tables are untouched.
+ * Version 5 — harness + widget records (HW-HARNESS.md §5, 2026-10-11): seven tables, one per kind. Additive; nothing else changes.
  *
  * Once shipped, a version is FROZEN. Schema changes go via a NEW version+upgrade.
  */
@@ -48,6 +52,13 @@ export class PlannerDb extends Dexie {
   entries!: Table<Entry, string>
   outbox!: Table<OutboxRow, number>
   syncMeta!: Table<SyncMeta, string>
+  assessments!: Table<Assessment & SyncFields, string>
+  questions!: Table<Question & SyncFields, string>
+  links!: Table<Link & SyncFields, string>
+  entryStates!: Table<EntryState & SyncFields, string>
+  widgets!: Table<WidgetRecord & SyncFields, string>
+  reports!: Table<Report & SyncFields, string>
+  runs!: Table<RunRecord & SyncFields, string>
 
   /** `name` is only ever overridden by tests that need a second device. */
   constructor(name = 'personal-planner') {
@@ -180,6 +191,23 @@ export class PlannerDb extends Dexie {
       outbox: '++seq, entityId',
       syncMeta: 'userId',
     })
+
+    // v5 — harness + widget records. New tables only, so no upgrade callback; entries, outbox and the financial tables are untouched.
+    // `serverVersion` is indexed on each so a sweep can find what the server has not acknowledged.
+    this.version(5)
+      .stores({
+        assessments: 'id, entryId, runId, serverVersion',
+        questions: 'id, entryId, state, serverVersion',
+        links: 'id, fromEntryId, toEntryId, state, serverVersion',
+        entryStates: 'id, state, followUpOn, serverVersion',
+        widgets: 'id, kind, active, serverVersion',
+        reports: 'id, widgetId, runId, ranAt, serverVersion',
+        runs: 'id, stage, ranAt, serverVersion',
+      })
+      // A build from before v5 asks a newer Worker for changes, ignores the `records` it cannot read, and still moves its cursor
+      // past them. Left alone, that device would upgrade with a cursor that is already beyond records it never stored. Pulling
+      // again from 0 once is safe (upserts are idempotent; a queued local edit is never overwritten) and costs one fetch.
+      .upgrade((tx) => tx.table('syncMeta').toCollection().modify((m: { cursor: number }) => { m.cursor = 0 }))
 
     // ---------------------------------------------------------------------
     // Migration template — DO NOT REMOVE

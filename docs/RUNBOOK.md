@@ -71,6 +71,7 @@ from this machine, so a guard enforces the same rule there.
    uploads the Worker tagged with the commit (`wrangler deployments list` shows `abc1234 <subject>`). It **refuses**
    on uncommitted or untracked files, a branch other than `main`, or `main` differing from `origin/main`.
    Migrations alone: `pnpm --dir api run db:migrate:remote` (same guard).
+   **Order when a change adds a record kind or a table the client writes (HW-HARNESS S3 onwards): Worker and migration first, client second.** Pages builds from `main` by itself; an older Worker answers a record push with `rejected`, and the client keeps refused rows until Retry.
 3. `pnpm smoke` — a minute after the Worker deploy, not at once: on 2026-10-11 the new check failed seconds after `deploy` and passed about a minute later (the new version taking a moment to reach the edge). Run it again before calling it red.
 
 Between steps 1 and 2 the new app runs against the old Worker for a minute or two. That is fine while every Worker

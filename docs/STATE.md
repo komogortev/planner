@@ -5,7 +5,7 @@
 - **Working:** prod as before plus the above; smoke 13/13; `pnpm check` app 316 · worker 147. Sync, sign-out guard, export/delete, `/log`, 4-page pager, Dashboard notes dialog unchanged.
 - **Broken:** nothing known. **Not verified:** every new behaviour on a real phone (DEVICE-CHECKS 10, 13–17); the first real D1 restore (D-58 is tested, never run live); the tester's first sync (0 entries).
 - **Blocker:** none.
-- **Next:** (1) HW-HARNESS S2: Dexie v5 + D1 `0008`, kind-aware sync (gate: all existing tests green + per-kind replay/isolation); S1 domain built, PR open. (2) DEVICE-CHECKS 10, 13–17 fold into S3/S4; the exit week is S4, after the harness UI (D-60). **Origin move closed 2026-10-11** ([ORIGIN-MOVE.md](ORIGIN-MOVE.md), #57–#66): app at `koplanner.pages.dev` (CF Pages, `main` only, CSP), old address = moved notice, Worker `a50f00b` allows one origin, smoke 16/16. Rollback: restore the entry in `wrangler.toml`, redeploy. Parked items with re-entry conditions: Carried follow-ups below.
+- **Next:** (1) S2 PR (Dexie v5 + D1 `0008`, records sync) merged → **deploy the Worker + `0008` before any client writes records** (RUNBOOK). (2) HW-HARNESS S3 UI, gates in the spec. (3) DEVICE-CHECKS 10, 13–17 fold into S3/S4; the exit week is S4 (D-60). **Origin move closed 2026-10-11** ([ORIGIN-MOVE.md](ORIGIN-MOVE.md), #57–#66): app at `koplanner.pages.dev` (CF Pages, `main` only, CSP), old address = moved notice, Worker `a50f00b` allows one origin, smoke 16/16. Rollback: restore the entry in `wrangler.toml`, redeploy. Parked items with re-entry conditions: Carried follow-ups below.
 ---
 
 ## Context
@@ -59,6 +59,8 @@
 ## Decision log
 
 Full log: PROJECT.md → Decisions log. Latest:
+
+- 2026-10-11 (s6b) — HW-HARNESS S2 built (Claude, vibe-code): records sync end to end. D-64: ONE server `records` table, typed Dexie tables per kind (a deviation from D-62's wording, recorded). Worker: migration `0008`, `records.ts` (CAS push, revisions, merged pull under one cursor), account export/delete cover it (the A13 guard caught the table; the export reading only entries was NOT caught by it and was fixed by reading the code). Client: Dexie v5 with a cursor-reset upgrade, record-aware engine (ack, pull, D-58 sweep, discard), `writeRecords`, clear/copy/export/delete cover records. 453 app + 169 Worker tests, 37/38 guards mutated red; entry path unchanged. CodeReview: 0 critical, 4 improvements (v5 cursor reset fixed; skipped-record trace added; discard label shows the text; Worker-before-client order is a gate on S3). Not deployed.
 
 - 2026-10-11 (s6) — Harness + first widget scoped and S1 built (Claude, vibe-code; the owner: the exit week measures a loop with no reason to run). Owner rulings D-60…D-63 (harness plus Daily task journal; two stages; separate tables; copy-prompt). Spec `HW-HARNESS.md`. S1 = pure domain (`uuid5`, `harness`, `journal`): 85 tests, 32 guards each mutated red, replay and two-device ids proven; CodeReview found 7 real issues (second-order prompt injection through stored question text, stale or late pastes, paste-time vs compose-time, lone surrogates, owner date overwritten, trivial citations, mutable report id), all fixed with tests. Spec corrected while building: carries are links; re-assessment after an answer; assessment key is (note, run). Sync is entry-specific (engine 489 lines, Worker `entries.ts` 270): S2 is the high-blast-radius slice.
 

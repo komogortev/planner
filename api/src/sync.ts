@@ -3,7 +3,8 @@ import { Hono } from 'hono'
 import { signedOutBody } from './account'
 import { authenticate, renewSession, type AuthedSession } from './auth'
 import { overLimit, tooMany, byIp } from './ratelimit'
-import { getEntry, pullChanges, pushMutations, queryEntries, PULL_MAX, PUSH_MAX_BYTES, PUSH_MAX_MUTATIONS } from './entries'
+import { getEntry, pushMutations, queryEntries, PULL_MAX, PUSH_MAX_BYTES, PUSH_MAX_MUTATIONS, type PushResult } from './entries'
+import { pullAll, pushRecords } from './records'
 import type { Env } from './index'
 import { isIsoDate } from '../../src/domain/clean'
 
@@ -46,7 +47,18 @@ sync.post('/push', async (c) => {
   const mutations = (body as { mutations?: unknown } | null)?.mutations
   if (!Array.isArray(mutations)) return c.json({ error: 'mutations: not an array' }, 400)
   if (mutations.length > PUSH_MAX_MUTATIONS) return c.json({ error: `mutations: over ${PUSH_MAX_MUTATIONS}` }, 400)
-  return c.json({ results: await pushMutations(c.env.DB, c.get('session').id, mutations) })
+  // A mutation without `recordKind` is an entry — exactly what every client before the harness sends. One naming a kind goes to
+  // the records path. Each path answers in its own order; the answers go back in the request's.
+  const userId = c.get('session').id
+  const isRecord = (m: unknown) => typeof m === 'object' && m !== null && (m as { recordKind?: unknown }).recordKind !== undefined
+  const entryAt: number[] = []
+  const recordAt: number[] = []
+  mutations.forEach((m, i) => (isRecord(m) ? recordAt : entryAt).push(i))
+  const results: PushResult[] = new Array(mutations.length)
+  const fill = (at: number[], got: PushResult[]) => at.forEach((index, i) => { results[index] = got[i]! })
+  fill(entryAt, entryAt.length ? await pushMutations(c.env.DB, userId, entryAt.map((i) => mutations[i])) : [])
+  fill(recordAt, recordAt.length ? await pushRecords(c.env.DB, userId, recordAt.map((i) => mutations[i])) : [])
+  return c.json({ results })
 })
 
 sync.get('/pull', async (c) => {
@@ -54,7 +66,7 @@ sync.get('/pull', async (c) => {
   const limit = int(c.req.query('limit'), PULL_MAX)
   if (since === null) return c.json({ error: 'since: not a version' }, 400)
   if (limit === null || limit < 1) return c.json({ error: 'limit: not a positive number' }, 400)
-  return c.json(await pullChanges(c.env.DB, c.get('session').id, since, Math.min(limit, PULL_MAX)))
+  return c.json(await pullAll(c.env.DB, c.get('session').id, since, Math.min(limit, PULL_MAX)))
 })
 
 // GET /entries?from=YYYY-MM-DD&to=YYYY-MM-DD&q=text&deleted=1&limit=50&cursor=… — newest first (UTC days on createdAt).

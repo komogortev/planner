@@ -1,6 +1,8 @@
 // Account data rights, the app half (H1-ENTRIES S2b; api/src/account.ts): export everything the server holds for the
 // signed-in person, delete the account, and wipe the account's tables on this device.
 import { db } from '@/db'
+import { recordTables } from '@/db/records'
+import { RECORD_KINDS, RECORD_TABLE } from '@/domain/records'
 import { clearDraft, flushDrafts, hasDraft, isBlank, loadDraft } from '@/capture/draft'
 import { syncEngine } from '@/sync'
 import { API_URL, revokeSession, signOutLocally, storedToken, storeToken } from './signIn'
@@ -12,6 +14,9 @@ export type AccountExport = {
   identities: unknown[]
   entries: unknown[]
   revisions: unknown[]
+  /** Harness and widget records (answers, links, reports…) and what their stale edits replaced. Empty from an older Worker. */
+  records: unknown[]
+  recordRevisions: unknown[]
 }
 
 type Page = AccountExport & { cursor: number; more: boolean }
@@ -40,7 +45,16 @@ function dedupe(out: AccountExport): AccountExport {
   }
   const revisions = new Map<string, unknown>()
   for (const r of out.revisions as { id: string; replacedVersion: number }[]) revisions.set(`${r.id}@${r.replacedVersion}`, r)
-  return { ...out, entries: [...newest.values()], revisions: [...revisions.values()] }
+  // The same for records, keyed by kind AND id (an entryState shares its entry's id).
+  const newestRecord = new Map<string, { serverVersion?: number }>()
+  for (const r of out.records as { recordKind: string; id: string; serverVersion?: number }[]) {
+    const k = `${r.recordKind}/${r.id}`
+    const seen = newestRecord.get(k)
+    if (!seen || (r.serverVersion ?? 0) >= (seen.serverVersion ?? 0)) newestRecord.set(k, r)
+  }
+  const recordRevisions = new Map<string, unknown>()
+  for (const r of out.recordRevisions as { recordKind: string; id: string; replacedVersion: number }[]) recordRevisions.set(`${r.recordKind}/${r.id}@${r.replacedVersion}`, r)
+  return { ...out, entries: [...newest.values()], revisions: [...revisions.values()], records: [...newestRecord.values()], recordRevisions: [...recordRevisions.values()] }
 }
 
 /**
@@ -48,7 +62,7 @@ function dedupe(out: AccountExport): AccountExport {
  * half-finished download is never presented as a complete export.
  */
 export async function exportAccount(token: string, fetchImpl: Fetch = fetch, apiUrl = API_URL): Promise<AccountExport> {
-  const out: AccountExport = { format: 0, exportedAt: 0, account: null, identities: [], entries: [], revisions: [] }
+  const out: AccountExport = { format: 0, exportedAt: 0, account: null, identities: [], entries: [], revisions: [], records: [], recordRevisions: [] }
   let since = 0
   for (let guard = 0; guard < 10_000; guard++) {
     const res = await fetchImpl(`${apiUrl}/me/export?since=${since}`, { headers: { Authorization: `Bearer ${token}` } })
@@ -58,6 +72,8 @@ export async function exportAccount(token: string, fetchImpl: Fetch = fetch, api
     out.exportedAt = page.exportedAt
     out.entries.push(...page.entries)
     out.revisions.push(...page.revisions)
+    out.records.push(...(page.records ?? [])) // absent from an older Worker
+    out.recordRevisions.push(...(page.recordRevisions ?? []))
     if (!page.more) return dedupe(out)
     if (page.cursor <= since) throw new AccountError('export did not advance', null) // a stuck cursor would loop for ever
     since = page.cursor
@@ -74,6 +90,9 @@ export async function deleteAccountRemote(token: string, confirm: string, fetchI
   })
   if (!res.ok) throw await failure(res)
 }
+
+/** Harness and widget records on this device, all kinds: part of what a clear would remove. */
+const recordCount = async (): Promise<number> => (await Promise.all(recordTables(db).map((t) => t.count()))).reduce((a, b) => a + b, 0)
 
 /** The stored draft as the owner sees it: a blank one is nothing. One reading for the question and for the clear's re-check. */
 const draftNow = (): string => (isBlank(loadDraft()) ? '' : loadDraft())
@@ -94,18 +113,18 @@ type Cleared = { kind: 'cleared' } | { kind: 'unsynced'; n: number; draft: boole
  * Not exported on purpose: every caller is a gesture of the owner (sign out, Clear this device, delete account), each with
  * its own guards above. Never reach it from a server verdict (401, account deleted) — D-55.
  */
-async function clearAccountData(o: { refuseIfUnsynced?: boolean; expect?: { entries: number; outbox: number; draft: string }; dropToken?: boolean } = {}): Promise<Cleared> {
+async function clearAccountData(o: { refuseIfUnsynced?: boolean; expect?: { entries: number; records: number; outbox: number; draft: string }; dropToken?: boolean } = {}): Promise<Cleared> {
   const token = o.dropToken ? storedToken() : null
   try {
-    const r = await db.transaction('rw', db.entries, db.outbox, db.syncMeta, async (): Promise<Cleared> => {
+    const r = await db.transaction('rw', [db.entries, db.outbox, db.syncMeta, ...recordTables(db)], async (): Promise<Cleared> => {
       const outbox = await db.outbox.count()
       flushDrafts() // text typed since the question is stored before it is compared, not wiped unseen
       const draft = hasDraft()
       if (o.refuseIfUnsynced && (outbox > 0 || draft)) return { kind: 'unsynced', n: outbox, draft }
-      if (o.expect && (outbox !== o.expect.outbox || (await db.entries.count()) !== o.expect.entries || draftNow() !== o.expect.draft)) return { kind: 'changed' }
+      if (o.expect && (outbox !== o.expect.outbox || (await db.entries.count()) !== o.expect.entries || (await recordCount()) !== o.expect.records || draftNow() !== o.expect.draft)) return { kind: 'changed' }
       if (o.dropToken) signOutLocally()
       syncEngine.reset() // a cycle in flight must not write this account's rows back after the clear
-      await Promise.all([db.entries.clear(), db.outbox.clear(), db.syncMeta.clear()])
+      await Promise.all([db.entries.clear(), db.outbox.clear(), db.syncMeta.clear(), ...recordTables(db).map((t) => t.clear())])
       return { kind: 'cleared' }
     })
     // The unsent draft is the owner's text too (D-56): it goes with the rest, and an open capture box is told.
@@ -136,9 +155,11 @@ export async function signOutSafely(fetchImpl: Fetch = fetch, apiUrl = API_URL):
 }
 
 /** Everything this device holds for the account, as a plain object: the copy offered before a device is cleared (D-50). */
-export type LocalCopy = { exportedAt: string; entries: unknown[]; notSynced: unknown[]; draft: string }
+export type LocalCopy = { exportedAt: string; entries: unknown[]; /** Every harness / widget record by table: the owner's answers are theirs and may exist only here. */ records: Record<string, unknown[]>; notSynced: unknown[]; draft: string }
 export async function localCopy(): Promise<LocalCopy> {
-  return { exportedAt: new Date().toISOString(), entries: await db.entries.toArray(), notSynced: await db.outbox.toArray(), draft: loadDraft() }
+  const records: Record<string, unknown[]> = {}
+  for (const kind of RECORD_KINDS) records[RECORD_TABLE[kind]] = await db.table(RECORD_TABLE[kind]).toArray()
+  return { exportedAt: new Date().toISOString(), entries: await db.entries.toArray(), records, notSynced: await db.outbox.toArray(), draft: loadDraft() }
 }
 
 export type DeviceClearDeps = { confirm: (message: string) => boolean; saveCopy: (copy: LocalCopy) => void }
@@ -154,16 +175,17 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
 export async function clearDeviceSafely(deps: DeviceClearDeps, opts: { dropToken?: boolean } = {}): Promise<'cleared' | 'declined' | 'changed'> {
   flushDrafts() // what is stored is what the owner sees in the box
   const entries = await db.entries.count()
+  const records = await recordCount()
   const outbox = await db.outbox.count()
   const draftText = draftNow()
   const draft = draftText !== ''
-  if (entries > 0 || outbox > 0 || draft) {
+  if (entries > 0 || records > 0 || outbox > 0 || draft) {
     const only = outbox > 0 ? ` (${outbox} not uploaded yet — they exist only here)` : ''
-    const what = [entries > 0 ? plural(entries, 'note') : '', draft ? 'an unsent draft' : ''].filter(Boolean).join(' and ')
+    const what = [entries > 0 ? plural(entries, 'note') : '', records > 0 ? plural(records, 'saved item') : '', draft ? 'an unsent draft' : ''].filter(Boolean).join(' and ')
     if (!deps.confirm(`${what} on this device will be cleared${only}. A copy is downloaded first. Clear it?`)) return 'declined'
     deps.saveCopy(await localCopy())
   }
-  const r = await clearAccountData({ expect: { entries, outbox, draft: draftText }, dropToken: opts.dropToken })
+  const r = await clearAccountData({ expect: { entries, records, outbox, draft: draftText }, dropToken: opts.dropToken })
   return r.kind === 'cleared' ? 'cleared' : 'changed'
 }
 

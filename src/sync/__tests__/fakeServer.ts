@@ -4,10 +4,16 @@
 import type { Entry } from '@/domain/entry'
 
 type Row = Omit<Entry, 'serverVersion'> & { version: number }
+/** A harness / widget record as stored: its wire form (`id`, own fields, `deletedAt`) plus its kind and version. */
+type RecordRow = Record<string, unknown> & { recordKind: string; id: string; version: number }
 type Req = { path: string; method: string; body: unknown; auth: string | null }
 
 export class FakeServer {
   rows = new Map<string, Row>()
+  /** Records by `kind/id`; they share `seq` with the entries, as the Worker's one per-account counter does. */
+  records = new Map<string, RecordRow>()
+  /** Send `records` with pulls. Off: an older Worker, which knows nothing of them. */
+  sendRecords = true
   seq = 0
   /** token → user id. A token not in here gets 401. */
   tokens = new Map<string, string>([['tok-a', 'user-a']])
@@ -28,6 +34,7 @@ export class FakeServer {
   /** The database was restored to an earlier point: later versions are gone and the counter is back at `version`. */
   restoreTo(version: number): void {
     for (const [id, r] of this.rows) if (r.version > version) this.rows.delete(id)
+    for (const [key, r] of this.records) if (r.version > version) this.records.delete(key)
     this.seq = version
   }
 
@@ -61,14 +68,23 @@ export class FakeServer {
     const user = this.tokens.get(auth?.replace(/^Bearer /, '') ?? '')
     if (!user) return FakeServer.json({ error: 'signed out' }, 401)
     if (url.pathname === '/me') return FakeServer.json({ id: user, email: `${user}@example.com`, name: null })
-    if (url.pathname === '/sync/push') return FakeServer.json({ results: (body.mutations as { entityId: string; payload: Omit<Entry, 'serverVersion'> }[]).map((m) => this.apply(m)) })
+    if (url.pathname === '/sync/push') {
+      type Mutation = { entityId: string; recordKind?: string; payload: Omit<Entry, 'serverVersion'> }
+      return FakeServer.json({ results: (body.mutations as Mutation[]).map((m) => (m.recordKind ? this.applyRecord(m as never) : this.apply(m))) })
+    }
     if (url.pathname === '/sync/pull') {
       const since = Number(url.searchParams.get('since'))
       const limit = Number(url.searchParams.get('limit'))
-      const all = [...this.rows.values()].filter((r) => r.version > since).sort((a, b) => a.version - b.version)
-      const changes = all.slice(0, limit).map(({ version, ...e }) => ({ ...e, serverVersion: version }))
+      // One stream in version order, entries and records together under one cursor, as the Worker serves it.
+      const all = [
+        ...[...this.rows.values()].filter((r) => r.version > since).map((r) => ({ version: r.version, entry: r })),
+        ...(this.sendRecords ? [...this.records.values()].filter((r) => r.version > since).map((r) => ({ version: r.version, record: r })) : []),
+      ].sort((a, b) => a.version - b.version)
+      const page = all.slice(0, limit)
+      const changes = page.flatMap((p) => ('entry' in p ? [(({ version, ...e }) => ({ ...e, serverVersion: version }))(p.entry)] : []))
+      const records = page.flatMap((p) => ('record' in p ? [(({ version, ...r }) => ({ ...r, serverVersion: version }))(p.record)] : []))
       return FakeServer.json({
-        changes, cursor: changes.length ? changes[changes.length - 1]!.serverVersion : since, more: all.length > limit,
+        changes, ...(records.length ? { records } : {}), cursor: page.length ? page[page.length - 1]!.version : since, more: all.length > limit,
         ...(this.sendHead ? { head: this.headOverride ?? this.seq } : {}),
       })
     }
@@ -84,6 +100,25 @@ export class FakeServer {
     const version = ++this.seq
     this.rows.set(m.entityId, { ...m.payload, version })
     return { entityId: m.entityId, status: 'applied', serverVersion: version }
+  }
+
+  private applyRecord(m: { entityId: string; recordKind: string; payload: Record<string, unknown> }) {
+    if (this.reject.has(m.entityId)) return { entityId: m.entityId, status: 'rejected', error: 'refused by the test server' }
+    if (this.retryOnce.delete(m.entityId)) return { entityId: m.entityId, status: 'retry' }
+    const key = `${m.recordKind}/${m.entityId}`
+    const cur = this.records.get(key)
+    const { version: _v, recordKind: _k, ...curFields } = (cur ?? {}) as RecordRow
+    if (cur && JSON.stringify(curFields) === JSON.stringify(m.payload)) return { entityId: m.entityId, status: 'duplicate', serverVersion: cur.version }
+    const version = ++this.seq
+    this.records.set(key, { ...m.payload, recordKind: m.recordKind, id: m.entityId, version })
+    return { entityId: m.entityId, status: 'applied', serverVersion: version }
+  }
+
+  /** Put a record on the server as if another device had pushed it. */
+  seedRecord(recordKind: string, payload: Record<string, unknown> & { id: string }): number {
+    const version = ++this.seq
+    this.records.set(`${recordKind}/${payload.id}`, { ...payload, recordKind, version })
+    return version
   }
 
   /** Put an entry on the server as if another device had pushed it. */
