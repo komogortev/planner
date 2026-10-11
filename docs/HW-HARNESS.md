@@ -1,0 +1,117 @@
+# HW — Harness and the first prompt widget (Design)
+
+**Status: S0 draft, 2026-10-11. Decisions D-60 … D-63 are the owner's (2026-10-11); §9 holds what is still open. No code until §9 is read.**
+Terms per [VOCABULARY.md](VOCABULARY.md); invariants per [ARCHITECTURE.md](ARCHITECTURE.md); run lifecycle per ARCHITECTURE §6; lens and report shapes per [H2-LENSES.md](H2-LENSES.md).
+
+## 1. Goal
+
+Give the exit week a reason to run. H1 delivers capture and sync; nothing yet *uses* what was captured. This tier adds one loop the owner wants every day:
+
+> capture → **harness** reads new notes, links them to older ones, asks short questions → owner answers, confirms "done" → a **widget** (first: *Daily task journal*) reports today's commitments from the marked notes.
+
+**Acceptance.** On the owner's phone, for three consecutive days: (a) a harness run over that day's notes stores questions, and answering one changes what the next run asks; (b) a note the owner marks done (or confirms as closed by a later note) is absent from the next day's journal; (c) a note carried to tomorrow appears in tomorrow's journal and not today's; (d) replaying the same pasted result twice changes nothing; (e) a second account sees none of the first account's marks (isolation, same test as H1 §8).
+
+## 2. Decisions (owner, 2026-10-11)
+
+| # | Decision |
+|---|---|
+| D-60 | **First slice = harness plus the Daily task journal widget** (not the harness alone): the smallest thing worth opening the app for each evening |
+| D-61 | **Two stages.** Stage 1 (harness) marks notes once; stage 2 (widget) reads the marks. A widget re-run never repeats the assessment |
+| D-62 | **Separate tables** for questions, links, per-note state and assessments. An Entry stays exactly as H1 defines it; AI text never lives on it |
+| D-63 | **Executor = copy-prompt** (D-35) for both stages. No API key, no per-token cost; the owner is the one who sends the data. H5 re-enters only on the evidence in §7 |
+
+## 3. Stage 1 — the harness
+
+One prompt, owned by the app (versioned: `harnessVersion`), inherited by every prompt widget's data. Built by the one composer (A2): the owner never edits it in this slice.
+
+**Input (the candidate set), all from the signed-in account's on-device copy:**
+- notes **open** (not done, not dropped, not deleted) with **no assessment at the current `harnessVersion`**, or with a question **answered after their last assessment** (the answer is new information; this is what lets answering change the next run);
+- plus, as *context only*, notes still `open` created in the last 7 days (so a new note can close an old one), newest first;
+- each note with its id, capture time, event date, body **and its question–answer record**. An answer counts as content: a question the record already answers is never asked again, nor one the owner dismissed;
+- hard cap on candidates (default 60, oldest context dropped first, said so in the run header).
+
+**Output (strict JSON only; anything else is refused with the reason shown):**
+
+```ts
+interface HarnessOutput {
+  assessments: Array<{
+    entryId: string                                     // must be in the candidate set AND unassessed
+    questions: Array<{ text: string }>                  // 0–3, short, never repeating answered/dismissed ones
+    closes: Array<{ entryId: string; evidence: string }> // proposes: this note concludes that older note
+    followUp: { entryId: string; on: string } | null    // proposes: carry that note to YYYY-MM-DD
+  }>
+}
+```
+
+**Rules baked into the prompt** (patterns from the owner's prior journal tooling, restated generically): conservative — a wrong link is worse than a missed one; a due date only when the text implies one; evidence is a one-line quote; nothing is invented about people or places.
+
+**Validation before anything is stored** (`validateHarness`, pure): unknown or already-assessed `entryId` → that assessment dropped and counted; a 4th question dropped; a question whose normalized text matches an existing one on that note dropped; `closes`/`followUp` targets outside the candidate set, no longer open, or pointing at the note itself (closes only) dropped; a close by a note that is not newer than the one it closes dropped; a follow-up date that is malformed, in the past (settings zone) or more than 366 days away dropped; a pair already proposed once, in any state, is never proposed again; an assessment of a note that was deleted, done or dropped after the prompt was composed, or that another run assessed *after* this prompt was composed (a stale paste), dropped; model text holding a lone UTF-16 surrogate dropped; cuts are by code point, never mid-emoji. **"Today" and the assessment time are the moment the prompt was composed, not the paste**: the model was told that day, and an answer given between compose and paste must still re-open the note; malformed JSON → nothing stored. Closes and follow-ups are stored as **proposed**; only the owner's tap confirms them (the owner, or "the owner confirming the harness", is the only author of `done`).
+
+**Idempotency.** Every stored row's id is derived from its natural key (uuid v5: assessment = `entryId + runId`, question = `entryId + normalized question`, link = `from + to + kind`). A run that already stored an assessment for a note is a replay: nothing more is stored. A *later* run may assess the same note again. Pasting the same result twice, on one device or on two, produces the same ids, so replay is a no-op and sync merges cleanly.
+
+## 4. Stage 2 — the widget
+
+A **prompt widget** holds a lens (D-32). *Daily task journal* ships as the first, built in, not owner-edited in this slice.
+
+- **Slice** (pure, `resolveSlice` extended): notes dated today in the settings time zone, plus notes whose `followUpOn` is today, plus notes `open` and carried. A note dated earlier and not carried is not read by a daily widget (calendar rule). `done`/`dropped` notes are excluded; they appear only as context when a today's note closes them.
+- **Prompt** carries each note's marks: state, confirmed links, answered questions. The model is asked for today's commitments as a checklist with citations by entry id.
+- **Report**: immutable, stored per ARCHITECTURE §6 step 5–6 (a second reply for a run that already has a report is refused, never stored over it); citations to entries outside the slice, quotes shorter than 8 characters (a shorter note is cited whole), and quotes that are not in the cited note (as written, or as shown in the prompt) are dropped and flagged; an empty slice makes no copy at all ("nothing today").
+- The widget's last report shows in its own body and, once activated, on the Dashboard with its age (D-36). Whether the Dashboard shows the full report or a summary opens the widget is the owner's call at UI time (§9 Q3).
+- **No Task record, no hook index** (D-34, D-39): commitments are found at run time and shown in the report. What is stored is only marks *about notes* (state, link, question, assessment). If the owner wants commitments tracked past a day, that is the evidence that builds Task (H4), not this slice.
+
+## 5. Data (Dexie v5 · D1 `0008`)
+
+All rows keyed `(user_id, id)`, carry `serverVersion` and soft delete, and travel through the **existing outbox and per-account cursor** (the cursor is `users.version_seq`, already shared by every table, so one cursor covers all kinds).
+
+| Table | Columns (beyond the common ones) |
+|---|---|
+| `assessments` | `entryId`, `harnessVersion`, `runId`, `at` — "processed" is *a row exists at the current version and no answer is newer than it* (D-61) |
+| `questions` | `entryId`, `text`, `state open·answered·dismissed`, `answer \| null`, `createdAt`, `answeredAt`, `runId` — the answer is the owner's own text, stored here, never on the Entry |
+| `links` | `fromEntryId` (the note that gave the evidence), `toEntryId` (the note concluded, or carried), `kind closes·carries`, `onDate` (carries only), `state proposed·confirmed·rejected`, `evidence`, `runId`. A carry may point at its own note. The model only ever creates `proposed`; confirming sets the note's `entryStates` row |
+| `entryStates` | `id = entryId`; `state open·done·dropped`, `followUpOn \| null`, `by owner·confirmed-proposal`, `updatedAt` — one row per note that has left the default (absent = open) |
+| `widgets` | `name`, `kind system·prompt`, `active`, `lens {instruction, shape, version} \| null`, `lineage \| null` |
+| `reports` | `widgetId`, `lensVersion`, `runId`, `entryIds`, `body`, `citations`, `executor 'copy-prompt'` |
+| `runs` | `stage harness·widget`, `version`, `entryIds`, `ranAt`, `executor` — the composed header (A2), so any result can be explained |
+
+**Vocabulary rows to add before code** (VOCABULARY rule): Harness, Assessment, Question, Link, Entry state, Run (widened to both stages). `Hook` stays unstored.
+
+## 6. Blast radius — where a change would reach
+
+Pre-release: every module may change together; the tester has 0 entries, so a schema change costs nothing now. After release the boundary rows (stored data, push/pull shape) must be additive only.
+
+| Change | Reaches | Why it is the risky one |
+|---|---|---|
+| Sync made kind-aware (`src/sync/engine.ts` 489 lines, `api/src/entries.ts` 270, `api/src/sync.ts`) | outbox, push/pull, conflict rules, **every existing sync test**, the entry path that works today | Entry-specific today. A bug here costs captured notes, not just harness data. Gate: the 316/147 existing tests plus a per-kind isolation and replay test before any harness UI |
+| Dexie v5 + D1 `0008` | all devices on next open | Additive tables only; never edit v4 (frozen) |
+| Harness prompt wording | stage 1 output only | Versioned: bumping `harnessVersion` re-assesses, which re-asks questions; so it bumps rarely and says so |
+| Domain code (compose, validate, apply) | nothing outside itself | Pure, synthetic fixtures; no clock or storage reads |
+
+## 7. Evidence this slice must produce
+
+- **Paste count per day** (from `runs`): the two-stage design costs up to two copy–paste round trips. This number is the re-entry evidence for H3 (D-37); more than ~3 a day for a week is the signal.
+- **Questions asked vs answered vs dismissed**, per day: an unanswered majority means the harness is noisy (lower the cap or sharpen the rule), not that the loop works.
+- **Closes proposed vs confirmed vs rejected**: the harness's precision, measured, not assumed.
+
+## 8. Privacy
+
+The prompt is built only from the signed-in account's on-device notes. The run header shows how many notes will leave the device before the owner copies. Clipboard cleared after the timeout (D-54). No note content, answer or report reaches the public repo's fixtures or docs: fixtures are synthetic.
+
+## 9. Slices of work and open points
+
+| Slice | Content | Done when |
+|---|---|---|
+| **S0** | This doc; D-60…D-63 and the VOCABULARY rows recorded | owner reads §9 |
+| **S1 Domain** ✅ (CodeReview round 1 fixed: 8 findings, 7 confirmed and fixed, 1 low-impact accepted with a test) | `src/domain/{uuid5,harness,journal}.ts`: selection, compose, `parseHarnessOutput`, `applyHarness`, the owner's transitions, journal slice + compose + `validateReport`. Pure, no UI, no sync | 85 tests incl. replay ×2 → nothing written, two devices → same ids, foreign id / 4th question / repeated question / past date / foreign or invented citation dropped, acceptance (a)(b)(c) end to end on synthetic notes; each of 32 guards removed in turn turns the suite red |
+| **S2 Schema + sync** | Dexie v5, D1 `0008`, kind-aware push/pull | per-kind replay + isolation tests; all pre-existing tests unchanged and green; smoke on prod |
+| **S3 UI** | Run harness (copy → paste box → preview of what will be stored), questions on the note, done / carry-to-date taps, Widgets page create + activate, Dashboard shows the journal | DEVICE-CHECKS rows written, then run on the phone |
+| **S4 Use** | The exit week, now measuring a loop (H1 §1 acceptance plus §1 above) | §1 true on three days |
+
+**Open — each with the default I would proceed under:**
+
+1. **D-34 reading.** Stored marks about notes (assessment, link, state) are not an extracted hook index. *Default: yes, consistent.*
+2. **Context window for stage 1:** 7 days of open notes, cap 60. *Default as written.*
+3. **Dashboard shows** the full report or a one-line summary opening the widget. *Default: summary + age; decide at S3.*
+4. **Language of questions** from settings, not from the prompt (H2 §4.5). *Default: yes.*
+5. **Entry-state `dropped`** exists in the schema but has no UI in this slice. *Default: schema yes, UI no.*
+6. **An overdue carried note resurfaces in every daily journal until marked done** (tested on purpose). Intended, or should it fall out after N days? *Default: keep resurfacing; revisit on evidence from the exit week.*
+7. **S3 carry-overs from review:** the report body is untrusted model markdown, so the renderer must disable HTML and links; `localDay` throws on an invalid zone, so Settings must guarantee a valid one.
