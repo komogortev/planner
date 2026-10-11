@@ -19,8 +19,13 @@ until it does (a new version loads on the second open), or tap Reload on the upd
 | 7 | Offline capture | Airplane mode, capture two notes, close and reopen the app, then switch the connection back on | Status says "2 not synced yet · offline" across the reopen; within ~a minute of reconnecting both are on the server | not run |
 | 8 | Second device | Open the app on another device signed in to the same account | The first device's notes appear in the Dashboard list | not run in production |
 | 9 | Signed-out with notes waiting | (Local only: delete the session row.) Capture, wait | Banner "Signed out of the server… kept on this device"; Sign out in Settings is refused with the count; after signing in again the notes upload | local dev only, 2026-10-11 |
-| 10 | Update flow | Deploy a new build, open the installed app twice | Update banner appears; after Reload the badge shows the new commit; no note is lost | not run |
+| 10 | Update flow | Deploy a new build, open the installed app twice | The app reloads itself onto the new commit (the update banner never shows — the service worker updates automatically); a half-typed note is still in the box (check 13); no note is lost | not run |
 | 11 | Install and offline reload | Install to the home screen, go offline, reopen | The app opens and shows the notes | not run |
 | 12 | Export and delete | Settings → Your data → Export (any account); Delete **only on a throwaway account** | A file downloads with the notes; delete asks for the typed email and leaves the device cleared | export/delete verified on production with a throwaway account, API level only, 2026-10-11 |
+| 13 | Unsent note survives | Type two lines on Home without tapping Capture; switch to another app for a minute, then swipe the app away and reopen it | The two lines are in the box; Capture sends them once; the box is empty afterwards (D-56) | not run on a phone |
+| 14 | One capture per tap | Tap the Capture key twice quickly | One note in the Dashboard list | not run |
+| 15 | Two windows | With the installed app AND a Chrome tab open on the same account: type in one, capture in the other, then sign out in one | The other box shows what was typed; a capture empties the other box; sign-out sends the other window to the sign-in screen; Settings → Sync stays "Up to date" in both (D-56, D-59) | not run |
+| 16 | A refused sign-in | Sign in with a GitHub or Google account that has no invite | The sign-in screen says "Not invited" and names the address the provider reported; you are never left on a text page (D-57) | not run |
+| 17 | Clear this device | (Needs an account deleted from another device, or a throwaway account.) Banner → Clear this device | The question counts the notes; a file downloads and opens from Files; then the device is cleared (D-55) | not run |
 
 An iPhone round trip of the sign-in (H1-ENTRIES Q2) is separate and deferred until an invitee uses one.
