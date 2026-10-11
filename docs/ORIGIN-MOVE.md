@@ -1,6 +1,6 @@
 # Moving the app off `komogortev.github.io` (design)
 
-**Status 2026-10-11: phases 0 and 1 done (`https://koplanner.pages.dev/`, name changed from the default by the owner; PRs #57–#59, Worker deployed). Phase 2 ✅ the same day (both providers signed in on the new origin, existing notes appeared). Phase 3 ✅ (phone + desktop). Phase 4 ✅ the same day (#62). Next: phase 5 — only when the owner has seen the notice on every old install; until then the old origin stays in `ALLOWED_APP_URLS`. Phase 1 note: the build must emit no `404.html` on Cloudflare (it disables the SPA fallback), so `_redirects` was dropped.** S0 closed the same day — the owner took every recommended default in §6. Part of H1 S4 (owner: "its own session, before the
+**Status 2026-10-11: phases 0 and 1 done (`https://koplanner.pages.dev/`, name changed from the default by the owner; PRs #57–#59, Worker deployed). Phase 2 ✅ the same day (both providers signed in on the new origin, existing notes appeared). Phase 3 ✅ (phone + desktop). Phase 4 ✅ the same day (#62). Phase 5 ✅ (#64, deployed `a50f00b`): the old origin is no longer in `ALLOWED_APP_URLS`. **The move is closed.** Phase 1 note: the build must emit no `404.html` on Cloudflare (it disables the SPA fallback), so `_redirects` was dropped.** S0 closed the same day — the owner took every recommended default in §6. Part of H1 S4 (owner: "its own session, before the
 exit week"). Terms per [VOCABULARY.md](VOCABULARY.md); the amendment this carries out is H1-ENTRIES Q8 ("the client
 moves to its own free `*.pages.dev` origin at S4").
 
