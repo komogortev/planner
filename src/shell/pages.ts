@@ -60,17 +60,17 @@ export function backdropShift(
 }
 
 /**
- * "Cloth being pulled" (owner's test): while a page is dragged, the folds are shifted, stretched, squeezed, sheared,
- * twisted and tilted in the drag direction, then ease back — strong enough cloth to keep its folds. `p` is the drag as
- * a fraction of the page width; the effect reaches full strength at `1 / GAIN` of a page (so an ordinary swipe is
- * clearly visible) and is clamped there. At rest (p = 0) everything is the identity.
+ * "Cloth being pulled" (owner's test): while a page is dragged, the folds are stretched, squeezed, sheared, twisted and
+ * tilted in the drag direction, then ease back — strong enough cloth to keep its folds. `p` is the drag as a fraction of
+ * the page width; the effect reaches full strength at `1 / GAIN` of a page (so an ordinary swipe is clearly visible) and
+ * is clamped there. At rest (p = 0) everything is the identity.
  *
- * The folds and the two accent folds use different multipliers (accents shift further and twist the other way), so
- * their positions relative to each other change too — the shape changes, not only the position.
+ * Only the *shape* springs back. The folds' *position* does not (owner, 2026-10-11): it is a parallax layer of its own
+ * (see `layerShift`), so where a swipe ends is where the cloth stays. The two accent folds twist the other way, so
+ * their shape changes relative to the folds too, not only their position.
  */
 export const PULL = {
   gain: 2, // full strength at half a page of drag
-  shift: 0.16, // × page width
   stretch: 0.2, // extra width along the pull
   squeeze: 0.07, // height lost as it stretches (cloth keeps its area, roughly)
   skewDeg: 6,
@@ -79,10 +79,26 @@ export const PULL = {
 } as const
 
 export type PullLayer = 'folds' | 'accents'
-const LAYER = { folds: { shift: 1, rotate: 1 }, accents: { shift: 1.6, rotate: -1.3 } } as const
+const LAYER = { folds: { rotate: 1 }, accents: { rotate: -1.3 } } as const
+
+/**
+ * Position of each cloth layer, in page widths per page travelled (the backdrop itself moves PARALLAX per page; these
+ * ride on top, at their own rates, so the layers drift against each other and against the base). The accents travel
+ * further than the folds. Bound: the layers have 16% of the 2-screen backdrop spare on each side and the shift is
+ * centred on the middle of the pager, so (count-1)/2 * rate must stay under ~0.2 (the 6° shear eats the rest) or an edge shows.
+ */
+export const LAYER_RATE: Record<PullLayer, number> = { folds: 0.08, accents: 0.13 }
+
+/**
+ * Where a cloth layer sits, in page widths: a pure function of the page and the live drag, continuous through a swipe
+ * and identical to the settled position when the swipe completes — nothing to spring back to. `p` is the drag as a
+ * fraction of the page width (negative = towards the next page). Centred, so both ends of the pager are symmetric.
+ */
+export function layerShift(index: number, p: number, layer: PullLayer = 'folds', count = PAGES.length): number {
+  return -(index - p - (count - 1) / 2) * LAYER_RATE[layer]
+}
 
 export interface Pull {
-  shift: number
   scaleX: number
   scaleY: number
   skewDeg: number
@@ -94,7 +110,6 @@ export function pullTransform(p: number, layer: PullLayer = 'folds'): Pull {
   const c = Math.max(-1, Math.min(1, p * PULL.gain))
   const k = LAYER[layer]
   return {
-    shift: c * PULL.shift * k.shift,
     scaleX: 1 + Math.abs(c) * PULL.stretch,
     scaleY: 1 - Math.abs(c) * PULL.squeeze,
     skewDeg: -c * PULL.skewDeg,
@@ -103,10 +118,15 @@ export function pullTransform(p: number, layer: PullLayer = 'folds'): Pull {
   }
 }
 
-/** The CSS transform for a Pull (`cqw` = the pager's width). */
+/** The CSS transform for a Pull: the shape only — the position is the separate `translate` (`layerShiftCss`). */
 export function pullCss(t: Pull): string {
   return (
-    `translate3d(${t.shift * 100}cqw, 0, 0) perspective(900px) rotateY(${t.tiltDeg}deg) rotate(${t.rotateDeg}deg) ` +
+    `perspective(900px) rotateY(${t.tiltDeg}deg) rotate(${t.rotateDeg}deg) ` +
     `skewX(${t.skewDeg}deg) scale(${t.scaleX}, ${t.scaleY})`
   )
+}
+
+/** The CSS `translate` for a layer position in page widths (`cqw` = the pager's width). */
+export function layerShiftCss(shift: number): string {
+  return `${shift * 100}cqw 0`
 }

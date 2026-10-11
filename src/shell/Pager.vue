@@ -5,7 +5,7 @@ import HomeView from '@/views/HomeView.vue'
 import DashboardView from '@/views/DashboardView.vue'
 import WidgetsView from '@/views/WidgetsView.vue'
 import SettingsView from '@/views/SettingsView.vue'
-import { PAGES, PARALLAX, backdropShift, backdropWidth, dragOffset, pageIndex, pullCss, pullTransform, settle } from './pages'
+import { PAGES, PARALLAX, backdropShift, backdropWidth, dragOffset, layerShift, layerShiftCss, pageIndex, pullCss, pullTransform, settle } from './pages'
 
 // The four main pages sit side by side on one track. The track follows the finger while dragging and eases to the
 // settled page on release, so the next page pushes the current one away (native page-swap feel). The route is the
@@ -61,7 +61,7 @@ function onTouchEnd(e: TouchEvent): void {
   const target = settle(index.value, dx, vx, width)
   dragging.value = false // re-enables the easing; the transform now animates to the settled position
   dragPx.value = 0
-  pull.value = 0 // the cloth relaxes back (elastic ease, see .pulled)
+  pull.value = 0 // the cloth's shape relaxes back (elastic ease, see .pulled); its position stays
   if (target !== index.value) void router.push(PAGES[target]!.to)
 }
 
@@ -74,10 +74,18 @@ const backdropStyle = computed(() => {
   }
 })
 
-// The folds and the accent folds are pulled with the finger (shifted, stretched, squeezed, sheared, twisted, tilted —
-// the accents on their own schedule, so the folds change shape relative to each other) and spring back on release.
-const foldsStyle = computed(() => ({ transform: pullCss(pullTransform(pull.value, 'folds')) }))
-const accentsStyle = computed(() => ({ transform: pullCss(pullTransform(pull.value, 'accents')) }))
+// The folds and the accent folds are pulled with the finger (stretched, squeezed, sheared, twisted, tilted — the
+// accents on their own schedule, so the folds change shape relative to each other) and the *shape* springs back on
+// release. Their *position* does not: it is a function of the page (`layerShift`), its own parallax layer, so it stays
+// where the swipe ended. Two properties, two easings: `translate` (smooth, locked to the pages) and `transform` (spring).
+const foldsStyle = computed(() => ({
+  translate: layerShiftCss(layerShift(index.value, pull.value, 'folds')),
+  transform: pullCss(pullTransform(pull.value, 'folds')),
+}))
+const accentsStyle = computed(() => ({
+  translate: layerShiftCss(layerShift(index.value, pull.value, 'accents')),
+  transform: pullCss(pullTransform(pull.value, 'accents')),
+}))
 
 const trackStyle = computed(() => ({
   transform: `translate3d(calc(${-index.value * 100}% + ${dragPx.value}px), 0, 0)`,
@@ -125,12 +133,15 @@ const trackStyle = computed(() => ({
   pointer-events: none;
 }
 .pulled {
-  /* Springy: overshoots a touch on release, like cloth settling back into its folds. */
-  transition: transform 560ms cubic-bezier(0.3, 1.45, 0.5, 1);
-  will-change: transform;
+  /* The shape is springy: it overshoots a touch on release, like cloth settling back into its folds. The position
+     (`translate`) rides the pages' own easing, no overshoot, and stays where the swipe ended. */
+  transition:
+    transform 560ms cubic-bezier(0.3, 1.45, 0.5, 1),
+    translate 320ms cubic-bezier(0.22, 0.85, 0.28, 1);
+  will-change: transform, translate;
 }
 .pulled-live {
-  transition: transform 80ms linear; /* follows the finger, lightly smoothed */
+  transition: transform 80ms linear, translate 0s; /* the shape follows the finger, lightly smoothed; the position exactly */
 }
 .track {
   position: relative; /* above the backdrop */
