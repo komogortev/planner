@@ -48,7 +48,7 @@ async function clearDevice(leave: boolean): Promise<void> {
       { confirm: (m) => window.confirm(m), saveCopy: (copy) => downloadJson(copyName(), copy) },
       { dropToken: leave },
     )
-    if (out === 'changed') problem.value = 'A note arrived while the copy was made, so nothing was cleared. Try again.'
+    if (out === 'changed') problem.value = 'Something changed on this device while the copy was made, so nothing was cleared. Try again.'
     if (out !== 'cleared') return
     if (leave) await router.push({ name: 'signin' })
     else syncNow(true)

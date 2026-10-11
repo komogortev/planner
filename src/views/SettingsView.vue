@@ -51,6 +51,7 @@ const me = ref<AccountLine | null>(null)
 
 // D-28: signing out clears this device's notes (D-50), so it is refused while some have not reached the server.
 const signOutBlocked = ref<number | null>(null)
+const signOutDraft = ref(false) // an unsent draft in the capture box stands in the way too (D-56)
 const signOutError = ref<string | null>(null)
 async function signOut(): Promise<void> {
   signOutError.value = null
@@ -58,6 +59,7 @@ async function signOut(): Promise<void> {
     const r = await signOutSafely()
     if (!r.ok) {
       signOutBlocked.value = r.unsynced
+      signOutDraft.value = r.draft === true
       return
     }
     void router.push({ name: 'signin' })
@@ -417,8 +419,14 @@ async function doDisconnect(): Promise<void> {
       </div>
       <p v-if="signOutError" class="text-sm text-rose-300 mt-3" role="alert" data-test="sign-out-error">{{ signOutError }}</p>
       <p v-if="signOutBlocked !== null" class="text-sm text-amber-300 mt-3" role="alert" data-test="sign-out-blocked">
-        {{ signOutBlocked }} {{ signOutBlocked === 1 ? 'note has' : 'notes have' }} not reached the server. Signing out clears this
-        device, so they would be lost. Let them sync first{{ rejected.length ? ', or retry or discard the refused ones below' : '' }}.
+        <template v-if="signOutBlocked > 0">
+          {{ signOutBlocked }} {{ signOutBlocked === 1 ? 'note has' : 'notes have' }} not reached the server. Signing out clears this
+          device, so they would be lost. Let them sync first{{ rejected.length ? ', or retry or discard the refused ones below' : '' }}.
+        </template>
+        <template v-if="signOutDraft">
+          {{ signOutBlocked > 0 ? 'There is also an' : 'There is an' }} unsent draft in the capture box. Signing out clears this device, so
+          capture it, or empty the box, first.
+        </template>
       </p>
     </section>
 

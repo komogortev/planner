@@ -1,6 +1,7 @@
 // Account data rights, the app half (H1-ENTRIES S2b; api/src/account.ts): export everything the server holds for the
 // signed-in person, delete the account, and wipe the account's tables on this device.
 import { db } from '@/db'
+import { clearDraft, flushDrafts, hasDraft, isBlank, loadDraft } from '@/capture/draft'
 import { syncEngine } from '@/sync'
 import { API_URL, revokeSession, signOutLocally, storedToken, storeToken } from './signIn'
 
@@ -74,13 +75,17 @@ export async function deleteAccountRemote(token: string, confirm: string, fetchI
   if (!res.ok) throw await failure(res)
 }
 
-type Cleared = { kind: 'cleared' } | { kind: 'unsynced'; n: number } | { kind: 'changed' }
+/** The stored draft as the owner sees it: a blank one is nothing. One reading for the question and for the clear's re-check. */
+const draftNow = (): string => (isBlank(loadDraft()) ? '' : loadDraft())
+
+type Cleared = { kind: 'cleared' } | { kind: 'unsynced'; n: number; draft: boolean } | { kind: 'changed' }
 
 /**
  * The one place this device's account tables are emptied (D-50, D-55). It leaves the legacy financial tables, which belong
  * to the device. The checks and the clear are one transaction, so a capture that lands in between is counted, not cleared.
- *  - `refuseIfUnsynced`: stop while the outbox holds rows (sign-out, D-28).
- *  - `expect`: stop when the device no longer holds what the owner was shown.
+ *  - `refuseIfUnsynced`: stop while the outbox holds rows, or the capture box holds an unsent draft — both exist only on
+ *    this device (sign-out, D-28, D-56).
+ *  - `expect`: stop when the device no longer holds what the owner was shown (notes, unsent changes, the draft).
  *  - `dropToken`: the token goes FIRST, inside the transaction and after the checks (so a refused sign-out never flickers
  *    the engine into "signed out"). Otherwise a poll tick between the engine reset and the end of the clear starts a cycle
  *    that claims the cleared device for the account being left. It comes back if the clear fails — in the callback or at
@@ -89,18 +94,23 @@ type Cleared = { kind: 'cleared' } | { kind: 'unsynced'; n: number } | { kind: '
  * Not exported on purpose: every caller is a gesture of the owner (sign out, Clear this device, delete account), each with
  * its own guards above. Never reach it from a server verdict (401, account deleted) — D-55.
  */
-async function clearAccountData(o: { refuseIfUnsynced?: boolean; expect?: { entries: number; outbox: number }; dropToken?: boolean } = {}): Promise<Cleared> {
+async function clearAccountData(o: { refuseIfUnsynced?: boolean; expect?: { entries: number; outbox: number; draft: string }; dropToken?: boolean } = {}): Promise<Cleared> {
   const token = o.dropToken ? storedToken() : null
   try {
-    return await db.transaction('rw', db.entries, db.outbox, db.syncMeta, async (): Promise<Cleared> => {
+    const r = await db.transaction('rw', db.entries, db.outbox, db.syncMeta, async (): Promise<Cleared> => {
       const outbox = await db.outbox.count()
-      if (o.refuseIfUnsynced && outbox > 0) return { kind: 'unsynced', n: outbox }
-      if (o.expect && (outbox !== o.expect.outbox || (await db.entries.count()) !== o.expect.entries)) return { kind: 'changed' }
+      flushDrafts() // text typed since the question is stored before it is compared, not wiped unseen
+      const draft = hasDraft()
+      if (o.refuseIfUnsynced && (outbox > 0 || draft)) return { kind: 'unsynced', n: outbox, draft }
+      if (o.expect && (outbox !== o.expect.outbox || (await db.entries.count()) !== o.expect.entries || draftNow() !== o.expect.draft)) return { kind: 'changed' }
       if (o.dropToken) signOutLocally()
       syncEngine.reset() // a cycle in flight must not write this account's rows back after the clear
       await Promise.all([db.entries.clear(), db.outbox.clear(), db.syncMeta.clear()])
       return { kind: 'cleared' }
     })
+    // The unsent draft is the owner's text too (D-56): it goes with the rest, and an open capture box is told.
+    if (r.kind === 'cleared') clearDraft()
+    return r
   } catch (err) {
     if (token && storedToken() === null) storeToken(token)
     throw err
@@ -111,22 +121,24 @@ async function clearAccountData(o: { refuseIfUnsynced?: boolean; expect?: { entr
 export const unsyncedCount = (): Promise<number> => db.outbox.count()
 
 /**
- * Sign out (D-28): refused while notes have not reached the server — they exist only on this device, and clearing the
- * account's tables is part of signing out (D-50). The count says what stands in the way. Afterwards the server is told to
+ * Sign out (D-28): refused while notes have not reached the server — or an unsent draft sits in the capture box (D-56) —
+ * they exist only on this device, and clearing the account's tables is part of signing out (D-50). The count (and the
+ * `draft` flag) says what stands in the way. Afterwards the server is told to
  * end the session (best effort, D-55): without that, a token copied off the device stays good for 30 more days.
  */
-export async function signOutSafely(fetchImpl: Fetch = fetch, apiUrl = API_URL): Promise<{ ok: true } | { ok: false; unsynced: number }> {
+export async function signOutSafely(fetchImpl: Fetch = fetch, apiUrl = API_URL): Promise<{ ok: true } | { ok: false; unsynced: number; draft?: true }> {
   const token = storedToken()
+  flushDrafts() // what is stored is what the owner sees in the box
   const r = await clearAccountData({ refuseIfUnsynced: true, dropToken: true })
-  if (r.kind === 'unsynced') return { ok: false, unsynced: r.n }
+  if (r.kind === 'unsynced') return { ok: false, unsynced: r.n, ...(r.draft ? { draft: true as const } : {}) }
   if (token) void revokeSession(token, fetchImpl, apiUrl)
   return { ok: true }
 }
 
 /** Everything this device holds for the account, as a plain object: the copy offered before a device is cleared (D-50). */
-export type LocalCopy = { exportedAt: string; entries: unknown[]; notSynced: unknown[] }
+export type LocalCopy = { exportedAt: string; entries: unknown[]; notSynced: unknown[]; draft: string }
 export async function localCopy(): Promise<LocalCopy> {
-  return { exportedAt: new Date().toISOString(), entries: await db.entries.toArray(), notSynced: await db.outbox.toArray() }
+  return { exportedAt: new Date().toISOString(), entries: await db.entries.toArray(), notSynced: await db.outbox.toArray(), draft: loadDraft() }
 }
 
 export type DeviceClearDeps = { confirm: (message: string) => boolean; saveCopy: (copy: LocalCopy) => void }
@@ -140,14 +152,18 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
  * still holds what the owner was shown.
  */
 export async function clearDeviceSafely(deps: DeviceClearDeps, opts: { dropToken?: boolean } = {}): Promise<'cleared' | 'declined' | 'changed'> {
+  flushDrafts() // what is stored is what the owner sees in the box
   const entries = await db.entries.count()
   const outbox = await db.outbox.count()
-  if (entries > 0 || outbox > 0) {
+  const draftText = draftNow()
+  const draft = draftText !== ''
+  if (entries > 0 || outbox > 0 || draft) {
     const only = outbox > 0 ? ` (${outbox} not uploaded yet — they exist only here)` : ''
-    if (!deps.confirm(`${plural(entries, 'note')} on this device will be cleared${only}. A copy is downloaded first. Clear it?`)) return 'declined'
+    const what = [entries > 0 ? plural(entries, 'note') : '', draft ? 'an unsent draft' : ''].filter(Boolean).join(' and ')
+    if (!deps.confirm(`${what} on this device will be cleared${only}. A copy is downloaded first. Clear it?`)) return 'declined'
     deps.saveCopy(await localCopy())
   }
-  const r = await clearAccountData({ expect: { entries, outbox }, dropToken: opts.dropToken })
+  const r = await clearAccountData({ expect: { entries, outbox, draft: draftText }, dropToken: opts.dropToken })
   return r.kind === 'cleared' ? 'cleared' : 'changed'
 }
 
