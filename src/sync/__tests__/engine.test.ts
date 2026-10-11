@@ -3,7 +3,9 @@ import Dexie from 'dexie'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { PlannerDb } from '@/db'
 import { captureEntry } from '@/capture/capture'
-import { backoffDelay, BACKOFF_MAX_MS, coalesce, PULL_PAGE, PUSH_BATCH_BYTES, PUSH_BATCH_MAX, SyncEngine, takeBatch } from '../engine'
+import { createCycleLock } from '../lock'
+import { fakeLocks } from './fakeLocks'
+import { type EngineDeps, backoffDelay, BACKOFF_MAX_MS, coalesce, PULL_PAGE, PUSH_BATCH_BYTES, PUSH_BATCH_MAX, SyncEngine, takeBatch } from '../engine'
 import { FakeServer } from './fakeServer'
 
 let n = 0
@@ -657,6 +659,152 @@ describe('review findings', () => {
       expect(server.requests.filter((r) => r.path.startsWith('/sync/pull')).map((r) => r.path)).toEqual([`/sync/pull?since=2&limit=${PULL_PAGE}`])
       expect((await a.db.syncMeta.toArray())[0]).toMatchObject({ cursor: 2 })
       expect((await a.db.syncMeta.toArray())[0]!.reconcile).toBeFalsy()
+    })
+  })
+
+  // D-59: two windows of the app (the installed app and a browser tab) each run their own engine over the SAME IndexedDB.
+  describe('two windows on one device', () => {
+    const twoEngines = (lock?: EngineDeps['lock']) => {
+      const db = new PlannerDb(`shared-${++n}`)
+      const make = () => new SyncEngine({ db, fetch: server.fetch as typeof fetch, apiUrl: 'https://api.test', token: () => 'tok-a', online: () => true, yieldNow: async () => {}, lock })
+      return { db, one: make(), two: make() }
+    }
+
+    // Known positive: without a lock the two windows really do push at the same time, so "one at a time" below means something.
+    it('without a lock they overlap', async () => {
+      const { db, one, two } = twoEngines()
+      for (const t of ['a', 'b', 'c']) await captureEntry(t, db)
+      server.delayMs = 5
+      await Promise.all([one.run(), two.run()])
+      expect(server.maxInFlight).toBeGreaterThanOrEqual(2)
+    })
+
+    it('under the lock they take turns: never two requests at once, every note arrives once', async () => {
+      const lock = createCycleLock(fakeLocks(), { waitMs: 5_000 })
+      const { db, one, two } = twoEngines(lock)
+      for (const t of ['a', 'b', 'c']) await captureEntry(t, db)
+      server.delayMs = 5
+      await Promise.all([one.run(), two.run()])
+      expect(server.maxInFlight).toBe(1)
+      expect(server.rows.size).toBe(3)
+      expect(server.seq).toBe(3) // pushed once, not once per window
+      expect(await db.outbox.count()).toBe(0)
+    })
+
+    it('a window whose turn never came runs nothing and leaves its state alone', async () => {
+      const { db, one } = twoEngines(async () => false)
+      await captureEntry('x', db)
+      const before = one.state
+      await one.run()
+      expect(server.requests).toHaveLength(0)
+      expect(one.state).toBe(before)
+      expect(await db.outbox.count()).toBe(1) // still waiting for the next trigger, not lost
+    })
+
+    // Review finding: the account the engine had learned was kept after the token changed in ANOTHER window, so this window
+    // went on syncing under the old account's id (a wrong cursor, or the new account's notes under the old one's name).
+    it('the account it knows is the account of the token it holds now', async () => {
+      server.tokens.set('tok-b', 'user-b')
+      const a = device(server)
+      await captureEntry('mine', a.db)
+      await a.engine.run() // the device now belongs to user-a
+      a.token.v = 'tok-b' // another window signed in as someone else; this window was never told
+      server.requests.length = 0
+      await a.engine.run()
+      expect(server.count('/me')).toBe(1) // asked again, not remembered
+      expect(a.engine.state.phase).toBe('foreign-account')
+      expect(server.count('/sync/push')).toBe(0)
+    })
+
+    // The answer to /me belongs to the token that was SENT. If another window changed the token while it was on its way,
+    // remembering it would pair the old token's answer with the new token.
+    it('an answer that arrives after the token changed is not remembered or acted on', async () => {
+      server.tokens.set('tok-b', 'user-b')
+      const a = device(server)
+      const real = server.fetch
+      const engine = new SyncEngine({
+        db: a.db, apiUrl: 'https://api.test', token: () => a.token.v, online: () => true, yieldNow: async () => {}, now: () => a.clock.t,
+        fetch: (async (...args: Parameters<typeof fetch>) => {
+          const res = await real(...args)
+          if (String(args[0]).endsWith('/me') && a.token.v === 'tok-a') a.token.v = 'tok-b' // another window signs in as someone else
+          return res
+        }) as typeof fetch,
+      })
+      await engine.run()
+      expect(engine.state.phase).toBe('waiting') // the cycle stopped; it did not carry on as user-a
+      expect(await a.db.syncMeta.count()).toBe(0) // and claimed the device for nobody
+      await engine.run({ force: true })
+      expect((await a.db.syncMeta.toArray()).map((m) => m.userId)).toEqual(['user-b'])
+    })
+
+    // Review finding (A1): the account was learned under one token, but every request re-read the token. Another window can replace
+    // it between the outbox read and the send, and this window would send the old account's notes under the new account's token.
+    it('a token that changes mid-cycle is never used to send the old account\'s notes', async () => {
+      server.tokens.set('tok-b', 'user-b')
+      const a = device(server)
+      await captureEntry('mine', a.db)
+      const realToArray = a.db.outbox.toArray.bind(a.db.outbox)
+      let flipped = false
+      a.db.outbox.toArray = (async () => {
+        if (!flipped) { flipped = true; a.token.v = 'tok-b' } // another window signs in as someone else, just before the send
+        return realToArray()
+      }) as never
+      await a.engine.run()
+      expect(flipped).toBe(true) // exercised: the token changed inside the cycle
+      expect(server.count('/sync/push')).toBe(0) // nothing sent, under either token
+      expect(server.rows.size).toBe(0)
+      expect(a.engine.state.phase).toBe('waiting')
+      await a.engine.run({ force: true }) // the next cycle runs under the new token and meets the other account's notes
+      expect(a.engine.state.phase).toBe('foreign-account')
+      expect(server.count('/sync/push')).toBe(0)
+    })
+
+    // Review finding (A2): `again` was cleared before the wait for the lock, so a trigger that arrived during the wait caused a
+    // second round although the cycle that ran after the wait had already read everything fresh.
+    it('a trigger that arrives while the window waits for its turn does not cause a second round', async () => {
+      let release!: () => void
+      const turn = new Promise<void>((r) => { release = r })
+      const lock: EngineDeps['lock'] = async (fn) => { await turn; await fn(); return true }
+      const { db, one } = twoEngines(lock)
+      await captureEntry('x', db)
+      const first = one.run()
+      void one.run() // a capture's timer fires while the first run is still waiting
+      release()
+      await first
+      expect(server.count('/sync/pull')).toBe(1)
+    })
+
+    // Review finding (A6): giving a wait up must leave the engine able to run again.
+    it('a window whose wait was given up runs at the next trigger', async () => {
+      let giveUp = true
+      const lock: EngineDeps['lock'] = async (fn) => { if (giveUp) return false; await fn(); return true }
+      const { db, one } = twoEngines(lock)
+      await captureEntry('x', db)
+      await one.run()
+      expect(server.requests).toHaveLength(0)
+      giveUp = false
+      await one.run()
+      expect(server.rows.size).toBe(1)
+    })
+
+    // Review finding (A4): the lock bounds the WAIT, so a request that never answers would hold it for as long as the browser
+    // lets it hang, and every other window would give up its turns behind it.
+    it('a request that never answers is cut off, so it cannot hold the lock for ever', async () => {
+      const hang: typeof fetch = (_url, init) => new Promise((_res, rej) => {
+        init!.signal!.addEventListener('abort', () => rej(Object.assign(new Error('aborted'), { name: 'AbortError' })))
+      })
+      const db = new PlannerDb(`hang-${++n}`)
+      const engine = new SyncEngine({ db, fetch: hang, apiUrl: 'https://api.test', token: () => 'tok-a', online: () => true, yieldNow: async () => {}, requestTimeoutMs: 30 })
+      await engine.run()
+      expect(engine.state.phase).toBe('waiting')
+      expect(engine.state.lastError).toContain('did not answer')
+    })
+
+    it('the same token keeps the account it learned: /me is asked once', async () => {
+      const a = device(server)
+      await a.engine.run()
+      await a.engine.run()
+      expect(server.count('/me')).toBe(1)
     })
   })
 

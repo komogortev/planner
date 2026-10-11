@@ -10,7 +10,7 @@ export type Provider = 'github' | 'google'
 // localStorage, not sessionStorage: sessionStorage is per browsing context, and an iOS home-screen app may come back
 // from the provider in a new one. The spike must measure whether the *token* survives, not lose the nonce first.
 const PENDING_KEY = 'planner.signIn.pending'
-const TOKEN_KEY = 'planner.signIn.token'
+export const TOKEN_KEY = 'planner.signIn.token'
 const RESULT_KEY = 'planner.signIn.lastResult'
 const PENDING_TTL_MS = 10 * 60_000 // the Worker's flow cookie lives 10 minutes too
 
