@@ -5,7 +5,7 @@
 - **Working:** prod = Worker `f098057` + D1 `0008`; `pnpm check` app 453 · Worker 169; note sync, sign-out guard, export/delete, `/log`, pager unchanged. The record tables exist in production, empty.
 - **Broken:** nothing known. **Not verified:** a record push on production (smoke has no signed-in session; S3 or a signed-in probe proves it); DEVICE-CHECKS 10, 13–17 on a phone; a live D1 restore; the tester's first sync.
 - **Blocker:** none. The Worker-before-client gate for S3 is met.
-- **Next:** (1) S3 UI, gates in HW-HARNESS §9 (records are never delete-and-recreate; surface skipped server records; discard label). (2) Phone checks fold into S3/S4; exit week = S4 (D-60). Parked items: Carried follow-ups below.
+- **Next:** (1) S3 UI incl. the evening pass, drop and lead-time question (D-65…D-68, DEVICE-CHECKS 18–20), gates in HW-HARNESS §9 (records are never delete-and-recreate; surface skipped server records; discard label). (2) Phone checks fold into S3/S4; exit week = S4 (D-60). Parked items: Carried follow-ups below.
 ---
 
 ## Context

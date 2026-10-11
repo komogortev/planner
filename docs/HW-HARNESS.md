@@ -9,7 +9,7 @@ Give the exit week a reason to run. H1 delivers capture and sync; nothing yet *u
 
 > capture → **harness** reads new notes, links them to older ones, asks short questions → owner answers, confirms "done" → a **widget** (first: *Daily task journal*) reports today's commitments from the marked notes.
 
-**Acceptance.** On the owner's phone, for three consecutive days: (a) a harness run over that day's notes stores questions, and answering one changes what the next run asks; (b) a note the owner marks done (or confirms as closed by a later note) is absent from the next day's journal; (c) a note carried to tomorrow appears in tomorrow's journal and not today's; (d) replaying the same pasted result twice changes nothing; (e) a second account sees none of the first account's marks (isolation, same test as H1 §8).
+**Acceptance.** On the owner's phone, for three consecutive days: (a) a harness run over that day's notes stores questions, and answering one changes what the next run asks; (b) a note the owner marks done (or confirms as closed by a later note) is absent from the next day's journal; (c) a note carried to tomorrow appears in tomorrow's journal and not today's, and a note left open with no tap is listed in the next evening's pass (D-65); (d) replaying the same pasted result twice changes nothing; (e) a second account sees none of the first account's marks (isolation, same test as H1 §8).
 
 ## 2. Decisions (owner, 2026-10-11)
 
@@ -43,7 +43,7 @@ interface HarnessOutput {
 }
 ```
 
-**Rules baked into the prompt** (patterns from the owner's prior journal tooling, restated generically): conservative — a wrong link is worse than a missed one; a due date only when the text implies one; evidence is a one-line quote; nothing is invented about people or places.
+**Rules baked into the prompt** (patterns from the owner's prior journal tooling, restated generically): conservative — a wrong link is worse than a missed one; a due date only when the text implies one, and then also one question asking which earlier day to pick the note up (D-66); evidence is a one-line quote; nothing is invented about people or places.
 
 **Validation before anything is stored** (`validateHarness`, pure): unknown or already-assessed `entryId` → that assessment dropped and counted; a 4th question dropped; a question whose normalized text matches an existing one on that note dropped; `closes`/`followUp` targets outside the candidate set, no longer open, or pointing at the note itself (closes only) dropped; a close by a note that is not newer than the one it closes dropped; a follow-up date that is malformed, in the past (settings zone) or more than 366 days away dropped; a pair already proposed once, in any state, is never proposed again; an assessment of a note that was deleted, done or dropped after the prompt was composed, or that another run assessed *after* this prompt was composed (a stale paste), dropped; model text holding a lone UTF-16 surrogate dropped; cuts are by code point, never mid-emoji. **"Today" and the assessment time are the moment the prompt was composed, not the paste**: the model was told that day, and an answer given between compose and paste must still re-open the note; malformed JSON → nothing stored. Closes and follow-ups are stored as **proposed**; only the owner's tap confirms them (the owner, or "the owner confirming the harness", is the only author of `done`).
 
@@ -104,7 +104,7 @@ The prompt is built only from the signed-in account's on-device notes. The run h
 | **S1 Domain** ✅ (CodeReview round 1 fixed: 8 findings, 7 confirmed and fixed, 1 low-impact accepted with a test) | `src/domain/{uuid5,harness,journal}.ts`: selection, compose, `parseHarnessOutput`, `applyHarness`, the owner's transitions, journal slice + compose + `validateReport`. Pure, no UI, no sync | 85 tests incl. replay ×2 → nothing written, two devices → same ids, foreign id / 4th question / repeated question / past date / foreign or invented citation dropped, acceptance (a)(b)(c) end to end on synthetic notes; each of 32 guards removed in turn turns the suite red |
 | **S2 Schema + sync** ✅ (CodeReview: 0 critical, 4 improvements, all handled or gated below) | Dexie v5, D1 `0008`, kind-aware push/pull, merged pull under one cursor, account export/delete/clear/copy cover records, `writeRecords` | the 316/147 pre-existing tests unchanged and green (now 453 app / 169 Worker); 37 of 38 guards removed in turn turn the suite red (16 Worker, 22 client; the 38th is redundant with the validator); replay, isolation, same-id-two-kinds, stale-edit revision, CAS race, rewind sweep, rejected + discard, v4→v5 upgrade proven. **Not run: production smoke (the Worker is not deployed).** |
 | **S3 gates (from the S2 review)** | **Step 0: deploy the S2 Worker (and `0008`) BEFORE any client that writes records is merged** — Pages builds from `main` on its own, the Worker does not, and an older Worker rejects every record push, which the client then keeps as refused until the owner presses Retry. Records are never deleted and re-created under the same id (a deleted id stays deleted on the server): use `state`. Surface the count of server records a device could not store (today a console warning only). A rejected record's Discard deletes the owner's text: the label shows it, and the saved copy should hold discarded payloads. Pull pages of 100 can carry up to 64 KB per record: watch the size once reports exist | — |
-| **S3 UI** | Run harness (copy → paste box → preview of what will be stored), questions on the note, done / carry-to-date taps, Widgets page create + activate, Dashboard shows the journal | DEVICE-CHECKS rows written, then run on the phone |
+| **S3 UI** | Run harness (copy → paste box → preview of what will be stored), questions on the note, done / carry-to-date taps, **evening pass with done · carry to tomorrow · drop (D-65, D-67)**, **lead-time question on in-text due dates (D-66)**, Widgets page create + activate, Dashboard shows the journal | DEVICE-CHECKS rows written, then run on the phone |
 | **S4 Use** | The exit week, now measuring a loop (H1 §1 acceptance plus §1 above) | §1 true on three days |
 
 **Open — each with the default I would proceed under:**
@@ -113,11 +113,11 @@ The prompt is built only from the signed-in account's on-device notes. The run h
 2. **Context window for stage 1:** 7 days of open notes, cap 60. *Default as written.*
 3. **Dashboard shows** the full report or a one-line summary opening the widget. *Default: summary + age; decide at S3.*
 4. **Language of questions** from settings, not from the prompt (H2 §4.5). *Default: yes.*
-5. **Entry-state `dropped`** exists in the schema; UI in S3 inside the evening pass (§10 C3). *Default: yes — amended 2026-10-11, proposed.*
+5. **Entry-state `dropped`** exists in the schema; UI in S3 inside the evening pass. *Accepted 2026-10-11 (D-67).*
 6. **An overdue carried note resurfaces in every daily journal until marked done** (tested on purpose). Intended, or should it fall out after N days? *Default: keep resurfacing; revisit on evidence from the exit week.*
 7. **S3 carry-overs from review:** the report body is untrusted model markdown, so the renderer must disable HTML and links; `localDay` throws on an invalid zone, so Settings must guarantee a valid one.
 
-## 10. Calibration from the first real notes (2026-10-11) — proposed, none of it decided
+## 10. Calibration from the first real notes (2026-10-11) — C1–C4 accepted (owner, D-65…D-68); C5–C6 parked
 
 **Basis.** The one production account held 11 notes: 6 dev test strings, and 5 written from the phone in about fifty minutes away from the desk — 3 errands (one with a deadline inside its text), 1 request for a spec, 1 statement of purpose. Small n, and the harness has **not** been run on them (no S3 UI yet): this is a paper walk-through of §3–§4 against real capture, a probe of the spec and not a measurement. Note text is not reproduced here (public repo).
 
