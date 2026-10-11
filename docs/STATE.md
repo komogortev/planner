@@ -1,11 +1,11 @@
 # Personal Planner — STATE
 
 ## SNAPSHOT
-- **Phase/Last:** H1 built. **2026-10-11: HW-HARNESS (harness + Daily task journal widget) S1 domain (#68) and S2 records sync (#69) merged** (D-60…D-64, [HW-HARNESS.md](HW-HARNESS.md)). Same day, deployed earlier: hardening scan (#50–#55), origin move (#57–#66, app at `koplanner.pages.dev`). Vibe-code mode.
-- **Working:** prod = Worker `a50f00b`, D1 `0001`–`0007` (unchanged); the local D1 has `0008`; `pnpm check` app 453 · Worker 169; note sync, sign-out guard, export/delete, `/log`, pager unchanged.
-- **Broken:** nothing known. **Not deployed: the Worker + D1 `0008`**: the guarded deploy got Cloudflare 403 / 7403 on the D1 query (saved wrangler login refused). **Not verified:** DEVICE-CHECKS 10, 13–17 on a phone; a live D1 restore; the tester's first sync.
-- **Blocker:** owner runs `pnpm --dir api exec wrangler login`; then the deploy. S3 must not merge before it (an older Worker rejects every record push).
-- **Next:** (1) deploy Worker + `0008`, `pnpm smoke` a minute later. (2) S3 UI, gates in HW-HARNESS §9. (3) Phone checks fold into S3/S4; exit week = S4 (D-60). Parked items: Carried follow-ups below.
+- **Phase/Last:** H1 built. **2026-10-11: HW-HARNESS (harness + Daily task journal widget) S1 domain (#68) and S2 records sync (#69) merged AND DEPLOYED** (Worker `f098057`, D1 `0001`–`0008`, smoke 16/16). D-60…D-64, [HW-HARNESS.md](HW-HARNESS.md). Earlier today: hardening scan (#50–#55), origin move (#57–#66, `koplanner.pages.dev`). Vibe-code mode.
+- **Working:** prod = Worker `f098057` + D1 `0008`; `pnpm check` app 453 · Worker 169; note sync, sign-out guard, export/delete, `/log`, pager unchanged. The record tables exist in production, empty.
+- **Broken:** nothing known. **Not verified:** a record push on production (smoke has no signed-in session; S3 or a signed-in probe proves it); DEVICE-CHECKS 10, 13–17 on a phone; a live D1 restore; the tester's first sync.
+- **Blocker:** none. The Worker-before-client gate for S3 is met.
+- **Next:** (1) S3 UI, gates in HW-HARNESS §9 (records are never delete-and-recreate; surface skipped server records; discard label). (2) Phone checks fold into S3/S4; exit week = S4 (D-60). Parked items: Carried follow-ups below.
 ---
 
 ## Context
@@ -61,7 +61,7 @@
 
 Full log: PROJECT.md → Decisions log. Latest:
 
-- 2026-10-11 (s6c) — Session close (Claude, vibe-code): S1 (#68) and S2 (#69) merged on green. Production deploy of the Worker stopped at the first step (`d1 migrations apply --remote` → 403 / 7403); `wrangler whoami` showed a valid login with `d1 (write)`, so the saved OAuth token is the suspect, unconfirmed. Nothing in production changed; the merged client writes no records until S3. Local D1 migrated to `0008` for the dev stack. Review lesson: the A13 guard covers a new table, not the code that reads it: the account export read only entries and was caught by reading, not by the guard.
+- 2026-10-11 (s6c) — Session close (Claude, vibe-code): S1 (#68) and S2 (#69) merged on green, then DEPLOYED. The first guarded deploy stopped at `d1 migrations apply --remote` with Cloudflare 403 / 7403; I read it as a login problem and asked the owner to re-login on one data point. It was the transient D1 `7403` already in memory: `d1 migrations list --remote` worked minutes later and one retry applied `0008` and uploaded the Worker (`f098057`); smoke 16/16. Lesson (R4/R3): isolate with the read-only listing and retry once before handing a credential task to the owner, and read the project memory file, not only its index line. Second lesson: the A13 guard covers a new table, not the code that reads it: the account export read only entries and was caught by reading, not by the guard.
 
 - 2026-10-11 (s6b) — HW-HARNESS S2 built (Claude, vibe-code): records sync end to end. D-64: ONE server `records` table, typed Dexie tables per kind (a deviation from D-62's wording, recorded). Worker: migration `0008`, `records.ts` (CAS push, revisions, merged pull under one cursor), account export/delete cover it (the A13 guard caught the table; the export reading only entries was NOT caught by it and was fixed by reading the code). Client: Dexie v5 with a cursor-reset upgrade, record-aware engine (ack, pull, D-58 sweep, discard), `writeRecords`, clear/copy/export/delete cover records. 453 app + 169 Worker tests, 37/38 guards mutated red; entry path unchanged. CodeReview: 0 critical, 4 improvements (v5 cursor reset fixed; skipped-record trace added; discard label shows the text; Worker-before-client order is a gate on S3). Not deployed.
 
