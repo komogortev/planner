@@ -1,11 +1,11 @@
 # Personal Planner — STATE
 
 ## SNAPSHOT
-- **Phase/Last:** H1 built. **2026-10-11: HW-HARNESS (harness + Daily task journal widget) S1 domain (#68) and S2 records sync (#69) merged AND DEPLOYED** (Worker `f098057`, D1 `0001`–`0008`, smoke 16/16). D-60…D-64, [HW-HARNESS.md](HW-HARNESS.md). Earlier today: hardening scan (#50–#55), origin move (#57–#66, `koplanner.pages.dev`). Vibe-code mode.
-- **Working:** prod = Worker `f098057` + D1 `0008`; `pnpm check` app 453 · Worker 169; note sync, sign-out guard, export/delete, `/log`, pager unchanged. The record tables exist in production, empty.
-- **Broken:** nothing known. **Not verified:** a record push on production (smoke has no signed-in session; S3 or a signed-in probe proves it); DEVICE-CHECKS 10, 13–17 on a phone; a live D1 restore; the tester's first sync.
+- **Phase/Last:** H1 built. **2026-10-11: HW-HARNESS S3a thin loop built** (Dashboard journal card: harness + journal copy-paste steps, per-note questions/proposals, owner pick-up date). S1 (#68) + S2 (#69) deployed (Worker `f098057`, D1 `0008`). D-60…D-68, [HW-HARNESS.md](HW-HARNESS.md) §9. Vibe-code mode.
+- **Working:** prod = Worker `f098057` + D1 `0008` (S3a is client-only, no Worker change); `pnpm check` app 477 · Worker 169; the loop clicked through on a local build with synthetic notes.
+- **Broken:** nothing known. **Not verified:** a harness run on production from the phone (first real model reply, first record push from a signed-in device, the clipboard write on a phone); DEVICE-CHECKS 10, 13–17; a live D1 restore; the tester's first sync.
 - **Blocker:** none. The Worker-before-client gate for S3 is met.
-- **Next:** (1) S3 UI incl. the evening pass, drop and lead-time question (D-65…D-68, DEVICE-CHECKS 18–20), gates in HW-HARNESS §9 (records are never delete-and-recreate; surface skipped server records; discard label). (2) Phone checks fold into S3/S4; exit week = S4 (D-60). Parked items: Carried follow-ups below.
+- **Next:** (1) owner runs the loop once on the phone with real notes (step 1 → answer → step 2). (2) S3b: evening pass (D-65, D-67), Widgets create + activate, DEVICE-CHECKS 18–20. (3) S4 exit week. Deferred: §9 point 9 (re-entry: first client record delete).
 ---
 
 ## Context
@@ -60,6 +60,8 @@
 ## Decision log
 
 Full log: PROJECT.md → Decisions log. Latest:
+
+- 2026-10-11 (s3a) — S3 scoped by the owner as a POC of the loop's interaction/data model on the existing infrastructure (carte blanche on the client; the irreversible edge is what reaches D1). Built the thin loop: two copy-prompt steps on the Dashboard, pending header in localStorage, questions/proposals on notes, report as plain lines. Found: D-66's answer cannot become a second carry (derived link id) → owner pick-up date in UI. CodeReview: 6 improvements, 5 fixed (storage-refused compose, stale pick-up field, silent tap errors, clipboard-read prompt, preview passing what Store refuses), 1 deferred with re-entry (§9 point 9). Widget activation not built: the journal shows unconditionally.
 
 - 2026-10-11 (notes) — Notes-calibration session: the first phone-captured notes (test data for the planner, never inputs for Claude — owner) walked through HW-HARNESS on paper → §10 C1–C6 (#70); owner accepted C1–C4 as D-65…D-68 into S3 scope (evening pass, lead-time question, `dropped` UI, no `occurredAt`; DEVICE-CHECKS 18–20, #73) and parked weekly…life-goal horizons as drafts (`HORIZON-YEARLY-DRAFT.md`) until S4 acceptance. Why: the daily loop is the whole vertical slice; an uncarried note otherwise left the journal silently.
 - 2026-10-11 (s6c) — Session close (Claude, vibe-code): S1 (#68) and S2 (#69) merged on green, then DEPLOYED. The first guarded deploy stopped at `d1 migrations apply --remote` with Cloudflare 403 / 7403; I read it as a login problem and asked the owner to re-login on one data point. It was the transient D1 `7403` already in memory: `d1 migrations list --remote` worked minutes later and one retry applied `0008` and uploaded the Worker (`f098057`); smoke 16/16. Lesson (R4/R3): isolate with the read-only listing and retry once before handing a credential task to the owner, and read the project memory file, not only its index line. Second lesson: the A13 guard covers a new table, not the code that reads it: the account export read only entries and was caught by reading, not by the guard.

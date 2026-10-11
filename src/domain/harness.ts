@@ -176,6 +176,7 @@ For every note with role="to-assess":
 - If a to-assess note states a fact that concludes an OLDER note (any role), propose it in "closes" with a one-line quote
   as evidence. The closing note must be newer than the closed one.
 - If a note implies it should be picked up on a later day, propose "followUp" with that date (YYYY-MM-DD). Only when the text implies a date.
+  When that date is a deadline (the note must be done BY it), also ask one question: which earlier day to pick it up.
 - Be conservative: a wrong link is worse than a missed one. Invent nothing about people, places or dates.
 Notes with role="context" are read-only background: you may close or carry them, but ask them no questions.`
 
