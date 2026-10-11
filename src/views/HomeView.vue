@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { captureEntry } from '@/capture/capture'
+import { isBlank } from '@/capture/draft'
+import { createSubmitter } from '@/capture/submit'
 import { db } from '@/db'
+import { useDraft } from '@/composables/useDraft'
 import { useLiveQuery } from '@/composables/useLiveQuery'
 import { useSyncState } from '@/composables/useSyncState'
 import { syncSoon } from '@/sync'
@@ -11,7 +14,8 @@ import dictophone from '@/assets/dictophone.webp'
 // the cassette window IS the text area (tap = focus, nothing else on screen changes), the record key is Capture.
 // With nothing written, the key just focuses the window. The unsynced count is the persisted outbox size, so it
 // survives a reload (H1-ENTRIES.md section 5.1).
-const text = ref('')
+// The text survives a reload (D-56): a deploy reloads the app by itself, a phone kills a backgrounded one.
+const { text, clear: clearText, flush: saveDraftNow } = useDraft()
 const error = ref<string | null>(null)
 const saved = ref(false)
 const box = ref<HTMLTextAreaElement | null>(null)
@@ -19,15 +23,23 @@ const unsynced = useLiveQuery(() => db.outbox.count(), 0)
 const sync = useSyncState()
 let savedTimer: number | undefined
 
+// One capture at a time, and only what was captured leaves the box (capture/submit.ts): a second tap while the first is
+// still writing is dropped, and text typed during the write stays.
+const submit = createSubmitter({ get: () => text.value, set: (t) => { text.value = t } }, captureEntry)
+
 async function capture(): Promise<void> {
-  if (!text.value.trim()) return box.value?.focus()
-  const r = await captureEntry(text.value)
-  if (!r.ok) {
-    error.value = r.error
+  const out = await submit()
+  if (!out) return // a second tap while the first was still writing
+  if (out.kind === 'empty') return box.value?.focus()
+  if (out.kind === 'error') {
+    error.value = out.error
     return
   }
   error.value = null
-  text.value = ''
+  // The box is empty (or holds only whitespace): the stored draft goes too — here, and in any other window that holds the
+  // text that was captured. Otherwise what was typed during the write is the new draft, saved now rather than in 250 ms.
+  if (isBlank(out.left)) clearText(out.sent)
+  else saveDraftNow()
   syncSoon() // two seconds from now, not at once: a burst of captures is one request
   saved.value = true
   window.clearTimeout(savedTimer)

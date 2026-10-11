@@ -2,10 +2,11 @@
 // device", delete account. These tests pin the order and the guards of those gestures. Each guard has a negative control.
 import 'fake-indexeddb/auto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { clearDeviceSafely, signOutSafely } from '../account'
+import { clearDeviceSafely, deleteMyAccount, signOutSafely } from '../account'
 import { db } from '@/db'
 import { captureEntry } from '@/capture/capture'
 import { syncEngine } from '@/sync'
+import { CLEARED_KEY, DRAFT_CLEARED, DRAFT_FLUSH, DRAFT_KEY, loadDraft, saveDraft } from '@/capture/draft'
 
 const API = 'https://api.test'
 const TOKEN_KEY = 'planner.signIn.token'
@@ -182,5 +183,160 @@ describe('clearDeviceSafely', () => {
     await seedSynced(1)
     await clearDeviceSafely(yes, { dropToken: true })
     expect(localStorage.getItem(TOKEN_KEY)).toBeNull()
+  })
+})
+
+// D-56: an unsent draft is the owner's text that exists nowhere else. Sign-out refuses for it like for an unsent note, "Clear
+// this device" names it and keeps it in the copy, delete-account clears it; a refused or failed gesture keeps it.
+describe('the unsent draft and the wipe gestures (D-56)', () => {
+  beforeEach(() => { localStorage.removeItem(DRAFT_KEY); localStorage.removeItem(CLEARED_KEY) })
+
+  // M5: only a completed clear may take the draft.
+  it('"Clear this device" takes the draft with the rest, tells the open box, and the copy holds it', async () => {
+    await seedSynced(1)
+    saveDraft('half a thought')
+    const target = new EventTarget()
+    vi.stubGlobal('window', target)
+    try {
+      let heard = 0
+      target.addEventListener(DRAFT_CLEARED, () => heard++)
+      let copied: { draft: string } | null = null
+      expect(await clearDeviceSafely({ confirm: () => true, saveCopy: (c) => { copied = c } })).toBe('cleared')
+      expect(copied).toMatchObject({ draft: 'half a thought' })
+      expect(loadDraft()).toBe('')
+      expect(heard).toBe(1)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('"Clear this device" asks even when only a draft is on the device', async () => {
+    saveDraft('only a draft')
+    const asked: string[] = []
+    expect(await clearDeviceSafely({ confirm: (m) => (asked.push(m), true), saveCopy: () => undefined })).toBe('cleared')
+    expect(asked).toHaveLength(1)
+    expect(asked[0]).toContain('an unsent draft')
+    expect(asked[0]).not.toContain('0 notes')
+  })
+
+  it('a draft of only whitespace is nothing: no question, and nothing to count', async () => {
+    localStorage.setItem(DRAFT_KEY, ' \n ')
+    const asked: string[] = []
+    expect(await clearDeviceSafely({ confirm: (m) => (asked.push(m), true), saveCopy: () => undefined })).toBe('cleared')
+    expect(asked).toHaveLength(0)
+  })
+
+  it('declining keeps the draft', async () => {
+    saveDraft('only a draft')
+    expect(await clearDeviceSafely({ confirm: () => false, saveCopy: () => undefined })).toBe('declined')
+    expect(loadDraft()).toBe('only a draft')
+  })
+
+  it('a clear that fails keeps the draft', async () => {
+    await seedSynced(1)
+    saveDraft('half a thought')
+    vi.spyOn(db.syncMeta, 'clear').mockRejectedValue(new Error('disk full'))
+    await expect(clearDeviceSafely(yes)).rejects.toThrow('disk full')
+    expect(loadDraft()).toBe('half a thought')
+  })
+
+  // Review finding: a "changed" outcome used to be able to take the draft.
+  it('a clear that stops because the device changed keeps the draft', async () => {
+    await seedSynced(1)
+    saveDraft('half a thought')
+    let late: Promise<unknown> = Promise.resolve()
+    expect(await clearDeviceSafely({ confirm: () => true, saveCopy: () => { late = captureEntry('arrived late') } })).toBe('changed')
+    await late
+    expect(loadDraft()).toBe('half a thought')
+  })
+
+  it('stops when the draft itself changed after the question', async () => {
+    saveDraft('what the owner was shown')
+    expect(await clearDeviceSafely({ confirm: () => true, saveCopy: () => saveDraft('typed after the question') })).toBe('changed')
+    expect(loadDraft()).toBe('typed after the question')
+  })
+
+  it('sign-out is refused for an unsent draft, like for an unsent note, and keeps it', async () => {
+    await seedSynced(1)
+    localStorage.setItem(TOKEN_KEY, 'tok')
+    saveDraft('half a thought')
+    let called = false
+    const spy: typeof fetch = async () => { called = true; return new Response(null, { status: 204 }) }
+    expect(await signOutSafely(spy, API)).toEqual({ ok: false, unsynced: 0, draft: true })
+    await new Promise((r) => setTimeout(r, 20))
+    expect(called).toBe(false)
+    expect(localStorage.getItem(TOKEN_KEY)).toBe('tok')
+    expect(loadDraft()).toBe('half a thought')
+    expect(await db.entries.count()).toBe(1)
+  })
+
+  it('sign-out names both when both stand in the way', async () => {
+    expect((await captureEntry('not uploaded')).ok).toBe(true)
+    saveDraft('half a thought')
+    expect(await signOutSafely(ok204, API)).toEqual({ ok: false, unsynced: 1, draft: true })
+  })
+
+  it('sign-out goes ahead with a blank box, and clears the stored draft marker state', async () => {
+    await seedSynced(1)
+    localStorage.setItem(TOKEN_KEY, 'tok')
+    localStorage.setItem(DRAFT_KEY, ' \n ')
+    expect(await signOutSafely(ok204, API)).toEqual({ ok: true })
+    expect(loadDraft()).toBe('')
+  })
+
+  it('delete-account takes the draft with the rest', async () => {
+    saveDraft('half a thought')
+    localStorage.setItem(TOKEN_KEY, 'tok')
+    await deleteMyAccount('me@example.com', async () => new Response(JSON.stringify({ deleted: true }), { status: 200 }), API)
+    expect(loadDraft()).toBe('')
+    expect(localStorage.getItem(TOKEN_KEY)).toBeNull()
+  })
+
+  it('asks the open box to write what it holds before it reads the stored draft', async () => {
+    const target = new EventTarget()
+    vi.stubGlobal('window', target)
+    try {
+      // the box types "typed just now" but has not saved it yet; a flush request makes it save
+      target.addEventListener(DRAFT_FLUSH, () => saveDraft('typed just now'))
+      const asked: string[] = []
+      await clearDeviceSafely({ confirm: (m) => (asked.push(m), false), saveCopy: () => undefined })
+      expect(asked[0]).toContain('an unsent draft')
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+})
+
+describe('sign-out and the open capture box (D-56)', () => {
+  // The guard reads the STORED draft; what the owner sees is the box. Without the flush request the box's last 250 ms of
+  // typing is not stored yet and sign-out goes ahead over it.
+  it('asks the open box to write what it holds before it decides', async () => {
+    await seedSynced(1)
+    localStorage.setItem(TOKEN_KEY, 'tok')
+    const target = new EventTarget()
+    vi.stubGlobal('window', target)
+    try {
+      target.addEventListener(DRAFT_FLUSH, () => saveDraft('typed just now'))
+      expect(await signOutSafely(ok204, API)).toEqual({ ok: false, unsynced: 0, draft: true })
+      expect(localStorage.getItem(TOKEN_KEY)).toBe('tok')
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
+  // Typed after the question, while the copy was being made: the clear's own flush stores it, and the re-check stops.
+  it('"Clear this device" stops for text typed after the question, even before the box has saved it', async () => {
+    await seedSynced(1)
+    const target = new EventTarget()
+    vi.stubGlobal('window', target)
+    try {
+      let typed = false
+      target.addEventListener(DRAFT_FLUSH, () => { if (typed) saveDraft('typed during the copy') })
+      const out = await clearDeviceSafely({ confirm: () => true, saveCopy: () => { typed = true } })
+      expect(out).toBe('changed')
+      expect(loadDraft()).toBe('typed during the copy')
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 })
