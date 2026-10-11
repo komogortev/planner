@@ -6,7 +6,7 @@
   "description": "Personal planning + tracking PWA — commitments, intentions, market log",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc -b && vite build && node -e \"require('fs').copyFileSync('dist/index.html','dist/404.html')\"",
+    "build": "vue-tsc -b && vite build && node -e \"if(!process.env.CF_PAGES)require('fs').copyFileSync('dist/index.html','dist/404.html')\"",
     "preview": "vite preview",
     "typecheck": "vue-tsc -b && pnpm --dir api run typecheck",
     "test": "vitest --dir src",
