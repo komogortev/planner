@@ -40,6 +40,11 @@ Status column: **shipped** (in schema today) · **H<n>** (tier that introduces i
 | **Dashboard** | page 2 | The home of the activated widgets. Empty: an AddWidget button that swipes to the Widgets page | Widgets page | shipped as a stub |
 | **Widgets page** | page 3 (between Dashboard and Settings) | Lists all widgets, activated or not; empty: a CreateWidget button | Dashboard | HW (page + inert button shipped as a stub 2026-10-11; schema pending) |
 | **Hook** | not a stored type | An actionable item (promise, wait, date) the model finds in the note's context at run time. Nothing is extracted at capture and no index is stored (D-34) | Task | H2 / H4 |
+| **Harness** | `HARNESS_VERSION`, `composeHarness()` | The app-owned stage-1 prompt that reads new and still-open notes, links them, and asks short questions. It marks notes; it writes no hooks, tasks or Entry text. Owner-editable never in H-S1 (HW-HARNESS.md) | Lens; Widget | HW |
+| **Assessment** | `Assessment`, table `assessments` | A record that one run assessed one note at a harness version. "Processed" = a row at the current version with no newer answer | a Report | HW |
+| **Question** | `Question`, table `questions` | A short question the harness attached to a note, with the owner's answer stored on the same row. Open · answered · dismissed; never repeated once answered or dismissed | an Entry (the answer is the owner's text but is not one) | HW |
+| **Link** | `Link`, table `links` | A harness *proposal* that one note concludes (`closes`) or should be picked up on a date (`carries`) another. Proposed until the owner confirms or rejects; a pair is proposed once | Task; Proposal (H3) | HW |
+| **Entry state** | `EntryState`, table `entryStates` | Per-note `open · done · dropped` plus an optional follow-up date; a note with no row is open. Set by the owner, or by the owner confirming a link | a field on Entry | HW |
 
 ## Rules of use
 
