@@ -5,7 +5,7 @@
 - **Working:** prod as before plus the above; smoke 13/13; `pnpm check` app 316 · worker 147. Sync, sign-out guard, export/delete, `/log`, 4-page pager, Dashboard notes dialog unchanged.
 - **Broken:** nothing known. **Not verified:** every new behaviour on a real phone (DEVICE-CHECKS 10, 13–17); the first real D1 restore (D-58 is tested, never run live); the tester's first sync (0 entries).
 - **Blocker:** none.
-- **Next:** (1) origin move [ORIGIN-MOVE.md](ORIGIN-MOVE.md): phases 0–1 done 2026-10-11 (`koplanner.pages.dev` live, CSP enforced, Worker `f6d27bd` allow-list has both origins, smoke 14/14 + 15/15); **phase 2 is owner + Claude: a real sign-in on the new origin, both providers (DEVICE-CHECKS 4–5)**, then phase 3 per device; (2) run DEVICE-CHECKS 10, 13–17 on the phone; (3) exit week (H1-ENTRIES §1). Parked items with re-entry conditions: Carried follow-ups below.
+- **Next:** (1) origin move [ORIGIN-MOVE.md](ORIGIN-MOVE.md): phases 0–1 done 2026-10-11 (`koplanner.pages.dev` live, CSP enforced, Worker `f6d27bd` allow-list has both origins, smoke 14/14 + 15/15); phase 2 ✅ (owner, 2026-10-11: both providers sign in on the new origin, notes appear after the first pull; CSP not watched during that sign-in); **phase 3 is the owner's, per device**: 0 not on the server yet → open the new URL, install, sign in; the tester needs the new link. Phase 4 (moved notice on the old URL) waits for every device; (2) run DEVICE-CHECKS 10, 13–17 on the phone; (3) exit week (H1-ENTRIES §1). Parked items with re-entry conditions: Carried follow-ups below.
 ---
 
 ## Context
