@@ -18,6 +18,18 @@ export class FakeServer {
   reject = new Set<string>()
   /** Entity ids it answers `retry` for, once. */
   retryOnce = new Set<string>()
+  /** Send `head` (the account's newest version) with every pull, as the Worker does. Off: an older Worker (D-58). */
+  sendHead = true
+  /** Answer `head` with this instead of the real one: a server that lies, to prove the client cannot be looped. */
+  headOverride: number | null = null
+  /** After this many requests every answer is a 500 — a safety net so a client that loops FAILS a test instead of hanging it. */
+  maxRequests = Infinity
+
+  /** The database was restored to an earlier point: later versions are gone and the counter is back at `version`. */
+  restoreTo(version: number): void {
+    for (const [id, r] of this.rows) if (r.version > version) this.rows.delete(id)
+    this.seq = version
+  }
 
   static json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
     new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json', ...headers } })
@@ -29,6 +41,7 @@ export class FakeServer {
     this.requests.push({ path: url.pathname + url.search, method: init.method ?? 'GET', body, auth })
     const scripted = this.script.shift()
     if (scripted) return scripted()
+    if (this.requests.length > this.maxRequests) return FakeServer.json({ error: 'too many requests in one test' }, 500)
     const user = this.tokens.get(auth?.replace(/^Bearer /, '') ?? '')
     if (!user) return FakeServer.json({ error: 'signed out' }, 401)
     if (url.pathname === '/me') return FakeServer.json({ id: user, email: `${user}@example.com`, name: null })
@@ -38,7 +51,10 @@ export class FakeServer {
       const limit = Number(url.searchParams.get('limit'))
       const all = [...this.rows.values()].filter((r) => r.version > since).sort((a, b) => a.version - b.version)
       const changes = all.slice(0, limit).map(({ version, ...e }) => ({ ...e, serverVersion: version }))
-      return FakeServer.json({ changes, cursor: changes.length ? changes[changes.length - 1]!.serverVersion : since, more: all.length > limit })
+      return FakeServer.json({
+        changes, cursor: changes.length ? changes[changes.length - 1]!.serverVersion : since, more: all.length > limit,
+        ...(this.sendHead ? { head: this.headOverride ?? this.seq } : {}),
+      })
     }
     return FakeServer.json({ error: 'not found' }, 404)
   }

@@ -52,7 +52,12 @@ function randomToken(): string {
   return base64url(crypto.getRandomValues(new Uint8Array(32)))
 }
 
-async function sha256(text: string): Promise<string> {
+/**
+ * SHA-256, base64url. The ONE hash of a bearer token: `sessions.token_hash` is written and looked up with it, and
+ * `deleted_tokens` (the "account deleted" reason on a 401) is looked up with it too — a second copy that drifted would
+ * silently turn that reason into a plain "signed out".
+ */
+export async function sha256(text: string): Promise<string> {
   return base64url(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text))))
 }
 

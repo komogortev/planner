@@ -2,7 +2,7 @@
 // `ACCOUNT_TABLES` is the one list both operations read; test/account.test.ts fails when a migration adds a table that
 // is in neither this list nor ACCOUNT_EXEMPT, so a new per-account table cannot ship without export and delete cover.
 import { Hono } from 'hono'
-import { authenticate, type AuthedSession } from './auth'
+import { authenticate, sha256, type AuthedSession } from './auth'
 import { PULL_MAX, pullChanges, revisionsFor } from './entries'
 import type { Env } from './index'
 
@@ -69,18 +69,11 @@ export async function deleteAccount(db: D1Database, userId: string): Promise<voi
   ])
 }
 
-async function sha256b64(text: string): Promise<string> {
-  const bytes = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text)))
-  let s = ''
-  for (const b of bytes) s += String.fromCharCode(b)
-  return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-}
-
 /** The 401 body: `reason` is set when the bearer token belonged to a deleted account. */
 export async function signedOutBody(db: D1Database, authorization: string | undefined): Promise<{ error: string; reason?: 'account-deleted' }> {
   const token = authorization?.match(/^Bearer (.+)$/)?.[1]
   if (token) {
-    const hit = await db.prepare('SELECT 1 AS hit FROM deleted_tokens WHERE token_hash = ?').bind(await sha256b64(token)).first()
+    const hit = await db.prepare('SELECT 1 AS hit FROM deleted_tokens WHERE token_hash = ?').bind(await sha256(token)).first()
     if (hit) return { error: 'signed out', reason: 'account-deleted' }
   }
   return { error: 'signed out' }

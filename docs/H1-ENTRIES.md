@@ -159,12 +159,27 @@ INDEX entries(user_id, server_version) ; INDEX entries(user_id, created_at)
 
 ### 6.2 Pull
 
-`GET /sync/pull?since=<cursor>&limit=500` → `{ changes: Entry[], cursor, more: boolean }`
+`GET /sync/pull?since=<cursor>&limit=500` → `{ changes: Entry[], cursor, more: boolean, head: number }`
 
 - Returns rows with `server_version > since`, ascending, **including soft-deleted ones**, so a delete reaches every
   device and an old device cannot resurrect it.
 - The client applies a pulled row unless that entity has a pending outbox row (local edit wins locally until pushed;
   the server decides on push).
+- `head` (D-58) is the account's newest version as of the read (`users.version_seq`) — not where the page ended. A client
+  whose cursor is **above** it knows the server went back in time (a D1 restore, a hand-edited counter): it starts again
+  from 0 (once per cycle; upserts are idempotent), and any note it holds that the server did not return, and that has no
+  change waiting, goes back into the outbox as a new note (a deleted one as a delete). An older Worker sends no `head`;
+  the client then does nothing new. The sweep is written down (`syncMeta.reconcile`) before its first request and cleared when
+  the notes are put back, so an interruption is finished by the next cycle.
+  - **Second signal:** this device's own push can bring `head` back up to the cursor before the pull looks (a restore that
+    lost *k* versions, then *k* new writes). An `applied` push that is given a version **at or below the cursor** proves the
+    counter went backwards — a new version is always above the head, which is at or above the cursor — and starts the same
+    sweep. A `duplicate` carries old versions legitimately and proves nothing.
+  - **Limits, stated:** `head` cannot tell when *another* device pushes past this device's cursor before this one ever pulls;
+    and if `users.version_seq` is edited by hand below `max(server_version)` the client sweeps again on every cycle
+    (a Time Travel restore is consistent and does not do this). After any manual edit set the counter to at least
+    `max(server_version)` of that account. Acknowledged **edits and deletes** lost in a restore are not reconciled: notes are
+    create-only today (re-entry: before an edit or delete UI ships).
 
 ### 6.3 Conflicts — the server orders, nothing is lost
 

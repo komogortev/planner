@@ -4,7 +4,7 @@
 import { env } from 'cloudflare:test'
 import { describe, expect, it } from 'vitest'
 import { createSession } from '../src/auth'
-import { pushMutations } from '../src/entries'
+import { pullChanges, pushMutations } from '../src/entries'
 import app from '../src/index'
 
 const API = 'https://api.test'
@@ -44,7 +44,7 @@ const pushOk = async (a: Account, mutations: unknown[]) => {
   expect(res.status).toBe(200)
   return ((await res.json()) as { results: Record<string, unknown>[] }).results
 }
-const pull = async (a: Account, qs = '') => (await call(a.token, `/sync/pull${qs}`)).json() as Promise<{ changes: Record<string, unknown>[]; cursor: number; more: boolean }>
+const pull = async (a: Account, qs = '') => (await call(a.token, `/sync/pull${qs}`)).json() as Promise<{ changes: Record<string, unknown>[]; cursor: number; more: boolean; head: number }>
 
 const rows = (sql: string, ...args: unknown[]) => env.DB.prepare(sql).bind(...args).all<Record<string, unknown>>().then((r) => r.results)
 const count = async (table: string) => ((await env.DB.prepare(`SELECT COUNT(*) AS n FROM ${table}`).first<{ n: number }>())!.n)
@@ -413,6 +413,42 @@ describe('sync auth and session renewal', () => {
     await env.DB.prepare('UPDATE sessions SET expires_at = ?').bind(Date.now() + 5 * DAY).run()
     expect((await call(a.token, '/sync/pull?since=abc')).status).toBe(400)
     expect(await expiry()).toBeLessThan(Date.now() + 6 * DAY)
+  })
+})
+
+describe('pull: head (D-58)', () => {
+  // The account can be deleted between the session check and the read. 0 would tell a client that the server is empty, and
+  // it would put every note it holds back into its outbox. No head at all says nothing, and the client does nothing.
+  it('has no head for an account that is not there (not 0)', async () => {
+    const page = await pullChanges(env.DB, 'no-such-user', 0, 10)
+    expect(page.changes).toEqual([])
+    expect('head' in page).toBe(false)
+  })
+
+  // A device whose cursor is ahead of the account's newest version would ask for "versions above N" for ever and hear nothing
+  // (a restore, a manual edit of the counter). `head` is what lets it notice.
+  it('says how far the account has got, not where the page ended', async () => {
+    const a = await account('a@example.com')
+    expect((await pull(a)).head).toBe(0) // exercised: a fresh account has a head of its own
+    await pushOk(a, [input(), input(), input()].map((e) => upsert(e)))
+    const first = await pull(a, '?since=0&limit=1')
+    expect([first.cursor, first.more, first.head]).toEqual([1, true, 3])
+    expect((await pull(a, '?since=3')).head).toBe(3)
+  })
+
+  it('follows the counter when it goes back', async () => {
+    const a = await account('a@example.com')
+    await pushOk(a, [input(), input(), input()].map((e) => upsert(e)))
+    await env.DB.prepare('UPDATE users SET version_seq = 1 WHERE id = ?').bind(a.id).run()
+    expect((await pull(a, '?since=3')).head).toBe(1)
+  })
+
+  it("is the caller's own: another account's pushes never move it", async () => {
+    const a = await account('a@example.com')
+    const b = await account('b@example.com')
+    await pushOk(b, [input(), input()].map((e) => upsert(e)))
+    expect((await pull(a)).head).toBe(0)
+    expect((await pull(b)).head).toBe(2)
   })
 })
 
