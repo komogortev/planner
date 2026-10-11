@@ -1,6 +1,6 @@
 # Moving the app off `komogortev.github.io` (design)
 
-**Status: S0 draft, 2026-10-11. No code until §6 is answered.** Part of H1 S4 (owner: "its own session, before the
+**Status: S0 closed 2026-10-11 — the owner took every recommended default in §6 ("all recommended"). Phase 1 is next session; phase 0 is the owner's and comes first (§4).** Part of H1 S4 (owner: "its own session, before the
 exit week"). Terms per [VOCABULARY.md](VOCABULARY.md); the amendment this carries out is H1-ENTRIES Q8 ("the client
 moves to its own free `*.pages.dev` origin at S4").
 
@@ -86,7 +86,7 @@ early, rolling back means redeploying an older commit through `deploy.yml`.
 | Cloudflare build differs from CI | a build that passes CI but fails there, or a wrong commit shown in the badge | smoke's "deployed app is origin/main" check runs against the new origin too |
 | `planner.pages.dev`-style name collisions | project creation refuses the name | pick another; nothing else depends on it |
 
-## 6. Questions for the owner
+## 6. Questions for the owner — answered 2026-10-11: all recommended (Q1 A · Q2 `komogortev-planner` · Q3 Git integration · Q4 CSP enforced · Q5 moved notice · Q6 before the exit week). Q7 not answered; not needed to proceed. Name availability is only certain once the project is created: if it is refused, the owner picks another and nothing else changes.
 
 | # | Question | Default |
 |---|---|---|
