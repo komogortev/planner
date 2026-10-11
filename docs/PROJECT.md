@@ -16,6 +16,8 @@ chat with an AI), and asks for **lenses**: saved instructions that read a slice 
 the owner chose ("today's commitments from Work, as a checklist"). The AI reads, reports and proposes; only the owner
 changes records.
 
+The purpose in one line (owner, 2026-10-11): the way a team organises work in sprints, brought to a personal space — a daily loop first, then wider horizons (HW-HARNESS §10).
+
 Vocabulary is fixed in [VOCABULARY.md](VOCABULARY.md); structure in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Doc map
