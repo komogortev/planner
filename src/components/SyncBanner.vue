@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { localCopy, wipeAccountTables, unsyncedCount } from '@/auth/account'
-import { signOutLocally } from '@/auth/signIn'
+import { clearDeviceSafely, localCopy } from '@/auth/account'
 import { db } from '@/db'
 import { useLiveQuery } from '@/composables/useLiveQuery'
 import { useSyncState } from '@/composables/useSyncState'
-import { syncEngine, syncNow } from '@/sync'
+import { syncNow } from '@/sync'
+import { downloadJson } from '@/utils/download'
 
 // What the owner must know or do about sync. Provisional shape (D-13: the final warning design is a UI session):
 // an icon and a sentence, shown only when something needs attention; a stuck connection is announced once per episode.
@@ -16,6 +16,7 @@ const router = useRouter()
 const unsynced = useLiveQuery(() => db.outbox.count(), 0)
 const dismissedStuck = ref(false)
 const busy = ref(false)
+const problem = ref<string | null>(null)
 
 // A new stuck episode (after a good sync reset the count) may warn again.
 watch(() => state.value.failures, (n) => { if (n === 0) dismissedStuck.value = false })
@@ -29,33 +30,31 @@ const kind = computed<'auth' | 'deleted' | 'foreign' | 'stuck' | null>(() => {
   return null
 })
 
-function download(name: string, data: unknown): void {
-  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }))
-  const a = document.createElement('a')
-  a.href = url
-  a.download = name
-  a.click()
-  URL.revokeObjectURL(url)
-}
+const copyName = () => `planner-device-copy-${new Date().toISOString().slice(0, 10)}.json`
 
 async function saveCopy(): Promise<void> {
-  download(`planner-device-copy-${new Date().toISOString().slice(0, 10)}.json`, await localCopy())
+  downloadJson(copyName(), await localCopy())
 }
 
-/** Clear this device's copy of an account that is gone (or that is not the signed-in one). */
+/**
+ * Clear this device's copy of an account that is gone (or that is not the signed-in one). The question names every note
+ * (they may be the only copy) and a copy is saved first (D-55); `leave` also ends the sign-in.
+ */
 async function clearDevice(leave: boolean): Promise<void> {
   busy.value = true
+  problem.value = null
   try {
-    const lost = await unsyncedCount()
-    if (lost > 0 && !window.confirm(`${lost} notes on this device never reached the server and will be lost. Clear anyway?`)) return
-    await wipeAccountTables()
-    syncEngine.reset()
-    if (leave) {
-      signOutLocally()
-      await router.push({ name: 'signin' })
-    } else {
-      syncNow(true)
-    }
+    const out = await clearDeviceSafely(
+      { confirm: (m) => window.confirm(m), saveCopy: (copy) => downloadJson(copyName(), copy) },
+      { dropToken: leave },
+    )
+    if (out === 'changed') problem.value = 'A note arrived while the copy was made, so nothing was cleared. Try again.'
+    if (out !== 'cleared') return
+    if (leave) await router.push({ name: 'signin' })
+    else syncNow(true)
+  } catch (err) {
+    // A copy that could not be made, or a clear that failed and was rolled back: the device is as it was.
+    problem.value = `Nothing was cleared: ${err instanceof Error ? err.message : String(err)}`
   } finally {
     busy.value = false
   }
@@ -77,6 +76,7 @@ async function clearDevice(leave: boolean): Promise<void> {
         This device holds another account's notes, so nothing is synced. Clear it to use this account here.
       </template>
       <template v-else>Can't reach the server. Your notes are safe on this device and will upload when it answers.</template>
+      <span v-if="problem" class="problem" data-test="sync-problem"> {{ problem }}</span>
     </div>
     <div class="actions">
       <button v-if="kind === 'auth'" class="act" data-test="sync-signin" @click="router.push({ name: 'signin' })">Sign in</button>
@@ -95,6 +95,7 @@ async function clearDevice(leave: boolean): Promise<void> {
   background: var(--glass-bg); color: var(--glass-text); border-bottom: 1px solid var(--glass-edge); -webkit-backdrop-filter: var(--glass-blur); backdrop-filter: var(--glass-blur); }
 .icon { font-size: 1rem; color: #e0a458; flex: none; }
 .text { flex: 1; min-width: 0; }
+.problem { font-weight: 600; }
 .actions { display: flex; gap: 0.4rem; flex: none; }
 .act { border: 1px solid var(--glass-btn-edge); background: var(--glass-btn-bg); color: var(--glass-text); border-radius: 0.6rem; padding: 0.25rem 0.6rem; font-size: 0.75rem; }
 .act:disabled { opacity: 0.5; }

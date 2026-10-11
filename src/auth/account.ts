@@ -2,7 +2,7 @@
 // signed-in person, delete the account, and wipe the account's tables on this device.
 import { db } from '@/db'
 import { syncEngine } from '@/sync'
-import { API_URL, signOutLocally, storedToken } from './signIn'
+import { API_URL, revokeSession, signOutLocally, storedToken, storeToken } from './signIn'
 
 export type AccountExport = {
   format: number
@@ -74,15 +74,37 @@ export async function deleteAccountRemote(token: string, confirm: string, fetchI
   if (!res.ok) throw await failure(res)
 }
 
+type Cleared = { kind: 'cleared' } | { kind: 'unsynced'; n: number } | { kind: 'changed' }
+
 /**
- * Empties the tables that belong to the account (D-50) and leaves the legacy financial tables, which belong to the
- * device. Entries still in the outbox are lost with it — callers say so first.
+ * The one place this device's account tables are emptied (D-50, D-55). It leaves the legacy financial tables, which belong
+ * to the device. The checks and the clear are one transaction, so a capture that lands in between is counted, not cleared.
+ *  - `refuseIfUnsynced`: stop while the outbox holds rows (sign-out, D-28).
+ *  - `expect`: stop when the device no longer holds what the owner was shown.
+ *  - `dropToken`: the token goes FIRST, inside the transaction and after the checks (so a refused sign-out never flickers
+ *    the engine into "signed out"). Otherwise a poll tick between the engine reset and the end of the clear starts a cycle
+ *    that claims the cleared device for the account being left. It comes back if the clear fails — in the callback or at
+ *    commit, which is why the restore wraps the whole transaction.
+ *
+ * Not exported on purpose: every caller is a gesture of the owner (sign out, Clear this device, delete account), each with
+ * its own guards above. Never reach it from a server verdict (401, account deleted) — D-55.
  */
-export async function wipeAccountTables(): Promise<void> {
-  syncEngine.reset() // a cycle in flight must not write this account rows back after the wipe
-  await db.transaction('rw', db.entries, db.outbox, db.syncMeta, async () => {
-    await Promise.all([db.entries.clear(), db.outbox.clear(), db.syncMeta.clear()])
-  })
+async function clearAccountData(o: { refuseIfUnsynced?: boolean; expect?: { entries: number; outbox: number }; dropToken?: boolean } = {}): Promise<Cleared> {
+  const token = o.dropToken ? storedToken() : null
+  try {
+    return await db.transaction('rw', db.entries, db.outbox, db.syncMeta, async (): Promise<Cleared> => {
+      const outbox = await db.outbox.count()
+      if (o.refuseIfUnsynced && outbox > 0) return { kind: 'unsynced', n: outbox }
+      if (o.expect && (outbox !== o.expect.outbox || (await db.entries.count()) !== o.expect.entries)) return { kind: 'changed' }
+      if (o.dropToken) signOutLocally()
+      syncEngine.reset() // a cycle in flight must not write this account's rows back after the clear
+      await Promise.all([db.entries.clear(), db.outbox.clear(), db.syncMeta.clear()])
+      return { kind: 'cleared' }
+    })
+  } catch (err) {
+    if (token && storedToken() === null) storeToken(token)
+    throw err
+  }
 }
 
 /** Entries on this device the server has not acknowledged: what a wipe would lose. */
@@ -90,26 +112,43 @@ export const unsyncedCount = (): Promise<number> => db.outbox.count()
 
 /**
  * Sign out (D-28): refused while notes have not reached the server — they exist only on this device, and clearing the
- * account's tables is part of signing out (D-50). The count says what stands in the way.
+ * account's tables is part of signing out (D-50). The count says what stands in the way. Afterwards the server is told to
+ * end the session (best effort, D-55): without that, a token copied off the device stays good for 30 more days.
  */
-export async function signOutSafely(): Promise<{ ok: true } | { ok: false; unsynced: number }> {
-  // The count and the clear are one transaction: a capture that lands between them is counted, not cleared. The engine is
-  // reset inside it, so no cycle that started earlier can write after the clear.
-  const unsynced = await db.transaction('rw', db.entries, db.outbox, db.syncMeta, async () => {
-    const n = await db.outbox.count()
-    if (n > 0) return n
-    syncEngine.reset()
-    await Promise.all([db.entries.clear(), db.outbox.clear(), db.syncMeta.clear()])
-    return 0
-  })
-  if (unsynced > 0) return { ok: false, unsynced }
-  signOutLocally()
+export async function signOutSafely(fetchImpl: Fetch = fetch, apiUrl = API_URL): Promise<{ ok: true } | { ok: false; unsynced: number }> {
+  const token = storedToken()
+  const r = await clearAccountData({ refuseIfUnsynced: true, dropToken: true })
+  if (r.kind === 'unsynced') return { ok: false, unsynced: r.n }
+  if (token) void revokeSession(token, fetchImpl, apiUrl)
   return { ok: true }
 }
 
 /** Everything this device holds for the account, as a plain object: the copy offered before a device is cleared (D-50). */
-export async function localCopy(): Promise<{ exportedAt: string; entries: unknown[]; notSynced: unknown[] }> {
+export type LocalCopy = { exportedAt: string; entries: unknown[]; notSynced: unknown[] }
+export async function localCopy(): Promise<LocalCopy> {
   return { exportedAt: new Date().toISOString(), entries: await db.entries.toArray(), notSynced: await db.outbox.toArray() }
+}
+
+export type DeviceClearDeps = { confirm: (message: string) => boolean; saveCopy: (copy: LocalCopy) => void }
+
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`
+
+/**
+ * "Clear this device" (the sync banner, D-55). The notes on a device whose account is gone — or that belongs to another
+ * account — may be the only copy left, so the question names every note on it (not just the unsent ones), a copy is saved
+ * before anything is cleared (a copy that cannot be saved clears nothing), and the clear itself re-checks that the device
+ * still holds what the owner was shown.
+ */
+export async function clearDeviceSafely(deps: DeviceClearDeps, opts: { dropToken?: boolean } = {}): Promise<'cleared' | 'declined' | 'changed'> {
+  const entries = await db.entries.count()
+  const outbox = await db.outbox.count()
+  if (entries > 0 || outbox > 0) {
+    const only = outbox > 0 ? ` (${outbox} not uploaded yet — they exist only here)` : ''
+    if (!deps.confirm(`${plural(entries, 'note')} on this device will be cleared${only}. A copy is downloaded first. Clear it?`)) return 'declined'
+    deps.saveCopy(await localCopy())
+  }
+  const r = await clearAccountData({ expect: { entries, outbox }, dropToken: opts.dropToken })
+  return r.kind === 'cleared' ? 'cleared' : 'changed'
 }
 
 /** Export (done by the caller first), delete on the server, then this device: tables and token. */
@@ -123,6 +162,5 @@ export async function deleteMyAccount(confirm: string, fetchImpl: Fetch = fetch,
     // then meets "account deleted", which means the server half is done — carry on to this device's half.
     if (!(err instanceof AccountError && err.status === 401 && err.reason === 'account-deleted')) throw err
   }
-  await wipeAccountTables() // if this throws the token stays, so the same button can run it again
-  signOutLocally()
+  await clearAccountData({ dropToken: true }) // if this throws the token stays, so the same button can run it again
 }
