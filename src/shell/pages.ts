@@ -2,6 +2,7 @@
 export const PAGES = [
   { to: '/', label: 'Home' },
   { to: '/dashboard', label: 'Dashboard' },
+  { to: '/widgets', label: 'Widgets' },
   { to: '/settings', label: 'Settings' },
 ] as const
 
@@ -32,10 +33,10 @@ export function dragOffset(index: number, dx: number, count = PAGES.length): num
 
 /**
  * Parallax (owner's test, 2026-10-10): the backdrop moves with the pages but only `PARALLAX` of their distance. With
- * three pages the track travels 2 screen widths, the backdrop 2 * PARALLAX of one, so it is (1 + 2 * PARALLAX) screen
- * widths wide: its left edge meets the screen's at the first page and its right edge at the last.
- * (1/3 per page → a 5/3-screen-wide backdrop. The owner also described "200 vs 300 total", which is 1/2 per page —
- * change this one number to try it.)
+ * N pages the track travels N-1 screen widths, the backdrop (N-1) * PARALLAX of one, so it is (1 + (N-1) * PARALLAX)
+ * screen widths wide: its left edge meets the screen's at the first page and its right edge at the last.
+ * (1/3 per page, four pages → a 2-screen-wide backdrop. The owner also described "200 vs 300 total", which is 1/2 per
+ * page — change this one number to try it.)
  */
 export const PARALLAX = 1 / 3
 

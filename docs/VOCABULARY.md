@@ -38,7 +38,7 @@ Status column: **shipped** (in schema today) · **H<n>** (tier that introduces i
 | **System widget** | `Widget.kind = 'system'` | A built-in view that holds no lens: the notes list (sort, search) is the intended proof of concept | Prompt widget | HW |
 | **Prompt widget** | `Widget.kind = 'prompt'` | A widget that holds a Lens and shows its last report (cached per widget on the device and the server) with its age and a Run button | System widget | HW |
 | **Dashboard** | page 2 | The home of the activated widgets. Empty: an AddWidget button that swipes to the Widgets page | Widgets page | shipped as a stub |
-| **Widgets page** | page 3 (between Dashboard and Settings) | Lists all widgets, activated or not; empty: a CreateWidget button | Dashboard | HW |
+| **Widgets page** | page 3 (between Dashboard and Settings) | Lists all widgets, activated or not; empty: a CreateWidget button | Dashboard | HW (page + inert button shipped as a stub 2026-10-11; schema pending) |
 | **Hook** | not a stored type | An actionable item (promise, wait, date) the model finds in the note's context at run time. Nothing is extracted at capture and no index is stored (D-34) | Task | H2 / H4 |
 
 ## Rules of use
