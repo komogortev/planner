@@ -9,7 +9,9 @@
 // Every check has an expected outcome; the negative controls (refusals) matter as much as the passes.
 
 const local = process.argv.includes('--local')
-const APP = local ? 'http://localhost:5176/planner/' : 'https://komogortev.github.io/planner/'
+// --app=<url> points the production run at another origin (the Cloudflare Pages one: --app=https://koplanner.pages.dev/).
+const appArg = process.argv.find((a) => a.startsWith('--app='))?.slice(6)
+const APP = local ? 'http://localhost:5176/planner/' : appArg ?? 'https://komogortev.github.io/planner/'
 const API = local ? 'http://localhost:8787' : 'https://planner-api.komogortev.workers.dev'
 const ORIGIN = new URL(APP).origin
 const NONCE = 'smoketestnonce-0123456789'

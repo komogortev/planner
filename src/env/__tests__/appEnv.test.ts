@@ -14,8 +14,16 @@ describe('envFor', () => {
     }
   })
 
+  it('a Cloudflare Pages branch or deploy URL is preview; the production host is prod', () => {
+    for (const h of ['abc123.koplanner.pages.dev', 'feat-x.koplanner.pages.dev', 'planner.pages.dev']) {
+      expect(envFor(false, h), h).toBe('preview')
+    }
+    expect(envFor(false, 'koplanner.pages.dev')).toBe('prod')
+    expect(envFor(false, 'koplanner.pages.dev.evil.com')).toBe('prod') // a suffix match alone must not decide
+  })
+
   it('a production build anywhere else is prod', () => {
-    for (const h of ['komogortev.github.io', 'planner.pages.dev', '172.32.0.1', '8.8.8.8', '192.169.1.1', 'localhost.evil.com']) {
+    for (const h of ['komogortev.github.io', '172.32.0.1', '8.8.8.8', '192.169.1.1', 'localhost.evil.com']) {
       expect(envFor(false, h), h).toBe('prod')
     }
   })

@@ -459,14 +459,33 @@ describe('refusal reasons', () => {
 describe('where the browser is sent back to', () => {
   // The flow cookie is httpOnly and written by this Worker, but its returnTo is read back on the callback: it is checked
   // against the allow-list again, so a forged one can neither receive the token nor be the target of a refusal.
-  async function callbackWithCookie(returnTo: string) {
+  async function callbackWithCookie(returnTo: string, withEnv: typeof env = env) {
     const state = 'a'.repeat(43)
     const flow = { p: 'github', state, verifier: 'v'.repeat(43), returnTo, nonce: NONCE, at: Date.now() }
     return app.fetch(
       new Request(`${API}/auth/callback/github?code=c0de&state=${state}`, { headers: { Cookie: `oauth_flow_${state}=${encodeURIComponent(JSON.stringify(flow))}` } }),
-      env,
+      withEnv,
     )
   }
+
+  // Two origins live at once (docs/ORIGIN-MOVE.md phases 1–3): the second one is accepted, a lookalike is not.
+  const TWO = { ...env, ALLOWED_APP_URLS: `${RETURN_TO},https://new.test/` }
+  it('a second allowed origin receives the sign-in; the first stays the fallback', async () => {
+    await invite('owner@example.com')
+    stubProviders({ id: 101, emails: ['owner@example.com'] })
+    const res = await callbackWithCookie('https://new.test/signin', TWO)
+    expect(res.headers.get('Location')!.startsWith('https://new.test/signin#')).toBe(true)
+  })
+
+  it('a lookalike of the second origin gets the first URL, never the token', async () => {
+    await invite('owner@example.com')
+    stubProviders({ id: 101, emails: ['owner@example.com'] })
+    for (const forged of ['https://new.test.evil.example/', 'https://new.testx/', 'http://new.test/']) {
+      const res = await callbackWithCookie(forged, TWO)
+      const to = new URL(res.headers.get('Location')!)
+      expect(`${to.origin}${to.pathname}`, forged).toBe(RETURN_TO)
+    }
+  })
 
   // Known positive: a legitimate deeper path under the allowed prefix is kept, so the two refusals below are not just "always the first URL".
   it('keeps the page the app asked to come back to', async () => {
