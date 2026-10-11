@@ -5,8 +5,7 @@ compatibility_date = "2026-10-01"
 # Production only: the app URL(s) sign-in may return to; CORS admits their origins (src/config.ts).
 # Local dev overrides this with `--var` in package.json's `dev` script — localhost never reaches production.
 [vars]
-# The FIRST entry is the sign-in error fallback and the favicon source: swap the order at cut-over (docs/ORIGIN-MOVE.md §3).
-ALLOWED_APP_URLS = "https://komogortev.github.io/planner/,https://koplanner.pages.dev/"
+ALLOWED_APP_URLS = "https://koplanner.pages.dev/"
 # Which environment this Worker is (favicon cue, src/env/appEnv.ts). The local `dev` script overrides it to `local`.
 APP_ENV = "prod"
 

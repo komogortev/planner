@@ -48,9 +48,9 @@ folder: stop the ones whose branch has merged. A worktree cannot be deleted whil
 
 | What | Link |
 |---|---|
-| App (GitHub Pages — the old origin) | https://komogortev.github.io/planner/ |
-| App (Cloudflare Pages — the new origin, builds `main` on push; project `koplanner`) | https://koplanner.pages.dev/ — smoke it with `node api/scripts/smoke.mjs --app=https://koplanner.pages.dev/` |
-| Sign-in gate | https://komogortev.github.io/planner/signin · https://koplanner.pages.dev/signin |
+| App (Cloudflare Pages, builds `main` on push; project `koplanner`) | https://koplanner.pages.dev/ |
+| Old address (GitHub Pages) — only the "moved" notice; the Worker refuses it (phase 5) | https://komogortev.github.io/planner/ |
+| Sign-in gate | https://koplanner.pages.dev/signin |
 | API health | https://planner-api.komogortev.workers.dev/health |
 | App deploys (GitHub Actions → Pages) | https://github.com/komogortev/planner/actions |
 | Worker, logs, D1 | https://dash.cloudflare.com → Workers & Pages → `planner-api`; D1 → `planner` |
