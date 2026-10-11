@@ -294,6 +294,7 @@ Ids start at D-03: D-01/D-02 were dropped while drafting (merged into D-18 and D
 | D-24 | **Agreed (b):** own capped `/log` route into D1 on the existing rate limit; error type, route and build id only, never entry text | Before the exit week |
 | D-25 | **Agreed:** write `docs/DEVICE-CHECKS.md` from the "not verified" list in STATE, run on the phone at every UI-affecting PR | Next UI PR |
 | D-26 (amended) | **Agreed:** accessibility baseline (reduce-motion, labelled controls, keyboard path, one TalkBack pass) re-enters before the widgets page UI is built, not "before H1b" | Widgets page UI |
+| S4 (2026-10-11) | **Nightly export cron deferred** (owner: manual export + D1 Time Travel suffice for the vertical slice). **Version badge stays.** **Client origin move: its own session, before the exit week.** `/log` (D-24) and DEVICE-CHECKS (D-25) built | Export: proposed re-entry before the first invitee beyond the tester or on request; origin move: before the exit week |
 | H1b | **Doubtful.** Whether categories, tags and Inbox are needed depends on how well AI working on prompts performs; that result defines the need | AI-on-prompts evidence |
 
 
