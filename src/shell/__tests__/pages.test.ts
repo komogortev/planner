@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { backdropShift, backdropWidth, dragOffset, pageIndex, pullCss, pullTransform, settle } from '../pages'
+import { PAGES, backdropShift, backdropWidth, dragOffset, pageIndex, pullCss, pullTransform, settle } from '../pages'
+
+const LAST = PAGES.length - 1
 
 describe('settle', () => {
   it('changes page past 22% of the width, in the drag direction', () => {
@@ -17,8 +19,8 @@ describe('settle', () => {
   })
   it('stops at both ends (negative controls: no wrap)', () => {
     expect(settle(0, 200, 0, 375)).toBe(0)
-    expect(settle(2, -200, 0, 375)).toBe(2)
-    expect(settle(2, -50, -1, 375)).toBe(2)
+    expect(settle(LAST, -200, 0, 375)).toBe(LAST)
+    expect(settle(LAST, -50, -1, 375)).toBe(LAST)
   })
 })
 
@@ -26,7 +28,7 @@ describe('dragOffset', () => {
   it('follows the finger inside the range and resists past the ends', () => {
     expect(dragOffset(1, -100)).toBe(-100)
     expect(dragOffset(0, 100)).toBeCloseTo(30)
-    expect(dragOffset(2, -100)).toBeCloseTo(-30)
+    expect(dragOffset(LAST, -100)).toBeCloseTo(-30)
     expect(dragOffset(0, -100)).toBe(-100) // towards a real page: no resistance
   })
 })
@@ -35,20 +37,22 @@ describe('pageIndex', () => {
   it('is -1 outside the swipe order', () => {
     expect(pageIndex('/legacy')).toBe(-1)
     expect(pageIndex('/dashboard')).toBe(1)
+    expect(pageIndex('/widgets')).toBe(2) // between Dashboard and Settings (D-18)
+    expect(pageIndex('/settings')).toBe(LAST)
   })
 })
 
 describe('parallax backdrop', () => {
   it('is wide enough that neither edge ever shows, at every page', () => {
     for (const r of [1 / 3, 1 / 2, 0.2]) {
-      for (let i = 0; i < 3; i++) {
+      for (let i = 0; i < PAGES.length; i++) {
         const left = backdropShift(i, 0, r).screens
         expect(left).toBeLessThanOrEqual(0) // left edge never inside the screen
         expect(left + backdropWidth(r)).toBeGreaterThanOrEqual(1 - 1e-9) // right edge never inside the screen
       }
       // and it is exactly flush at both ends (no wasted width)
       expect(backdropShift(0, 0, r).screens).toBeCloseTo(0) // (-0 under Object.is, hence not toBe)
-      expect(backdropShift(2, 0, r).screens + backdropWidth(r)).toBeCloseTo(1)
+      expect(backdropShift(LAST, 0, r).screens + backdropWidth(r)).toBeCloseTo(1)
     }
   })
   it('moves a third as far as the pages while dragging', () => {
@@ -57,9 +61,9 @@ describe('parallax backdrop', () => {
   })
   it('stays put while the pages rubber-band past either end (no gap at its edge)', () => {
     expect(backdropShift(0, 120).px).toBe(0) // pulling right on the first page
-    expect(backdropShift(2, -120).px).toBe(0) // pulling left on the last page
+    expect(backdropShift(LAST, -120).px).toBe(0) // pulling left on the last page
     expect(backdropShift(0, -120).px).toBeCloseTo(-40) // towards a real page: moves
-    expect(backdropShift(2, 120).px).toBeCloseTo(40)
+    expect(backdropShift(LAST, 120).px).toBeCloseTo(40)
   })
 })
 

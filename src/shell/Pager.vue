@@ -3,10 +3,11 @@ import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import HomeView from '@/views/HomeView.vue'
 import DashboardView from '@/views/DashboardView.vue'
+import WidgetsView from '@/views/WidgetsView.vue'
 import SettingsView from '@/views/SettingsView.vue'
 import { PAGES, PARALLAX, backdropShift, backdropWidth, dragOffset, pageIndex, pullCss, pullTransform, settle } from './pages'
 
-// The three main pages sit side by side on one track. The track follows the finger while dragging and eases to the
+// The four main pages sit side by side on one track. The track follows the finger while dragging and eases to the
 // settled page on release, so the next page pushes the current one away (native page-swap feel). The route is the
 // source of truth: a nav-bar tap and a swipe both end in router.push, and the track animates to the new index.
 const route = useRoute()
@@ -100,7 +101,8 @@ const trackStyle = computed(() => ({
       <!-- inert: an off-screen page is neither focusable nor read by a screen reader. -->
       <section class="slot" :inert="index !== 0"><div class="sheet"><HomeView /></div></section>
       <section class="slot" :inert="index !== 1"><div class="sheet"><DashboardView /></div></section>
-      <section class="slot" :inert="index !== 2"><div class="sheet"><SettingsView /></div></section>
+      <section class="slot" :inert="index !== 2"><div class="sheet"><WidgetsView /></div></section>
+      <section class="slot" :inert="index !== 3"><div class="sheet"><SettingsView /></div></section>
     </div>
   </div>
 </template>
