@@ -22,8 +22,9 @@ const BUILD = {
 }
 
 export default defineConfig({
-  // GH Pages subpath — repo: komogortev/planner
-  base: '/planner/',
+  // The GitHub Pages build lives under /planner/; Cloudflare Pages (which sets CF_PAGES) serves its own origin at the
+  // root. APP_BASE overrides both. See docs/ORIGIN-MOVE.md.
+  base: process.env.APP_BASE ?? (process.env.CF_PAGES ? '/' : '/planner/'),
   define: {
     __APP_BUILD__: JSON.stringify(BUILD),
   },

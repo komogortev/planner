@@ -17,12 +17,16 @@ export const ENV_LOOK: Record<AppEnv, EnvLook> = {
 
 /**
  * Dev server → local. A production build on this machine or the home network → preview (the phone opening
- * `vite preview --host` over Wi-Fi must not look like prod); S4 adds the hosted staging host here. Anything else →
+ * `vite preview --host` over Wi-Fi must not look like prod); a Cloudflare Pages host other than the production one
+ * (a per-branch or per-deploy URL) → preview — the Worker refuses their origin, so they cannot sign in. Anything else →
  * prod. Decided at runtime, so the exact artifact that ships is the one tested.
  */
+export const PROD_PAGES_HOST = 'koplanner.pages.dev'
+
 export function envFor(isDevServer: boolean, hostname: string): AppEnv {
   if (isDevServer) return 'local'
-  return isLocalHost(hostname) ? 'preview' : 'prod'
+  if (isLocalHost(hostname)) return 'preview'
+  return hostname.endsWith('.pages.dev') && hostname !== PROD_PAGES_HOST ? 'preview' : 'prod'
 }
 
 function isLocalHost(h: string): boolean {
