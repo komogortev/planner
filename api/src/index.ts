@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
+import { meApi, signedOutBody } from './account'
 import { auth, sessionUser } from './auth'
 import { appOrigins, appUrls } from './config'
 import { byIp } from './ratelimit'
@@ -50,10 +51,11 @@ app.use('/auth/*', byIp('RL_AUTH_IP'))
 app.route('/auth', auth)
 app.route('/sync', sync)
 app.route('/entries', entriesApi)
+app.route('/me', meApi)
 
 app.get('/me', async (c) => {
   const user = await sessionUser(c)
-  return user ? c.json(user) : c.json({ error: 'signed out' }, 401)
+  return user ? c.json(user) : c.json(await signedOutBody(c.env.DB, c.req.header('Authorization')), 401)
 })
 
 export default app

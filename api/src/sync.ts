@@ -1,5 +1,6 @@
 // /sync/push, /sync/pull, /entries (H1-ENTRIES.md §6, §9). Thin: auth, bounds, parsing; the rules live in entries.ts.
 import { Hono } from 'hono'
+import { signedOutBody } from './account'
 import { authenticate, renewSession, type AuthedSession } from './auth'
 import { overLimit, tooMany, byIp } from './ratelimit'
 import { getEntry, pullChanges, pushMutations, queryEntries, PULL_MAX, PUSH_MAX_BYTES, PUSH_MAX_MUTATIONS } from './entries'
@@ -16,7 +17,7 @@ sync.use('/push', byIp('RL_PUSH_IP'))
 for (const r of [sync, entriesApi]) {
   r.use('*', async (c, next) => {
     const s = await authenticate(c.env.DB, c.req.header('Authorization'))
-    if (!s) return c.json({ error: 'signed out' }, 401)
+    if (!s) return c.json(await signedOutBody(c.env.DB, c.req.header('Authorization')), 401)
     c.set('session', s)
     await next()
     // A request that did its job keeps the session alive (§8); a failed one does not. The work has committed by now, so

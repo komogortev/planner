@@ -201,6 +201,19 @@ export async function getEntry(db: D1Database, userId: string, id: string): Prom
   return r ? toEntry(r) : null
 }
 
+/** Every revision kept for these entries of this account, for the account export (S2b). */
+export async function revisionsFor(db: D1Database, userId: string, ids: string[]) {
+  if (ids.length === 0) return []
+  const { results } = await db
+    .prepare(
+      `SELECT id, server_version AS replacedVersion, body, deleted_at AS deletedAt, replaced_at AS replacedAt, meta
+       FROM entry_revisions WHERE user_id = ? AND id IN (SELECT value FROM json_each(?)) ORDER BY id, server_version`,
+    )
+    .bind(userId, JSON.stringify(ids))
+    .all<{ id: string; replacedVersion: number; body: string; deletedAt: string | null; replacedAt: number; meta: string | null }>()
+  return results.map((r) => ({ ...r, meta: r.meta ? (JSON.parse(r.meta) as unknown) : null }))
+}
+
 export type EntryQuery = {
   /** UTC day, inclusive, on `createdAt`. */
   from?: string
