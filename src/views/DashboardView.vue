@@ -1,21 +1,15 @@
 <script setup lang="ts">
-import { useRouter } from 'vue-router'
+import LoopCard from '@/harness/LoopCard.vue'
 import NotesDialog from '@/notes/NotesDialog.vue'
 
-// The empty Dashboard offers AddWidget, which swipes to the Widgets page (D-18). Always empty until the widgets
-// design session defines what an activated widget is (D-53). Below it, the temporary notes dialog (D-14a) shows what
-// has been captured; the notes widget replaces it.
-const router = useRouter()
+// S3 thin slice (2026-10-11): the Dashboard carries the daily loop — the built-in Daily task journal with its two
+// copy-prompt steps — above the temporary notes dialog (D-14a), where the harness's questions and proposals are answered.
+// Widget activation (D-18, D-53) is not built yet: the journal shows here unconditionally until it is.
 </script>
 
 <template>
   <div class="max-w-2xl mx-auto w-full px-4 py-4 flex flex-col gap-4" style="padding-bottom: 14dvh">
-    <div class="card text-center">
-      <p class="text-sm text-slate-400">No widgets activated yet.</p>
-      <button type="button" class="btn-ghost mt-3" data-test="add-widget" @click="router.push('/widgets')">
-        Add widget
-      </button>
-    </div>
+    <LoopCard />
     <NotesDialog />
   </div>
 </template>

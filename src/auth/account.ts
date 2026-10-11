@@ -4,6 +4,7 @@ import { db } from '@/db'
 import { recordTables } from '@/db/records'
 import { RECORD_KINDS, RECORD_TABLE } from '@/domain/records'
 import { clearDraft, flushDrafts, hasDraft, isBlank, loadDraft } from '@/capture/draft'
+import { clearPending } from '@/harness/pending'
 import { syncEngine } from '@/sync'
 import { API_URL, revokeSession, signOutLocally, storedToken, storeToken } from './signIn'
 
@@ -128,7 +129,10 @@ async function clearAccountData(o: { refuseIfUnsynced?: boolean; expect?: { entr
       return { kind: 'cleared' }
     })
     // The unsent draft is the owner's text too (D-56): it goes with the rest, and an open capture box is told.
-    if (r.kind === 'cleared') clearDraft()
+    if (r.kind === 'cleared') {
+      clearDraft()
+      clearPending() // a waiting run names this account's notes
+    }
     return r
   } catch (err) {
     if (token && storedToken() === null) storeToken(token)
