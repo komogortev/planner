@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { AccountError, deleteAccountRemote, deleteMyAccount, exportAccount, signOutSafely, unsyncedCount, wipeAccountTables } from '../account'
+import { AccountError, clearDeviceSafely, deleteAccountRemote, deleteMyAccount, exportAccount, signOutSafely, unsyncedCount } from '../account'
 import { db } from '@/db'
 import { captureEntry } from '@/capture/capture'
 
@@ -111,7 +111,7 @@ describe('wiping this device (D-50)', () => {
     await seed()
     expect(await db.entries.count()).toBe(1) // exercised: there is something to wipe
     expect(await unsyncedCount()).toBe(1)
-    await wipeAccountTables()
+    expect(await clearDeviceSafely({ confirm: () => true, saveCopy: () => undefined })).toBe('cleared')
     expect(await db.entries.count()).toBe(0)
     expect(await db.outbox.count()).toBe(0)
     expect(await db.syncMeta.count()).toBe(0)
@@ -174,7 +174,7 @@ describe('signOutSafely (D-28)', () => {
   it('is refused while notes have not reached the server: nothing is cleared, the count is named', async () => {
     expect((await captureEntry('not uploaded yet')).ok).toBe(true)
     localStorage.setItem('planner.signIn.token', 'tok')
-    expect(await signOutSafely()).toEqual({ ok: false, unsynced: 1 })
+    expect(await signOutSafely(async () => new Response(null, { status: 204 }), API)).toEqual({ ok: false, unsynced: 1 })
     expect(await db.entries.count()).toBe(1)
     expect(await db.outbox.count()).toBe(1)
     expect(localStorage.getItem('planner.signIn.token')).toBe('tok')
@@ -189,7 +189,7 @@ describe('signOutSafely (D-28)', () => {
       notes: '', categoryId: null, tags: [], createdAt: '2026-01-01', updatedAt: '2026-01-01',
     })
     localStorage.setItem('planner.signIn.token', 'tok')
-    expect(await signOutSafely()).toEqual({ ok: true })
+    expect(await signOutSafely(async () => new Response(null, { status: 204 }), API)).toEqual({ ok: true })
     expect(await db.entries.count()).toBe(0)
     expect(localStorage.getItem('planner.signIn.token')).toBeNull()
     expect(await db.commitments.count()).toBe(1)

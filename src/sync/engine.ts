@@ -241,7 +241,9 @@ export class SyncEngine {
     const { db } = this.d
     await db.transaction('rw', db.syncMeta, async () => {
       this.live(gen)
-      if (!(await db.syncMeta.get(userId))) await db.syncMeta.put({ userId, cursor: 0, lastPushAt: null, lastPullAt: null })
+      const claimed = await db.syncMeta.get(userId)
+      this.live(gen) // the read waited for any clear queued ahead of this transaction; a reset it made must win
+      if (!claimed) await db.syncMeta.put({ userId, cursor: 0, lastPushAt: null, lastPullAt: null })
     })
   }
 
@@ -317,6 +319,7 @@ export class SyncEngine {
         // A change to an entity with a queued local edit is not applied: the local edit wins locally until it is
         // pushed, and the server decides then (§6.2). The cursor still moves past it.
         const queued = new Set((await db.outbox.toArray()).map((r) => r.entityId))
+        this.live(gen) // the read waited for any clear queued ahead of this transaction; a reset it made must win
         const apply = page.changes.filter((c) => typeof c?.id === 'string' && typeof c.body === 'string' && !queued.has(c.id))
         await db.entries.bulkPut(apply.map((c): Entry => ({
           id: c.id, body: c.body, createdAt: c.createdAt, occurredAt: c.occurredAt ?? null, categoryId: c.categoryId ?? null,

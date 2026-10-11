@@ -100,15 +100,46 @@ export function signOutLocally(): void {
   localStorage.removeItem(TOKEN_KEY)
 }
 
+/** Put a token back — only for an interrupted sign-out, which must leave the device as it found it. */
+export function storeToken(token: string): void {
+  try {
+    localStorage.setItem(TOKEN_KEY, token)
+  } catch {
+    // Storage blocked or full: the device stays signed out, which is the truthful state.
+  }
+}
+
+/**
+ * End this token's session on the server (`POST /auth/logout`, idempotent). Best effort: offline or refused, the session
+ * simply lives to its 30-day expiry — signing out must never wait for the network. No `keepalive`: the route change to the
+ * sign-in screen is not a page unload, and keepalive plus an Authorization header (a CORS preflight) is not reliable in
+ * every browser — a flag that can silently drop the request is worse than none.
+ */
+export async function revokeSession(token: string, fetchImpl: typeof fetch = fetch, apiUrl = API_URL): Promise<boolean> {
+  try {
+    const res = await fetchImpl(`${apiUrl}/auth/logout`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
 export type Me = { id: string; email: string; name: string | null }
 
-/** `/me` for the stored token: the user, 'signed-out' (no token or 401), or an error string. */
-export async function fetchMe(): Promise<Me | 'signed-out' | { error: string }> {
+/**
+ * `/me` for the stored token: the user, 'signed-out' (no token, or 401), 'account-deleted' (401 that says why — the notes
+ * on this device may be the only copy left), or an error string. A verdict, never an action: nothing here may touch the
+ * device's data (D-55).
+ */
+export async function fetchMe(): Promise<Me | 'signed-out' | 'account-deleted' | { error: string }> {
   const token = storedToken()
   if (!token) return 'signed-out'
   try {
     const res = await fetch(`${API_URL}/me`, { headers: { Authorization: `Bearer ${token}` } })
-    if (res.status === 401) return 'signed-out'
+    if (res.status === 401) {
+      const body = (await res.json().catch(() => ({}))) as { reason?: string }
+      return body.reason === 'account-deleted' ? 'account-deleted' : 'signed-out'
+    }
     if (!res.ok) return { error: `HTTP ${res.status}` }
     return (await res.json()) as Me
   } catch (err) {

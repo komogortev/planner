@@ -2,7 +2,9 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { AccountError, deleteMyAccount, exportAccount, signOutSafely, unsyncedCount } from '@/auth/account'
-import { fetchMe, storedToken, type Me } from '@/auth/signIn'
+import { checkAccount, type AccountLine } from '@/auth/launchCheck'
+import { storedToken } from '@/auth/signIn'
+import { downloadJson } from '@/utils/download'
 import { db } from '@/db'
 import type { OutboxRow } from '@/db/schema'
 import { useLiveQuery } from '@/composables/useLiveQuery'
@@ -45,18 +47,24 @@ const themeOptions: { value: ThemeChoice; label: string }[] = [
   { value: 'light', label: 'Light' },
   { value: 'dark', label: 'Dark' },
 ]
-const me = ref<Me | { error: string } | null>(null)
+const me = ref<AccountLine | null>(null)
 
 // D-28: signing out clears this device's notes (D-50), so it is refused while some have not reached the server.
 const signOutBlocked = ref<number | null>(null)
+const signOutError = ref<string | null>(null)
 async function signOut(): Promise<void> {
-  const r = await signOutSafely()
-  if (!r.ok) {
-    signOutBlocked.value = r.unsynced
-    return
+  signOutError.value = null
+  try {
+    const r = await signOutSafely()
+    if (!r.ok) {
+      signOutBlocked.value = r.unsynced
+      return
+    }
+    void router.push({ name: 'signin' })
+  } catch (err) {
+    // The clear failed and was rolled back (device and token as they were): say so instead of an unhandled rejection.
+    signOutError.value = `Could not sign out: ${err instanceof Error ? err.message : String(err)}`
   }
-  syncEngine.reset()
-  void router.push({ name: 'signin' })
 }
 
 // Sync status (S3): what the loop is doing, what stands in its way, and what the owner can do about a rejected note (D-27).
@@ -90,18 +98,13 @@ const unsynced = ref(0)
 
 async function exportMyData(): Promise<void> {
   const token = storedToken()
-  if (!token) return signOut()
+  // Not a sign-out gesture (D-55): with the token gone (another tab signed out) there is nothing to export — say so.
+  if (!token) { exportError.value = 'Signed out — sign in again to export.'; return }
   exporting.value = true
   exportError.value = null
   try {
     const data = await exportAccount(token)
-    const day = new Date().toISOString().slice(0, 10)
-    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }))
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `planner-export-${day}.json`
-    a.click()
-    URL.revokeObjectURL(url)
+    downloadJson(`planner-export-${new Date().toISOString().slice(0, 10)}.json`, data)
     exportedAt.value = new Date().toLocaleTimeString()
   } catch (err) {
     exportError.value = err instanceof AccountError && err.status === 401 ? 'Signed out — sign in again to export.' : err instanceof Error ? err.message : String(err)
@@ -133,15 +136,10 @@ async function deleteMyData(): Promise<void> {
 onMounted(async () => {
   void refreshStats()
   void storageUsage().then((u) => { usage.value = u })
-  const r = await fetchMe()
-  // 'signed-out': the server rejected the stored token (401). With nothing waiting to upload, sign out and ask for a fresh
-  // sign-in; with notes waiting, keep everything — the banner offers "Sign in" and they upload afterwards (D-04).
-  if (r === 'signed-out') {
-    await signOut()
-    if (signOutBlocked.value !== null) me.value = { error: 'signed out of the server' }
-    return
-  }
-  me.value = r
+  // Runs at launch (D-55): a verdict from the server is only displayed here. Wiping is the owner's gesture alone, and
+  // `launchCheck.test.ts` fails if anything destructive is called from this block. The sync banner (driven by the
+  // engine's own verdict) offers "Sign in" or "Save a copy / Clear this device".
+  me.value = await checkAccount()
 })
 
 // --------------------------------------------------------------------------
@@ -417,6 +415,7 @@ async function doDisconnect(): Promise<void> {
         <button class="btn-danger" data-test="sign-out" @click="signOut">Sign out</button>
         <InstallButton />
       </div>
+      <p v-if="signOutError" class="text-sm text-rose-300 mt-3" role="alert" data-test="sign-out-error">{{ signOutError }}</p>
       <p v-if="signOutBlocked !== null" class="text-sm text-amber-300 mt-3" role="alert" data-test="sign-out-blocked">
         {{ signOutBlocked }} {{ signOutBlocked === 1 ? 'note has' : 'notes have' }} not reached the server. Signing out clears this
         device, so they would be lost. Let them sync first{{ rejected.length ? ', or retry or discard the refused ones below' : '' }}.

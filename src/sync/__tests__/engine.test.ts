@@ -1,4 +1,5 @@
 import 'fake-indexeddb/auto'
+import Dexie from 'dexie'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { PlannerDb } from '@/db'
 import { captureEntry } from '@/capture/capture'
@@ -439,6 +440,39 @@ describe('review findings', () => {
     expect(server.rows.size).toBe(1) // exercised: the push reached the server
     expect((await a.db.entries.toArray())[0]!.serverVersion).toBeNull() // but the late answer wrote nothing here
     expect(await a.db.outbox.count()).toBe(1)
+  })
+
+  // Review finding (D-55 slice): `live(gen)` is checked when an engine transaction starts. A clear whose transaction was
+  // created first queues the engine's behind it and bumps the generation only after its own first read — so the engine's
+  // callback passed the check and wrote after the clear. The check is repeated after the first awaited read, which resolves
+  // only once the clear has committed. The hook below stands in for that clear: it resets the engine at the first read made
+  // INSIDE the engine's transaction. Known positive: both tests fail without the second check.
+  it('a pull whose transaction queued behind a clear writes nothing', async () => {
+    server.seed('late-1', 'from the old account')
+    const a = device(server)
+    const real = a.db.outbox.toArray.bind(a.db.outbox)
+    let hit = false
+    a.db.outbox.toArray = (async () => {
+      if (Dexie.currentTransaction && !hit) { hit = true; a.engine.reset() }
+      return real()
+    }) as never
+    await a.engine.run()
+    expect(hit).toBe(true) // exercised: the reset landed inside the pull's transaction
+    expect(await a.db.entries.count()).toBe(0)
+    expect((await a.db.syncMeta.toArray()).every((m) => m.cursor === 0)).toBe(true)
+  })
+
+  it('a claim whose transaction queued behind a clear writes nothing', async () => {
+    const a = device(server)
+    const real = a.db.syncMeta.get.bind(a.db.syncMeta)
+    let hit = false
+    a.db.syncMeta.get = (async (...args: unknown[]) => {
+      if (Dexie.currentTransaction && !hit) { hit = true; a.engine.reset() }
+      return (real as (...x: unknown[]) => unknown)(...args)
+    }) as never
+    await a.engine.run()
+    expect(hit).toBe(true) // exercised: the reset landed inside the claim's transaction
+    expect(await a.db.syncMeta.count()).toBe(0) // the old account must not be recorded on a cleared device
   })
 
   // C: the device is claimed by the first account that passes the check, even if its first pull fails.
