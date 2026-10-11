@@ -35,6 +35,14 @@ Decided at runtime from the host (`src/env/appEnv.ts`), so the exact build that 
 Local sign-in needs an invite in the **local** D1 (the `.wrangler/` state):
 `node api/scripts/invite.mjs create <email>` · `list` · `revoke <email>`.
 
+## Parallel sessions
+
+One session, one worktree off `origin/main` (`git worktree add E:/Projects/apps/planner-wt-<tag> origin/main`, a short
+path). Never `git switch` in the shared checkout. After creating one, run `pnpm install --frozen-lockfile` and
+`pnpm --dir api install --frozen-lockfile`. Sign-in works only from `http://localhost:5176/planner/` (the API's
+allow-list); other ports can test UI with a planted token but cannot sign in. A worktree cannot be deleted while
+`planner-api` runs (a hardlinked `workerd.exe`).
+
 ## Production
 
 | What | Link |
