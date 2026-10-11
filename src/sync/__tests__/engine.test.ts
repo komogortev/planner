@@ -475,6 +475,191 @@ describe('review findings', () => {
     expect(await a.db.syncMeta.count()).toBe(0) // the old account must not be recorded on a cleared device
   })
 
+  // D-58: the server's newest version (`head`) is below this device's cursor: the database was restored to an earlier point.
+  // Asking for "versions above N" would hear nothing for ever, and everything written from then on would never arrive.
+  describe('a server that went back in time', () => {
+    const bodiesSet = async (d: Device) => new Set(await bodies(d))
+
+    it('re-pulls from the start, and puts back the notes the server no longer has', async () => {
+      const a = device(server)
+      for (const text of ['one', 'two', 'three']) await captureEntry(text, a.db)
+      await a.engine.run() // versions 1-3 acknowledged
+      expect((await a.db.syncMeta.toArray())[0]!.cursor).toBe(3)
+      server.restoreTo(1) // the restore: "two" and "three" are gone from the server
+      server.seed('from-b', 'from another device') // and another device wrote version 2 again
+      await a.engine.run()
+      expect(await bodiesSet(a)).toEqual(new Set(['one', 'two', 'three', 'from another device']))
+      // (the same cycle went round again and uploaded the notes it put back)
+      expect([...server.rows.values()].map((r) => r.body).sort()).toEqual(['from another device', 'one', 'three', 'two'])
+      expect(await a.db.outbox.count()).toBe(0)
+      expect((await a.db.entries.toArray()).every((e) => e.serverVersion !== null)).toBe(true)
+      expect(a.engine.state.phase).toBe('idle')
+    })
+
+    // Known positive for the cases below: without the head check the same history leaves the device stuck, so "nothing happened"
+    // cannot be the old behaviour passing by accident.
+    it('without head (an older Worker) nothing is rewound — the device stays behind, as before', async () => {
+      const a = device(server)
+      for (const text of ['one', 'two', 'three']) await captureEntry(text, a.db)
+      await a.engine.run()
+      server.sendHead = false
+      server.restoreTo(1)
+      server.seed('from-b', 'from another device')
+      await a.engine.run()
+      expect(await bodiesSet(a)).toEqual(new Set(['one', 'two', 'three'])) // never hears of "from another device"
+    })
+
+    it('a head at or above the cursor changes nothing: one pull, no re-queue', async () => {
+      const a = device(server)
+      await captureEntry('one', a.db)
+      await a.engine.run()
+      server.requests.length = 0
+      await a.engine.run()
+      expect(server.count('/sync/pull')).toBe(1)
+      expect(await a.db.outbox.count()).toBe(0)
+    })
+
+    it('a note whose change is already waiting (here: refused) is not queued a second time', async () => {
+      const a = device(server)
+      await captureEntry('one', a.db)
+      await a.engine.run()
+      const e = (await a.db.entries.toArray())[0]!
+      await a.db.entries.update(e.id, { body: 'one edited' })
+      await a.db.outbox.add({ entityId: e.id, op: 'upsert', baseVersion: 1, payload: { ...e, body: 'one edited', serverVersion: undefined } as never, attempts: 0, lastError: null, queuedAt: '2026-10-11T10:00:00.000Z' })
+      server.reject.add(e.id)
+      await a.engine.run() // the server refuses the edit: the row is marked and stays
+      expect((await a.db.outbox.toArray())[0]!.rejectedAt).toBeTruthy()
+      server.restoreTo(0)
+      await a.engine.run() // the pull notices the restore
+      expect(await a.db.outbox.count()).toBe(1) // still the one refused row, not a second one beside it
+    })
+
+    it('a deleted note the server lost is re-queued as a delete', async () => {
+      const a = device(server)
+      await captureEntry('one', a.db)
+      await a.engine.run()
+      const e = (await a.db.entries.toArray())[0]!
+      await a.db.entries.update(e.id, { deletedAt: '2026-10-11T10:00:00.000Z' })
+      server.restoreTo(0)
+      server.requests.length = 0
+      await a.engine.run() // the same cycle goes round again and uploads what it put back
+      const push = server.requests.find((r) => r.path === '/sync/push')!
+      expect((push.body as { mutations: unknown[] }).mutations[0]).toMatchObject({ entityId: e.id, op: 'delete', baseVersion: null })
+      expect(server.rows.get(e.id)?.deletedAt).toBe('2026-10-11T10:00:00.000Z')
+      expect(await a.db.outbox.count()).toBe(0)
+    })
+
+    // Negative control: a server that keeps saying its head is below the cursor cannot make the client loop.
+    it('rewinds at most once per cycle, even if the server keeps claiming a low head across several pages', async () => {
+      const a = device(server)
+      for (let i = 0; i < PULL_PAGE + 20; i++) await captureEntry(`note ${i}`, a.db) // two pages from 0
+      await a.engine.run()
+      server.headOverride = 0 // a server that keeps saying its head is below the cursor
+      server.requests.length = 0
+      server.maxRequests = 12
+      await a.engine.run()
+      // the first answer, the rewound pull of 2 pages, and nothing more; a client that rewound again after the first page
+      // would go round until the safety net cuts it off
+      expect(server.count('/sync/pull')).toBeLessThanOrEqual(4)
+      expect(a.engine.state.phase).toBe('idle')
+    })
+
+    // Review finding: the first version of this test left `head` equal to the cursor, so the rewind code never ran. Here the
+    // cursor is 2 and the head after the restore is 1; the control run shows the notes WOULD have been put back.
+    describe('a reset while the rewind is under way', () => {
+      const setup = async () => {
+        const a = device(server)
+        await captureEntry('one', a.db)
+        await captureEntry('two', a.db)
+        await a.engine.run() // cursor 2
+        server.restoreTo(0)
+        server.seed('from-b', 'from another device') // head 1 < cursor 2
+        return a
+      }
+      const engineThatResets = (a: Device, resetAt: string | null) => {
+        const real = server.fetch
+        const engine: SyncEngine = new SyncEngine({
+          db: a.db, apiUrl: 'https://api.test', token: () => 'tok-a', online: () => true, yieldNow: async () => {},
+          fetch: (async (...args: Parameters<typeof fetch>) => {
+            const res = await real(...args)
+            if (resetAt && String(args[0]).includes(resetAt)) engine.reset()
+            return res
+          }) as typeof fetch,
+        })
+        return engine
+      }
+
+      it('control: without a reset the lost notes are put back and uploaded', async () => {
+        const a = await setup()
+        await engineThatResets(a, null).run()
+        expect([...server.rows.values()].map((r) => r.body).sort()).toEqual(['from another device', 'one', 'two'])
+      })
+
+      it('the pull that noticed the restore is cancelled: nothing is re-queued, the cursor is not touched', async () => {
+        const a = await setup()
+        await engineThatResets(a, '/sync/pull').run()
+        expect(await a.db.outbox.count()).toBe(0)
+        expect((await a.db.syncMeta.toArray())[0]!.cursor).toBe(2)
+        expect([...server.rows.values()].map((r) => r.body)).toEqual(['from another device']) // and nothing was pushed
+      })
+    })
+
+    // Review finding (B1): the rewind was held in memory only. A failure after the cursor was zeroed left the next cycle with
+    // nothing to say that notes had to be put back.
+    it('a rewind that was interrupted is finished by the next cycle', async () => {
+      const a = device(server)
+      for (const t of ['one', 'two', 'three']) await captureEntry(t, a.db)
+      await a.engine.run() // cursor 3
+      server.restoreTo(1) // "two" and "three" are lost
+      let pulls = 0
+      const real = server.fetch
+      const engine = new SyncEngine({
+        db: a.db, apiUrl: 'https://api.test', token: () => 'tok-a', online: () => true, yieldNow: async () => {}, now: () => a.clock.t,
+        fetch: (async (...args: Parameters<typeof fetch>) => {
+          if (String(args[0]).includes('/sync/pull') && ++pulls === 2) return new Response('{"error":"boom"}', { status: 500 }) // the refetch after the rewind
+          return real(...args)
+        }) as typeof fetch,
+      })
+      await engine.run()
+      expect(engine.state.phase).toBe('waiting') // interrupted after the cursor was zeroed
+      expect((await a.db.syncMeta.toArray())[0]).toMatchObject({ cursor: 0, reconcile: true })
+      await engine.run({ force: true }) // the next cycle: the server is fine now, and the head is no longer below the cursor
+      expect([...server.rows.values()].map((r) => r.body).sort()).toEqual(['one', 'three', 'two'])
+      expect((await a.db.syncMeta.toArray())[0]!.reconcile).toBeFalsy() // done: the marker is cleared
+    })
+
+    // Review finding (B2): this device's own push in the same cycle brings the counter back up to the cursor, so `head` alone
+    // no longer says anything. An applied push that is given a version at or below the cursor does.
+    it('a note pushed after a restore is given a version at or below the cursor: that alone proves the rewind', async () => {
+      const a = device(server)
+      for (const t of ['one', 'two', 'three']) await captureEntry(t, a.db)
+      await a.engine.run() // cursor 3
+      server.restoreTo(2) // "three" is lost
+      await captureEntry('four', a.db) // the push below takes version 3: head is back at 3 = the cursor, and head < cursor is false
+      await a.engine.run()
+      expect([...server.rows.values()].map((r) => r.body).sort()).toEqual(['four', 'one', 'three', 'two'])
+      expect(await a.db.outbox.count()).toBe(0)
+    })
+
+    // Negative control: a `duplicate` legitimately carries an old version; only an `applied` one proves anything.
+    it('a duplicate answer with an old version is not a rewind', async () => {
+      const a = device(server)
+      await captureEntry('one', a.db)
+      await captureEntry('two', a.db)
+      await a.engine.run() // cursor 2
+      const e = (await a.db.entries.toArray())[0]!
+      // the same change again, as after a lost answer: the server answers `duplicate` with version 1, which is below the cursor
+      await a.db.outbox.add({ entityId: e.id, op: 'upsert', baseVersion: null, payload: { ...e, serverVersion: undefined } as never, attempts: 0, lastError: null, queuedAt: '2026-10-11T10:00:00.000Z' })
+      server.requests.length = 0
+      await a.engine.run()
+      expect(server.count('/sync/push')).toBe(1) // exercised: the duplicate really was pushed
+      // an ordinary incremental pull from the cursor, not a sweep from 0 (a sweep would ask since=0)
+      expect(server.requests.filter((r) => r.path.startsWith('/sync/pull')).map((r) => r.path)).toEqual([`/sync/pull?since=2&limit=${PULL_PAGE}`])
+      expect((await a.db.syncMeta.toArray())[0]).toMatchObject({ cursor: 2 })
+      expect((await a.db.syncMeta.toArray())[0]!.reconcile).toBeFalsy()
+    })
+  })
+
   // C: the device is claimed by the first account that passes the check, even if its first pull fails.
   it('claims the device before the first pull, so a later sign-in as someone else is refused', async () => {
     const a = device(server)

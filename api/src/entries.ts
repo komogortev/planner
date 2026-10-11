@@ -184,15 +184,30 @@ export async function pushMutations(db: D1Database, userId: string, mutations: u
 
 // ── pull / query ────────────────────────────────────────────────────────────
 
-/** Rows after `since`, oldest first, soft-deleted ones included so a delete reaches every device (§6.2). */
+/**
+ * Rows after `since`, oldest first, soft-deleted ones included so a delete reaches every device (§6.2).
+ *
+ * `head` is the account's newest version (`users.version_seq`) as of this read — not where this page ended. A device whose
+ * cursor is AHEAD of it (the database was restored to an earlier point, the counter was edited by hand) would otherwise ask
+ * for "versions above N" for ever, hear nothing, and never receive what is written from then on (D-58). One batch: one
+ * round trip, one query on the free plan.
+ */
 export async function pullChanges(db: D1Database, userId: string, since: number, limit: number) {
-  const { results } = await db
-    .prepare(`SELECT ${COLS} FROM entries WHERE user_id = ? AND server_version > ? ORDER BY server_version LIMIT ?`)
-    .bind(userId, since, limit + 1)
-    .all<Raw>()
+  const [page, head] = await db.batch([
+    db.prepare(`SELECT ${COLS} FROM entries WHERE user_id = ? AND server_version > ? ORDER BY server_version LIMIT ?`).bind(userId, since, limit + 1),
+    db.prepare('SELECT version_seq FROM users WHERE id = ?').bind(userId),
+  ])
+  const results = page!.results as Raw[]
   const more = results.length > limit
   const changes = results.slice(0, limit).map(toEntry)
-  return { changes, cursor: changes.length ? changes[changes.length - 1].serverVersion! : since, more }
+  return {
+    changes,
+    cursor: changes.length ? changes[changes.length - 1].serverVersion! : since,
+    more,
+    // Absent when the account is not there any more (deleted between the session check and this read): "0" would tell a client
+    // that the server is empty, and it would put every note it holds back into its outbox.
+    ...((head!.results[0] as { version_seq: number } | undefined) ? { head: (head!.results[0] as { version_seq: number }).version_seq } : {}),
+  }
 }
 
 /** One entry, or null when it does not exist *for this account* — another account's id looks the same as a missing one. */

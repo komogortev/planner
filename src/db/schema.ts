@@ -203,4 +203,9 @@ export interface SyncMeta {
   cursor: number // highest server_version pulled
   lastPushAt: string | null
   lastPullAt: string | null
+  /**
+   * Set when a pull started again from 0 because the server went back in time (D-58), and cleared once the notes the server
+   * lost were put back. Kept on disk because the sweep takes more than one request: an interruption must not forget it.
+   */
+  reconcile?: boolean
 }

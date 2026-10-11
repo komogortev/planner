@@ -61,7 +61,8 @@ class Stop extends Error {
 }
 
 type PushResult = { entityId: string; status: 'applied' | 'duplicate' | 'rejected' | 'retry'; serverVersion?: number; conflict?: boolean; error?: string }
-type PullResponse = { changes: Entry[]; cursor: number; more: boolean }
+/** `head`: the account's newest version on the server (D-58). Absent from an older Worker. */
+type PullResponse = { changes: Entry[]; cursor: number; more: boolean; head?: number }
 
 export type Group = { entityId: string; seqs: number[]; mutation: { entityId: string; op: 'upsert' | 'delete'; baseVersion: number | null; payload: EntryInput } }
 
@@ -180,7 +181,7 @@ export class SyncEngine {
       this.live(gen)
       if (!(await this.sameAccount(userId))) throw new Stop('foreign-account', 'this device holds notes of another account', undefined, false)
       await this.claimDevice(userId, gen)
-      await this.push(gen)
+      await this.push(userId, gen)
       await this.pull(userId, gen)
       this.live(gen)
       this.set({ phase: 'idle', lastSyncedAt: new Date(this.now()).toISOString(), lastError: null, failures: 0, retryAt: null, initialPull: false })
@@ -255,8 +256,9 @@ export class SyncEngine {
 
   // ── push ──────────────────────────────────────────────────────────────────
 
-  private async push(gen: number): Promise<void> {
+  private async push(userId: string, gen: number): Promise<void> {
     const { db } = this.d
+    const cursorAtStart = (await db.syncMeta.get(userId))?.cursor ?? 0
     for (;;) {
       this.live(gen)
       const pending = (await db.outbox.toArray()).filter((r) => !r.rejectedAt)
@@ -275,6 +277,12 @@ export class SyncEngine {
         const r = results[i]!
         if (r.status === 'applied' || r.status === 'duplicate') {
           moved++
+          // D-58: a NEW version is always above the account's head, which is at or above this device's cursor. An applied
+          // change that was given a version at or below the cursor proves the counter went backwards — even when the device's own
+          // pushes have since brought `head` back up to the cursor, where `head < cursor` no longer says so. (A `duplicate`
+          // legitimately carries an old version: it proves nothing.) The marker is written NOW: the sweep it starts is finished by
+          // whichever cycle comes next, even if this one fails before the pull.
+          if (r.status === 'applied' && typeof r.serverVersion === 'number' && r.serverVersion <= cursorAtStart) await this.markRewind(userId, gen)
           await this.acknowledge(g, r.serverVersion, gen)
         } else if (r.status === 'rejected') {
           moved++ // the row leaves the pending set, so the loop moves on (D-27)
@@ -309,10 +317,28 @@ export class SyncEngine {
     const { db } = this.d
     const known = await db.syncMeta.get(userId)
     let cursor = known?.cursor ?? 0
+    // D-58: a sweep from 0 that finds the notes the server lost. Started when the server's `head` is below the cursor, or by an
+    // earlier cycle that did not finish it (the marker on disk). `seen` collects every id the server returns on the way, so the
+    // notes it no longer has can be found at the end; it is not kept, so an interrupted sweep starts over from 0.
+    let rewound = known?.reconcile === true
+    if (rewound) cursor = 0
+    const seen = new Set<string>()
     this.set({ initialPull: cursor === 0 })
     for (;;) {
       const page = (await this.call(`/sync/pull?since=${cursor}&limit=${PULL_PAGE}`)) as PullResponse
       if (!Array.isArray(page.changes) || typeof page.cursor !== 'number') throw new Error('pull: malformed answer')
+      // The server's newest version is BELOW where this device thinks it is: the database was restored to an earlier point (or
+      // its counter edited). "Versions above N" would hear nothing for ever, and what is written from now on would never
+      // arrive. Start again from 0 — upserts are idempotent — once per cycle, so a server that keeps claiming a low head
+      // cannot loop the client. An older Worker sends no `head`: nothing changes.
+      if (!rewound && typeof page.head === 'number' && page.head < cursor) {
+        rewound = true
+        cursor = 0
+        await this.markRewind(userId, gen)
+        this.set({ initialPull: true })
+        continue
+      }
+      if (rewound) for (const c of page.changes) if (typeof c?.id === 'string') seen.add(c.id)
       const next = Math.max(cursor, page.cursor)
       await db.transaction('rw', db.entries, db.outbox, db.syncMeta, async () => {
         this.live(gen) // a device cleared while the page was in flight must not receive it
@@ -325,14 +351,61 @@ export class SyncEngine {
           id: c.id, body: c.body, createdAt: c.createdAt, occurredAt: c.occurredAt ?? null, categoryId: c.categoryId ?? null,
           tags: Array.isArray(c.tags) ? c.tags : [], origin: 'author', updatedAt: c.updatedAt, deletedAt: c.deletedAt ?? null, serverVersion: c.serverVersion,
         })))
-        await db.syncMeta.put({ userId, cursor: next, lastPushAt: known?.lastPushAt ?? null, lastPullAt: new Date(this.now()).toISOString() })
+        await db.syncMeta.put({ userId, cursor: next, lastPushAt: known?.lastPushAt ?? null, lastPullAt: new Date(this.now()).toISOString(), ...(rewound ? { reconcile: true } : {}) })
       })
       this.set({ pulled: this.state.pulled + page.changes.length })
-      if (!page.more) return
+      if (!page.more) {
+        if (rewound) await this.requeueLost(userId, seen, gen)
+        return
+      }
       if (next <= cursor) throw new Error('pull: the cursor did not advance')
       cursor = next
       await (this.d.yieldNow ?? (() => new Promise<void>((r) => setTimeout(r, 0))))()
     }
+  }
+
+  /**
+   * The server went back in time (D-58): start the sweep from 0, and write that down BEFORE the first request of it. The sweep
+   * takes more than one request; if it is interrupted, the next cycle finds the marker and starts it over — the notes the
+   * server lost are still to be put back, and nothing else would say so.
+   */
+  private async markRewind(userId: string, gen: number): Promise<void> {
+    const { db } = this.d
+    await db.transaction('rw', db.syncMeta, async () => {
+      this.live(gen)
+      const known = await db.syncMeta.get(userId)
+      this.live(gen) // the read waited for any clear queued ahead of this transaction; a reset it made must win
+      await db.syncMeta.put({ userId, cursor: 0, lastPushAt: known?.lastPushAt ?? null, lastPullAt: known?.lastPullAt ?? null, reconcile: true })
+    })
+  }
+
+  /**
+   * End of a sweep from 0 (D-58): a note on this device that the server did not return — and that has no change waiting — is
+   * one the server LOST. Its acknowledged version belongs to a history that no longer exists, so it goes back into the outbox
+   * as a new note (base null; a deleted one as a delete) and is uploaded again. Clears the marker in the same transaction.
+   */
+  private async requeueLost(userId: string, seen: Set<string>, gen: number): Promise<void> {
+    const { db } = this.d
+    let requeued = 0
+    await db.transaction('rw', db.entries, db.outbox, db.syncMeta, async () => {
+      this.live(gen)
+      const waiting = new Set((await db.outbox.toArray()).map((r) => r.entityId))
+      this.live(gen) // the read waited for any clear queued ahead of this transaction; a reset it made must win
+      // Only the ids are read for all notes; the bodies only for the lost ones.
+      const ids = (await db.entries.toCollection().primaryKeys()) as string[]
+      const lost = (await db.entries.bulkGet(ids.filter((id) => !seen.has(id) && !waiting.has(id)))).filter((e): e is Entry => !!e)
+      for (const e of lost) {
+        const { serverVersion: _version, ...payload } = e
+        await db.outbox.add({
+          entityId: e.id, op: e.deletedAt ? 'delete' : 'upsert', baseVersion: null, payload, attempts: 0, lastError: null,
+          queuedAt: new Date(this.now()).toISOString(),
+        })
+        await db.entries.update(e.id, { serverVersion: null })
+        requeued++
+      }
+      await db.syncMeta.update(userId, { reconcile: false })
+    })
+    if (requeued > 0) this.again = true // go round once more now: push what was put back, instead of waiting for the poll
   }
 
   // ── what the owner can do about a stuck row (D-27) ────────────────────────
