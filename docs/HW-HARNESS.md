@@ -303,7 +303,9 @@ the next 7 days) with a **Today** tap that carries the Task to today (`by` the o
 lead-time question; its answer re-opens the Task as scope input, as any answer does. Owner layout calls (same day): the
 questions strip is fixed under the Dashboard's scrolling cards and shows only when there is something to act on —
 questions, changes waiting for a run (the first run is what creates questions, so this is the strip's only other way in),
-or a run in progress — one line at rest, tap = the question, Get feedback = the run (the strip grows upwards); Daily on
-top; the app opens on the Dashboard by default (Settings → Opens on: Dashboard · Record);
+or a run in progress — one line at rest; a body tap = the read-only detail (what is waiting, the next question); Get
+feedback = every queued question with its own reply, then the run (the strip grows upwards); a tap outside = back to one
+line, typed input kept. **Widget rule (owner):** a tap on any widget's body toggles its detailed view when it has one,
+like its own open button (`composables/bodyTap.ts`; today the strip and Summarize). Daily on top; the app opens on the Dashboard by default (Settings → Opens on: Dashboard · Record);
 Settings is the cloth's underside (darker, folds mirrored); the bottom band is the nav's alone and the version badge is
 gone. DEVICE-CHECKS 27–31.
