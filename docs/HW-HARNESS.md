@@ -232,3 +232,16 @@ done · tomorrow · drop, tap-to-edit text, "+ task". Bottom: notes (input histo
 **Slices.** S0 this section + VOCABULARY/DECISION rows on acceptance · S1 domain (`tasks.ts`, harness v2 compose/parse/apply,
 pure, tests incl. dedupe + owner-text guard) · S2 Worker kind `task` + `questions.taskId` (additive, deployed first) · S3
 Dashboard v2. The parked S3b branch (`feat/s3b-dashboard-loop`, local) gives the strip and day logic to reuse.
+
+**S1 built (2026-10-11), pure, nothing wired.** `domain/tasks.ts` (Task, owner edits, Daily, confirm/reject a proposal) ·
+`domain/harness2.ts` (v2 question/assessment rows, selection, `tasksWaiting` = the strip's count, compose) ·
+`domain/harness2Reply.ts` (parse, validate, apply) · `domain/summary.ts` (line diff, apply, removal question). v1 stays the
+shipped path until S3. Calls made in the slice: D-74 (rows keyed to a Task or a note; kind `taskProposal`), D-75 (dedupe
+against any open Task, `ref` on create, 7-day re-read of S3a notes, split/merge/confirm rules), D-76 (removal answers).
+Open points 1, 4, 5 and 6 are built at their defaults: Daily is computed on the device (P2), and note states are read only
+to leave dropped notes out (P4).
+
+**S2 scope, corrected by S1 — the Worker contract changes, not just the client.** Additive, deployed before any client
+writes: kinds `task` and `taskProposal`; `question` gains `taskId` and `kind`, and its `entryId` becomes nullable;
+`assessment` gains `taskId`, and its `entryId` becomes nullable; both get an exactly-one rule; the `run` record gains the
+task ids it sent. The validators read old rows without the new fields as before.

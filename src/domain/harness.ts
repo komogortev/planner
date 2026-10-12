@@ -427,7 +427,8 @@ export function applyHarness(output: HarnessOutput, run: RunScope, data: Harness
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string }
 
-export function answerQuestion(q: Question, answer: string, now: string): Result<Question> {
+/** Generic over the row shape, so the v2 rows (`harness2.ts`, with `taskId` and `kind`) keep their fields. */
+export function answerQuestion<Q extends Pick<Question, 'state' | 'answer' | 'answeredAt'>>(q: Q, answer: string, now: string): Result<Q> {
   if (q.state !== 'open') return { ok: false, error: 'This question is already closed.' }
   const text = cleanBody(answer).trim()
   if (text === '') return { ok: false, error: 'The answer is empty.' }
@@ -435,7 +436,7 @@ export function answerQuestion(q: Question, answer: string, now: string): Result
   return { ok: true, value: { ...q, state: 'answered', answer: text, answeredAt: now } }
 }
 
-export function dismissQuestion(q: Question): Result<Question> {
+export function dismissQuestion<Q extends Pick<Question, 'state'>>(q: Q): Result<Q> {
   return q.state === 'open' ? { ok: true, value: { ...q, state: 'dismissed' } } : { ok: false, error: 'This question is already closed.' }
 }
 
