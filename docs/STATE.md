@@ -2,10 +2,10 @@
 
 ## SNAPSHOT
 - **Phase/Last:** H1 built. **2026-10-12: S3 v2 shipped — Dashboard v2 is the owner's Dashboard (switch on merge, owner, no flag):** questions strip per Task, Daily of Tasks with an editable summary, optional Summarize, notes as input. Spec [HW-HARNESS.md](HW-HARNESS.md) §11 (S3-1, S3-2 records). Vibe-code mode.
-- **Working:** prod = Worker `b5215cb` + D1 `0008` (accepts `task`/`taskProposal`); Pages from `main`. `pnpm check` app 564 · Worker 176. Browser-verified on local dev with synthetic data (DEVICE-CHECKS 23, 24); A1 near-duplicate question guard live.
+- **Working:** prod = Worker `b5215cb` + D1 `0008` (accepts `task`/`taskProposal`); Pages `c53b999` (Dashboard v2), smoke 16/16 (2026-10-12). `pnpm check` app 564 · Worker 176. Browser-verified on local dev with synthetic data (DEVICE-CHECKS 23, 24); A1 near-duplicate question guard live.
 - **Broken:** nothing known. **Not verified:** the first real v2 run (DEVICE-CHECKS 21, 22, 25) and the first `task` write reaching D1 (26) — smoke cannot reach either; no component tests for the strip/Daily; DEVICE-CHECKS 10, 13–17.
 - **Blocker:** none.
-- **Next:** the owner's first real day on v2 → read the paste count (§7) and check 26 (a Task read back from the server). Then S4 acceptance (three consecutive days, §11) and the exit week. Parked: `feat/s3b-dashboard-loop` (superseded, delete after the first v2 day); §9 point 9.
+- **Next:** validation pass in its own session (owner, 2026-10-12): DEVICE-CHECKS 21–26 on the owner's first real day on v2 → read the paste count (§7) and check 26 (a Task read back from the server). Then S4 acceptance (three consecutive days, §11) and the exit week. Parked: `feat/s3b-dashboard-loop` (superseded, delete after the first v2 day); §9 point 9.
 ---
 
 ## Context
