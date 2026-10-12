@@ -135,3 +135,71 @@ The prompt is built only from the signed-in account's on-device notes. The run h
 | C6 | The stated purpose is corporate-style sprint organisation brought to personal space | PROJECT.md Vision, VOCABULARY | One sentence added to the Vision. Proposed term **Horizon** (daily · weekly · monthly · yearly · life) for the code; "sprint" stays framing only — it implies a committed backlog, which the calendar-window design does not have. VOCABULARY gets the row in the horizon spec's session, before any code (parked with C5) | Yes |
 
 **Not covered by the notes:** whether the harness's questions are worth answering (no run yet), the paste count per day (§7), and what the owner's other journaling tool's yearly view does — a note equates it with the yearly horizon; it was not read in this session, so the equivalence is the owner's claim, uncalibrated.
+
+## 11. S3 v2 — tasks derived from notes (DRAFT for owner read, 2026-10-11)
+
+**Why.** The first real run (12 notes, 10 questions, 1 carry) showed the owner the S3a shape is wrong in three ways (owner,
+2026-10-11): the surface is the notes themselves (raw input, often several topics in one note); questions sit on note rows
+and need one action per note; Daily is either a list of notes or a second paste. The owner's model:
+
+1. **Notes are input only.** One note may hold several topics; several notes in a day may feed the same one.
+2. **The harness derives Tasks from the notes' context.** The derived information is what the owner faces, not the notes.
+3. **Daily = the Tasks due today**, plainly listed. It is computed on the device: no second paste.
+4. **Questions are one queue** across everything the harness read, answered in one sheet with one Send.
+5. **An owner edit of a registered Task (or a Task added by hand) re-enters the next run** to be re-evaluated.
+
+**Proposed decisions (none accepted yet):**
+
+| # | Proposal | Replaces |
+|---|---|---|
+| P1 | The harness creates **Task** records directly (VOCABULARY "Task"); the owner edits, completes, carries or drops them. No accept-a-hook step | D-39 (Task only on accepting a hook), D-34's "nothing extracted" for tasks; H4 is pulled into HW |
+| P2 | **One paste per run.** The harness output gains task operations; Daily needs no stage-2 call. The AI journal (stage 2) stays optional ("Summarize") | D-60's two-round-trip shape for the daily loop |
+| P3 | Questions are keyed to a Task when one exists (`taskId`), else to the note; the answer sheet stores every filled answer in one transaction | per-note answering in S3a |
+| P4 | `entryStates` stops being an owner surface: a note's life ends at "assessed". Dropping a junk note stays possible from the notes list | D-65/D-67 evening pass on notes (moves to Tasks) |
+
+**Task record (new kind `task`, additive: Worker validator + D1 accept it before any client writes one).**
+
+| Field | Meaning |
+|---|---|
+| `id` | uuid5(`runId` + normalized text) when the harness creates it (replay = no-op); uuid v4 when the owner adds one |
+| `text` | one line, the task as the owner would say it |
+| `sourceEntryIds` | every note that contributed (grows when a later note joins the same topic) |
+| `due` | `YYYY-MM-DD` or null — only when a note implies it; a deadline also gets the lead-time question (D-66) |
+| `state` | `open · done · dropped`, with `followUpOn` for a carry (Daily = open with `followUpOn ?? due ?? createdDay` ≤ today) |
+| `by` | `harness · owner` — who wrote `text` last. **The model never overwrites owner text**; it may only propose |
+| `editedAt` | last owner edit; **`editedAt` > the task's last assessment ⇒ the task is in the next run** (constraint 5) |
+| `runId`, `createdAt`, `updatedAt` | provenance |
+
+**Harness v2 input and output.** Input = new or reopened notes (as today) **plus the open Tasks with their ids, sources and
+answered questions**. Output per run:
+
+```ts
+{ tasks: [
+    { op: 'create', text, sourceEntryIds, due|null },                 // new topic
+    { op: 'attach', taskId, sourceEntryIds, due?|null },               // a later note feeds an existing task (constraint 1)
+    { op: 'close',  taskId, entryId, evidence },                       // proposal: a note says it is done (owner confirms)
+    { op: 'revise', taskId, text?, due? },                             // proposal on a re-evaluated task; never applied over owner text
+  ],
+  questions: [ { taskId|null, entryId|null, text } ] }               // ≤ 3 per task or note, as today
+```
+
+Validation keeps every S1 rule (candidate set, replay, stale run, dates, caps) and adds: `attach`/`close`/`revise` name an
+open task that was in the prompt; `create` must cite at least one note from the prompt; a `create` whose normalized text
+equals an open task's is turned into an `attach` (dedupe within the day).
+
+**"Trigger a rerun" with the copy-prompt executor.** An edit cannot start a model call by itself: there is no API key
+(D-63). An edit marks the task as waiting, and the questions strip shows **"N changes waiting for feedback"** with the Get
+feedback button. A truly automatic re-run is H5 (API executor), whose re-entry is evidence: §7's paste count.
+
+**Dashboard v2.** Top: questions strip with a count and "Answer all" (the sheet). Middle: **Daily** — today's Tasks with
+done · tomorrow · drop, tap-to-edit text, "+ task". Bottom: notes (input history, "+ Today" removed).
+
+**Open — each with the default I would proceed under:**
+1. "Edit of an already registered daily summary" = editing a Task in Daily (or adding one) — *default yes*; the
+   alternative is a stored free-text day summary the owner edits, which would then be a note-like input to the next run.
+2. Do answered questions still reopen their note (S1 rule)? *Default: they reopen the task they belong to, else the note.*
+3. The S3a records already in production (assessments, questions, links on 12 notes) stay valid; v2 reads them, nothing migrates.
+
+**Slices.** S0 this section + VOCABULARY/DECISION rows on acceptance · S1 domain (`tasks.ts`, harness v2 compose/parse/apply,
+pure, tests incl. dedupe + owner-text guard) · S2 Worker kind `task` + `questions.taskId` (additive, deployed first) · S3
+Dashboard v2. The parked S3b branch (`feat/s3b-dashboard-loop`, local) gives the strip and day logic to reuse.
