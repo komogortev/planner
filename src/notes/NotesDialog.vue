@@ -34,7 +34,9 @@ const unsynced = computed(() => new Set(queued.value))
 </template>
 
 <style scoped>
-.dialog { color: var(--glass-text); max-height: 100%; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y; }
+/* Not a scroll box: the page sheet scrolls. A box with overscroll containment and no height of its own never scrolls and
+   swallows the gesture, so a Dashboard taller than the screen could not be scrolled over this card (S3a, 2026-10-11). */
+.dialog { color: var(--glass-text); }
 .head { display: flex; align-items: baseline; justify-content: space-between; }
 .count { font-size: 0.75rem; color: var(--glass-sub); }
 .empty, .more { font-size: 0.85rem; color: var(--glass-sub); margin-top: 0.75rem; }
