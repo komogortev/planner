@@ -316,6 +316,8 @@ Ids start at D-03: D-01/D-02 were dropped while drafting (merged into D-18 and D
 | D-78 | **Accepted (owner, 2026-10-12), [H5-MODELS.md](H5-MODELS.md):** bring your own model is the core AI path — a user registers a model (API key, or endpoint + key) and the planner's declared runs execute through it; each user pays their own provider. Supersedes D-21 (→ option b), D-63 (copy-prompt stays as executor `manual`) and D-42 (H5 is next, not evidence-gated); D-37 stands but H3 is off the critical path | H5 S1 |
 | D-79 | **Accepted (same):** the key is kept on the Worker, encrypted at rest, write-only (option a). Enables runs with the app closed; the CSP is unchanged | H5 S1 |
 | D-80 | **Accepted (same, the stated assumption):** owner account first; invitees after S2 acceptance and an updated tester notice | H5 S2 |
+| D-89 | **Accepted (owner, 2026-10-12, H5-MODELS O1):** the word for a declared run bound to a time is **Routine** (`Routine`, table `routines`; A8's registry `ROUTINES`) | H5 S3 |
+| D-90 | **Accepted (same, O6):** D-22 (list own sessions, sign out everywhere) is built before any invitee can register a model; supersedes D-22's "invitee #4" re-entry | Before invitees get H5 |
 | D-81 … D-88 | **Decided by Claude (same, vibe-code; owner may reverse before S1 merges):** two request formats, no SDKs · device composes and checks, Worker only calls · a paid reply is never lost · key bound to its endpoint · cut-off reply refused before parsing · call cap · call row is the audit, no prompt text · provider error bodies never passed through. Detail: H5-MODELS §2 | H5 S1 |
 | D-23 (amended) | **Agreed (a):** the vertical slice derives the time zone from the device; the explicit setting arrives with H2 windows | H2 S2 |
 | D-24 | **Agreed (b):** own capped `/log` route into D1 on the existing rate limit; error type, route and build id only, never entry text | Before the exit week |
@@ -389,7 +391,7 @@ needs the nightly export + ~1 week of real entries (the exit week supplies it)
 | D-08, D-09 | Share target, attachments | After the vertical slice ships |
 | D-10 | Background sync | Not set |
 | D-11 | Revision viewer | With H1b; if H1b never exists, at the first real two-device conflict (to confirm) |
-| D-22 | Session list / revoke | Invitee #4 |
+| D-22 | Session list / revoke | Before any invitee can register a model (D-90, 2026-10-12); was invitee #4 |
 
 ## 6. Gaps — forks no document covered, and where each stands
 

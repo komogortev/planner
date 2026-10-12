@@ -27,7 +27,7 @@ Entry ─────────────▶   Category · Theme · Tag ─�
 | A5 | **Audit.** Every tool call and every model call is listed with what it read and what it caused | audit table in D1 | H3 |
 | A6 | **No destructive tool.** No delete, no bulk overwrite, no accepting own proposals, nothing that sends | the registry: such tools are never registered | H3 |
 | A7 | **One model gate.** Every in-app model call goes through `callAI(featureId, …)`; model and effort resolve from settings | `callAI` | H5 |
-| A8 | **One scheduler, one notifier.** Background runs are registry entries with a global pause; notifications are capped per day and silent by default | `SCHEDULES`, `sendNotification` | H5 |
+| A8 | **One scheduler, one notifier.** Background runs are registry entries with a global pause; notifications are capped per day and silent by default | `ROUTINES` (D-89), `sendNotification` | H5 |
 | A9 | **Frozen schema versions.** One per-row migration function serves Dexie upgrade and snapshot restore | `src/db/migrations.ts` | shipped |
 | A10 | **Capture is atomic and never waits on the network.** An entry and its outbox row commit in one Dexie transaction | `src/stores/entries.ts` write path | H1 |
 | A11 | **Tenant isolation.** The backend takes `user_id` from the session only, never from a request body; every query passes through one data-access helper that requires it. **Amendment (H5, D-44, takes effect when H5 starts):** a scheduled run has no session, so its `user_id` may come from a schedule row created by that same user's own session; there is no cross-user system account | `api/src/db/` helper | H1 |

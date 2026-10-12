@@ -1,6 +1,6 @@
 # H5 — Bring your own model (Design)
 
-**Status: S0 draft, 2026-10-12.** D-78 … D-80 are the owner's (2026-10-12). D-81 … D-88 are decided by Claude under
+**Status: S0 draft, 2026-10-12.** D-78 … D-80, D-89 and D-90 are the owner's (2026-10-12). D-81 … D-88 are decided by Claude under
 vibe-code; the owner may reverse any of them before S1 merges. §10 holds what is still open. **No S1 code until §10 is read.**
 Terms per [VOCABULARY.md](VOCABULARY.md); invariants per [ARCHITECTURE.md](ARCHITECTURE.md); run shapes per
 [HW-HARNESS.md](HW-HARNESS.md) §5 and §11.
@@ -38,6 +38,8 @@ cannot call the first account's model (negative control).
 | D-86 | **Claude: code decides when a model runs, and a cap bounds it.** A Worker rate limit on the call route plus a daily call cap per user (default in §10 O3). It protects the user's own money from a client loop or a stolen session. The model never schedules itself (06 L8) | — |
 | D-87 | **Claude: the call row is the audit for model calls (A5).** It holds who, which model, which stage and run, how many notes, prompt bytes, the provider's token counts, the outcome and the duration. **No prompt text is stored.** The reply text is kept until the device stores the run or 7 days pass, then cleared | — |
 | D-88 | **Claude: provider error bodies are never passed through or logged.** They are mapped to a category (`key_rejected`, `rate_limited`, `model_not_found`, `provider_down`, `bad_request`). Some providers echo part of the key in an error message | — |
+| D-89 | **Owner, 2026-10-12 (O1): the word is Routine** — a declared run (harness, a widget's run, a lens) bound to a time. `Routine`, table `routines`; ARCHITECTURE A8's scheduler registry is `ROUTINES` | VOCABULARY's 2026-10-09 rejection of *Routine* as a name for Lens |
+| D-90 | **Owner, same (O6): D-22 (list own sessions, sign out everywhere) is built before any invitee can register a model** | D-22's re-entry "invitee #4" |
 
 ## 3. What exists — the seam
 
@@ -153,11 +155,11 @@ undone by turning the executor switch back to `manual`.
 
 | # | Point | Recommendation | Who |
 |---|---|---|---|
-| O1 | **The word for a declared run on a schedule.** The owner says "routine". VOCABULARY rejected *Routine* as a name for Lens because it "implies a schedule", which is exactly this concept; ARCHITECTURE A8 says `SCHEDULES` in code | **Routine** for the concept, in UI and code (`Routine`, table `routines`); A8's `SCHEDULES` renamed with it. Settles at S3 S0 | owner |
+| O1 ✅ D-89 | **The word for a declared run on a schedule.** The owner says "routine". VOCABULARY rejected *Routine* as a name for Lens because it "implies a schedule", which is exactly this concept; ARCHITECTURE A8 says `SCHEDULES` in code | **Routine** for the concept, in UI and code (`Routine`, table `routines`); A8's `SCHEDULES` renamed with it. **Owner, 2026-10-12: Routine** | — |
 | O2 | Which presets the Models page offers | Anthropic, OpenAI, Google Gemini (compatibility endpoint), OpenRouter, plus "Custom (OpenAI-compatible)". A preset fills format and base URL; the user types the model id | Claude |
 | O3 | Default daily call cap | 30 calls per user per day, changeable in Settings. A full day is about 3–6 calls (harness, Daily, a few re-runs) | Claude |
 | O4 | Whether a provider call survives a client disconnect | Measured in S1 step 0, not assumed | S1 |
 | O5 | What a device running an older build does when it pulls a run with `executor: 'model'` | Read the pull path in S1; if the old validator rejects the row, deploy the accepting client a day before the first model run (the owner's devices update on open) | S1 |
-| O6 | Pull D-22 (list sessions, sign out everywhere) forward from "invitee #4" | Yes, before invitees (D-80): a stored key raises what a stolen session is worth | owner |
+| O6 ✅ D-90 | Pull D-22 (list sessions, sign out everywhere) forward from "invitee #4" | **Owner, 2026-10-12: yes**, built before any invitee can register a model (D-80): a stored key raises what a stolen session is worth | — |
 | O7 | Prompts were tuned on Claude; other models may miss the JSON shape | Measure, don't pre-tune: `ai_calls` outcome per model gives the refusal rate. If refusals appear, 06 A5 (accept exactly one `{…}` span) is the first lever | Claude |
 | O8 | A token estimate before Run | Show the estimated input tokens (prompt bytes / 4), no price: prices differ per model and the app keeps no price table | Claude |

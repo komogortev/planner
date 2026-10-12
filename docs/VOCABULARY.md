@@ -22,6 +22,7 @@ Status column: **shipped** (in schema today) · **H<n>** (tier that introduces i
 | **Report** | `Report`, table `reports` | Stored output of a run, citing the entries it used. Immutable | Entry | H2 |
 | **Composer** | `composeRun()` | The one function that turns lens + entries + category rules into a prompt | — | H2 |
 | **Executor** | `executor` field | What performs a run: `copy-prompt` (shipped; shown as *manual*), `model` (the user's registered model via the Worker, H5) or `claude-code` (outside, over MCP, H3, optional) | — | shipped / H5 |
+| **Routine** | `Routine`, table `routines` | A declared run (the harness, a widget's run, a lens) bound to a time, run by the Worker with the app closed through the user's registered model (D-89) | Lens (what is run); Run (one execution) | H5 S3 |
 | **Model** | `ModelConfig`, D1 table `models` | A model the user registered: label, request format, endpoint, the provider's model id; the key is held encrypted on the Worker and never returned (D-79) | a provider account or subscription | H5 |
 | **Proposal** | `Proposal`, table `proposals` | A change the AI suggests (task, tag; category, rule and theme kinds parked). Accepted inline in the report in the widget, no queue page until volume demands one (D-38). Pending until the owner accepts or rejects | a write | H3 |
 | **Curation session** | `source.sessionId` | Time the owner spends in chat with the AI organising. Its only outputs are proposals | a run | parked |
@@ -70,7 +71,7 @@ Status column: **shipped** (in schema today) · **H<n>** (tier that introduces i
 | Commitment (for open loops) | **Task** with `direction: 'promise'` | `Commitment` is the frozen financial record. A lens may still *title* its report "Today's commitments"; that is report text |
 | Activity | **Task** with `completedAt`, `repeatEveryDays` | The 2026-06 Activity-log design folded into Task |
 | Label | Category or Tag | Ambiguous between the two |
-| Routine, Recipe | **Lens** | Alternatives considered for "feature"; Routine implies a schedule. Lens confirmed by the owner 2026-10-09 |
+| Recipe | **Lens** | Alternative considered for "feature". Lens confirmed by the owner 2026-10-09. (*Routine* was rejected here too because it implies a schedule; since D-89 it names exactly that) |
 
 ## Frozen domain (kept, no new work)
 

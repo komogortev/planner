@@ -5,7 +5,7 @@
 - **Working:** prod = Worker `b5215cb` + D1 `0008`; Pages `f2058bf`, smoke 16/16 (2026-10-12). `pnpm check` app 572 · Worker 176. Local-dev browser checks at 375px (DEVICE-CHECKS 23, 24, 27–32); owner confirmed on live: the Widgets scrollbar line is gone.
 - **Broken:** nothing known. **Not verified:** any v2 run on prod (D1 had 0 `task` rows, 2026-10-12) — DEVICE-CHECKS 21, 22, 25, 26; checks 27–32 on the phone; no component tests (no test-utils; interaction checked in the browser only); DEVICE-CHECKS 10, 13–17.
 - **Blocker:** none.
-- **Next:** the owner tests calibration 1 live (DEVICE-CHECKS 27–32) and runs the first real Get feedback (21) → read the paste count (§7) and check 26 from D1. Then S4 acceptance (three consecutive days, §11) and the exit week. Light-theme amber due dates are hard to read (not fixed). **H5 (bring your own model) S0 drafted** ([H5-MODELS.md](H5-MODELS.md), D-78…D-88); S1 after the owner reads §10 O1, O6. Parked: `feat/s3b-dashboard-loop` (delete after the first v2 day); §9 point 9.
+- **Next:** the owner tests calibration 1 live (DEVICE-CHECKS 27–32) and runs the first real Get feedback (21) → read the paste count (§7) and check 26 from D1. Then S4 acceptance (three consecutive days, §11) and the exit week. Light-theme amber due dates are hard to read (not fixed). **H5 (bring your own model) S0 drafted** ([H5-MODELS.md](H5-MODELS.md), D-78…D-88); Owner 2026-10-12: Routine (D-89), D-22 before invitees (D-90); S1 opens with the step-0 spike. Parked: `feat/s3b-dashboard-loop` (delete after the first v2 day); §9 point 9.
 ---
 
 ## Context
