@@ -2,7 +2,7 @@
 
 ## SNAPSHOT
 - **Phase/Last:** H1 built. **2026-10-11: S3a loop shipped (#75–#77), first real harness run on prod; owner then reshaped S3 → v2 (D-69…D-73): the harness derives stored Tasks, Daily = editable summary of today's Tasks, questions one at a time per Task.** Spec [HW-HARNESS.md](HW-HARNESS.md) §11. Vibe-code mode.
-- **Working:** prod = Worker `f098057` + D1 `0008`, Pages `663ea57` (S3a loop + scroll fix); `pnpm check` app 530 · Worker 169. Owner's prod run: 12 notes → 10 questions, 1 carry, stored, answered on the device. **S3 v2 S1 domain built** (pure, unwired): `tasks.ts`, `harness2.ts` + `harness2Reply.ts`, `summary.ts`; D-74…D-76.
+- **Working:** prod = Worker `f098057` + D1 `0008`, Pages `6d66017` (S3a loop; the S3 v2 domain is merged but imported by nothing, so not yet in the bundle); `pnpm check` app 530 · Worker 169. Owner's prod run: 12 notes → 10 questions, 1 carry, stored, answered on the device. **S3 v2 S1 domain built** (pure, unwired): `tasks.ts`, `harness2.ts` + `harness2Reply.ts`, `summary.ts`; D-74…D-76.
 - **Broken:** nothing known. **Not verified:** that the owner's answers reached D1 (no server read made); clipboard write on a phone; DEVICE-CHECKS 10, 13–20; a live D1 restore; the tester's first sync.
 - **Blocker:** none.
 - **Next:** (1) S2 Worker (D-74 accepted by the owner), additive, deployed before the client: kinds `task` + `taskProposal`; question/assessment `taskId`, nullable `entryId`, exactly-one rule; question `kind`; run task ids (§11 "S2 scope"). (2) S3 Dashboard v2 wires the S1 domain. Parked: local branch `feat/s3b-dashboard-loop` (strip + day logic to reuse); §9 point 9.
