@@ -3,6 +3,7 @@
 // (D-56) and a deploy reloads it. localStorage, like the capture draft: synchronous and per device. The header holds ids and
 // times only, never note text. It is cleared with the account's tables (`clearAccountData`).
 import type { RunHeader } from '@/domain/harness'
+import { HARNESS_V2, type RunHeader2 } from '@/domain/harness2'
 import type { JournalHeader } from '@/domain/journal'
 
 export type PendingStage = 'harness' | 'widget'
@@ -13,7 +14,9 @@ const KEY: Record<PendingStage, string> = {
   widget: 'planner.run.pending.widget',
 }
 
-export function savePending<S extends PendingStage>(stage: S, header: HeaderOf<S>): boolean {
+// One slot per stage: harness v1 and v2 share it, so composing either replaces the other, and each loader takes only its own
+// version (a header from the other version is ignored, never checked against the wrong rules).
+export function savePending<S extends PendingStage>(stage: S, header: S extends 'harness' ? RunHeader | RunHeader2 : JournalHeader): boolean {
   try {
     localStorage.setItem(KEY[stage], JSON.stringify(header))
     return true
@@ -29,11 +32,38 @@ export function loadPending<S extends PendingStage>(stage: S): HeaderOf<S> | nul
     if (!raw) return null
     const h = JSON.parse(raw) as Record<string, unknown> | null
     if (h?.stage !== stage || typeof h.runId !== 'string' || typeof h.composedAt !== 'string') return null
+    if (stage === 'harness' && h.harnessVersion === HARNESS_V2) return null
     const lists = stage === 'harness' ? [h.toAssessIds, h.contextIds] : [h.entryIds]
-    if (!lists.every((l) => Array.isArray(l) && l.every((x) => typeof x === 'string'))) return null
+    if (!lists.every(isIdList)) return null
     return h as unknown as HeaderOf<S>
   } catch {
     return null
+  }
+}
+
+const isIdList = (l: unknown) => Array.isArray(l) && l.every((x) => typeof x === 'string')
+
+/** The waiting harness v2 header, or null (none, malformed, or one composed by harness v1). */
+export function loadPending2(): RunHeader2 | null {
+  try {
+    const raw = localStorage.getItem(KEY.harness)
+    if (!raw) return null
+    const h = JSON.parse(raw) as Record<string, unknown> | null
+    if (h?.stage !== 'harness' || h.harnessVersion !== HARNESS_V2 || typeof h.runId !== 'string' || typeof h.composedAt !== 'string') return null
+    if (![h.toAssessIds, h.contextIds, h.reevaluateIds, h.taskIds].every(isIdList)) return null
+    return h as unknown as RunHeader2
+  } catch {
+    return null
+  }
+}
+
+/** True when the harness slot holds a header of another version: the reply the owner has is for a prompt this build cannot check. */
+export function pendingIsOtherVersion(): boolean {
+  try {
+    const raw = localStorage.getItem(KEY.harness)
+    return raw !== null && loadPending2() === null && loadPending('harness') !== null
+  } catch {
+    return false
   }
 }
 

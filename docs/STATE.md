@@ -5,7 +5,7 @@
 - **Working:** prod = Worker `b5215cb` + D1 `0008` (no new migration), Pages `b5215cb` (Dexie v6: `tasks`, `taskProposals`, one full re-pull per device); `pnpm smoke` 16/16. `pnpm check` app 543 · Worker 176. S1 domain (`tasks.ts`, `harness2*.ts`, `summary.ts`) still imported by nothing — the S3a loop is what the owner sees.
 - **Broken:** nothing known. **Not verified:** a `task`/`taskProposal` push against prod (smoke is read-only; only Worker tests cover it); restore combined with a lost push race; the owner's answers reaching D1; DEVICE-CHECKS 10, 13–20; a live D1 restore; the tester's first sync.
 - **Blocker:** none.
-- **Next:** S3 Dashboard v2 wires the S1 domain. First: switch the Dexie `questions`/`assessments` types to the stored v2 rows (`entryId` nullable) before any screen reads a Task question. Fold in A1 (near-duplicate question guard, umbrella `docs/architecture/06-prompt-authority-lessons.md`). Parked: local branch `feat/s3b-dashboard-loop` (strip + day logic to reuse); §9 point 9.
+- **Next:** S3-2 Dashboard v2 + the switch in one merge (owner 2026-10-12, no flag): strip (questions + proposals, one at a time), Daily (done · tomorrow · drop, tap-edit, + task, Edit summary with preview), notes below; remove `LoopCard`/`NoteMarks`. S3-1 groundwork (`loop2.ts`, A1, v2 Dexie types) built — §11. Parked: `feat/s3b-dashboard-loop` (strip to reuse).
 ---
 
 ## Context

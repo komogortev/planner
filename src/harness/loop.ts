@@ -20,6 +20,7 @@ import {
   type Question,
   type RunHeader,
 } from '@/domain/harness'
+import { isNoteAssessment, isNoteQuestion } from '@/domain/harness2'
 import { composeJournal, JOURNAL_LENS, validateReport, type JournalHeader, type Report } from '@/domain/journal'
 import { cleanRecord, type RunRecord } from '@/domain/records'
 import { uuid } from '@/utils/uuid'
@@ -43,7 +44,8 @@ export async function loadHarnessData(): Promise<HarnessData> {
     db.links.toArray(),
     db.entryStates.toArray(),
   ])
-  return { entries, assessments: live(assessments), questions: live(questions), links: live(links), states: live(states) }
+  // v1 reads the note rows only: a row about a Task (written by harness v2) means nothing to it.
+  return { entries, assessments: live(assessments).filter(isNoteAssessment), questions: live(questions).filter(isNoteQuestion), links: live(links), states: live(states) }
 }
 
 export type Composed<H> = { prompt: string; header: H } | null

@@ -235,6 +235,64 @@ describe('apply: questions and assessments', () => {
     expect(r.questions.map((q) => q.text)).toEqual(['a?', 'b?', 'c?'])
     expect(reasons(r)).toEqual(['bad-subject', 'not-assessable', 'repeated-question', 'too-many-questions'])
   })
+  // A1 (umbrella docs/architecture/06 §3 L7): the prompt says "never repeat", the code makes it so for rewordings too.
+  it('A1: a reworded repeat of an answered or dismissed question is dropped (known positive); a different one is kept', () => {
+    const dd = data({
+      ...d(),
+      questions: [
+        question({ id: 'q1', text: 'Which hardware store sells the replacement bulbs?', state: 'answered', answer: 'downtown', answeredAt: ago(0.2) }),
+        question({ id: 'q2', text: 'Should the ladder be borrowed from a neighbour?', state: 'dismissed' }),
+      ],
+    })
+    const r = applyHarness2(
+      out([], [
+        { taskId: 't1', entryId: null, text: 'Which store sells replacement bulbs?' },
+        { taskId: 't1', entryId: null, text: 'Could you borrow the ladder from your neighbour?' },
+        { taskId: 't1', entryId: null, text: 'What budget do you have for the bulbs this month?' },
+      ]),
+      run, dd, NOW, TZ,
+    )
+    expect(r.questions.map((q) => q.text)).toEqual(['What budget do you have for the bulbs this month?'])
+    expect(reasons(r)).toEqual(['repeated-question', 'repeated-question'])
+  })
+  it('A1: a rewording inside the same reply is dropped; the same words on another subject are kept', () => {
+    const r = applyHarness2(
+      out([], [
+        { taskId: 't1', entryId: null, text: 'Which weekend works for painting the fence?' },
+        { taskId: 't1', entryId: null, text: 'What weekend suits painting that fence?' },
+        { taskId: null, entryId: 'n1', text: 'Which weekend works for painting the fence?' },
+      ]),
+      run, d(), NOW, TZ,
+    )
+    expect(r.questions.map((q) => [q.taskId ?? q.entryId, q.text])).toEqual([
+      ['t1', 'Which weekend works for painting the fence?'],
+      ['n1', 'Which weekend works for painting the fence?'],
+    ])
+    expect(reasons(r)).toEqual(['repeated-question'])
+  })
+  it('A1: an earlier question on another subject is no repeat (each Task or note keeps its own thread)', () => {
+    const dd = data({ ...d(), questions: [question({ text: 'Which weekend works for painting the fence?', state: 'answered', answer: 'the 18th', answeredAt: ago(0.2) })] })
+    const r = applyHarness2(out([], [{ taskId: null, entryId: 'n1', text: 'What weekend suits painting that fence?' }]), run, dd, NOW, TZ)
+    expect(r.questions.map((q) => q.entryId)).toEqual(['n1'])
+    expect(reasons(r)).toEqual([])
+  })
+  it("A1: a thread follow-up that only shares the Task's own words is kept (CodeReview false positives, known must-keep)", () => {
+    const bulbs = data({ ...d(), questions: [question({ text: 'Which hardware store sells the replacement bulbs?', state: 'answered', answer: 'downtown', answeredAt: ago(0.2) })] })
+    const r1 = applyHarness2(out([], [{ taskId: 't1', entryId: null, text: 'What budget do you have for replacement bulbs?' }]), run, bulbs, NOW, TZ)
+    expect([r1.questions.length, reasons(r1)]).toEqual([1, []])
+    const fence = data({
+      ...d(),
+      tasks: [task({ text: 'Paint the fence' })],
+      questions: [question({ text: 'Which weekend works for painting the fence?', state: 'answered', answer: 'the 18th', answeredAt: ago(0.2) })],
+    })
+    const r2 = applyHarness2(out([], [{ taskId: 't1', entryId: null, text: 'Do you have enough paint for the fence painting?' }]), run, fence, NOW, TZ)
+    expect([r2.questions.length, reasons(r2)]).toEqual([1, []])
+  })
+  it('A1: under 3 content words only the exact match counts (too few words to tell a rewording)', () => {
+    const r = applyHarness2(out([], [{ taskId: 't1', entryId: null, text: 'Which shop exactly?' }]), run, d(), NOW, TZ)
+    expect(r.questions.map((q) => q.text)).toEqual(['Which shop exactly?'])
+    expect(reasons(r)).toEqual([])
+  })
   it('every fresh to-assess note, re-evaluated task and created task is assessed, even when the reply says nothing about it', () => {
     const r = applyHarness2(out([create('Call the plumber', ['n1'])]), { ...run, reevaluateIds: ['t1'] }, d(), NOW, TZ)
     expect(r.assessments.map((a) => [a.entryId ?? a.taskId, a.at])).toEqual([['n1', NOW], ['t1', NOW], [r.tasks[0].id, NOW]])

@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { db } from '@/db'
 import { useLiveQuery } from '@/composables/useLiveQuery'
 import { marksByNote } from '@/harness/marks'
+import { isNoteQuestion } from '@/domain/harness2'
 import { groupByDay } from './group'
 import NotesList from './NotesList.vue'
 
@@ -14,7 +15,7 @@ const entries = useLiveQuery(() => db.entries.orderBy('createdAt').reverse().fil
 const queued = useLiveQuery(() => db.outbox.toArray().then((rows) => rows.map((r) => r.entityId)), [] as string[])
 const total = useLiveQuery(() => db.entries.filter((e) => !e.deletedAt).count(), 0)
 const marks = useLiveQuery(
-  async () => marksByNote(await db.questions.toArray(), await db.links.where('state').equals('proposed').toArray(), await db.entryStates.toArray()),
+  async () => marksByNote((await db.questions.toArray()).filter(isNoteQuestion), await db.links.where('state').equals('proposed').toArray(), await db.entryStates.toArray()),
   new Map(),
 )
 const groups = computed(() => groupByDay(entries.value))
