@@ -136,7 +136,7 @@ The prompt is built only from the signed-in account's on-device notes. The run h
 
 **Not covered by the notes:** whether the harness's questions are worth answering (no run yet), the paste count per day (§7), and what the owner's other journaling tool's yearly view does — a note equates it with the yearly horizon; it was not read in this session, so the equivalence is the owner's claim, uncalibrated.
 
-## 11. S3 v2 — tasks derived from notes (D-69…D-72 accepted 2026-10-11; open points below)
+## 11. S3 v2 — tasks derived from notes (D-69…D-73 accepted 2026-10-11; open points below)
 
 **Why.** The first real run (12 notes, 10 questions, 1 carry) showed the owner the S3a shape is wrong in three ways (owner,
 2026-10-11): the surface is the notes themselves (raw input, often several topics in one note); questions sit on note rows
@@ -216,8 +216,10 @@ done · tomorrow · drop, tap-to-edit text, "+ task". Bottom: notes (input histo
    fixed order; saving diffs old lines against new ones (unchanged = kept, same position changed = edit, inserted = add,
    deleted = removed). No model call is needed to apply it; the edited Tasks go to the next run for re-evaluation. A
    free-form rewrite that the diff cannot place becomes added Tasks plus removed ones, shown before saving.
-2. **A removed line (D-71)** — *default: the Task is dropped, reopenable from the notes/tasks list*; the alternative is
-   "not today" (carry to tomorrow). Owner's call.
+2. ~~A removed line~~ → **D-73**: a removed line never drops its Task. The Task is **carried to tomorrow** and a question
+   joins the queue under it: what the removal means (drop it, or keep it for later). It stays carried until the owner
+   explicitly confirms the drop. The question is written by the app at save time (no model call, so it is asked at once);
+   the next harness run sees the answer like any other.
 3. **Automatic re-run (D-72) assessment** — what it must answer before H5 is built: the per-run token cost on the observed
    note rate (measured from stored prompts, not estimated), where the key lives (Worker secret, owner-only per D-21), the
    debounce (one run per burst of edits, not per keystroke), and the failure mode (a failed call leaves the change waiting,
