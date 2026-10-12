@@ -279,3 +279,18 @@ actions wrote the screen's stale copy) + 3 lower, all fixed with tests. Mutation
 second mechanism covers (v2 loader version check ⊂ shape check; topic subtraction on either side alone — both off is killed). **Not covered:** a
 sync landing between a reply's check and its store (as v1); A1's word list is English, so for other languages only the
 length filter removes question words.
+
+**S3-2 built (2026-10-12) — Dashboard v2, the switch.** Strip (`QuestionsStrip` + `StripItemView`, pure order in
+`queue2.ts`): one question or proposal at a time under its Task (or note), newest run first, proposals before questions on a
+subject; items on a closed Task or a closed note are left out; removal questions get Drop it · Keep it for later; "N changes
+waiting for feedback" = `harnessWork` (new notes + changed Tasks). Daily (`DailyCard`): ✓ · → · ✕ with Undo of the last,
+tap-to-edit, + task, Edit summary → Preview → Save (a refused save keeps the typed text and re-diffs against the list as it
+now is). Summarize (stage 2) stays, optional, collapsed (`JournalCard`). Notes: input history, ✕ drops a junk note,
+restore reopens any closed note. Removed: `LoopCard`, `NoteMarks`, `marks.ts`, v1 `harnessSummary`; v1 stage-1 functions in
+`loop.ts` stay (tested, no caller in the UI). Verified in the browser on local dev with synthetic data (DEVICE-CHECKS 23,
+24): strip answer, split confirm, summary removal + Drop it, junk-note drop, a full paste round trip, phone width 375 px.
+CodeReview: 8 findings (none corrupting): empty strip over a non-zero count after a no-op Store; a refused summary lost the
+typed text; no undo for ✓/✕; blur-save racing a row tap; double-tap drop/restore; v1 "done" notes not restorable; a hidden
+run panel lost its paste; a stale comment — all fixed, the first four re-checked in the browser. **Not covered:** no
+component tests (the UI state is checked by hand, above); the first write of the `task` kind to production (DEVICE-CHECKS 26).
+

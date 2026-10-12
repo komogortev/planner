@@ -1,11 +1,11 @@
 # Personal Planner — STATE
 
 ## SNAPSHOT
-- **Phase/Last:** H1 built. **2026-10-11: S3 v2 S2 shipped — Worker contract for Tasks deployed (#86, D-77).** S3a loop live since #75–#77; owner reshaped S3 → v2 (D-69…D-73): the harness derives stored Tasks, Daily = editable summary of today's Tasks, questions one at a time per Task. Spec [HW-HARNESS.md](HW-HARNESS.md) §11. Vibe-code mode.
-- **Working:** prod = Worker `b5215cb` + D1 `0008` (no new migration), Pages `b5215cb` (Dexie v6: `tasks`, `taskProposals`, one full re-pull per device); `pnpm smoke` 16/16. `pnpm check` app 543 · Worker 176. S1 domain (`tasks.ts`, `harness2*.ts`, `summary.ts`) still imported by nothing — the S3a loop is what the owner sees.
-- **Broken:** nothing known. **Not verified:** a `task`/`taskProposal` push against prod (smoke is read-only; only Worker tests cover it); restore combined with a lost push race; the owner's answers reaching D1; DEVICE-CHECKS 10, 13–20; a live D1 restore; the tester's first sync.
+- **Phase/Last:** H1 built. **2026-10-12: S3 v2 shipped — Dashboard v2 is the owner's Dashboard (switch on merge, owner, no flag):** questions strip per Task, Daily of Tasks with an editable summary, optional Summarize, notes as input. Spec [HW-HARNESS.md](HW-HARNESS.md) §11 (S3-1, S3-2 records). Vibe-code mode.
+- **Working:** prod = Worker `b5215cb` + D1 `0008` (accepts `task`/`taskProposal`); Pages from `main`. `pnpm check` app 564 · Worker 176. Browser-verified on local dev with synthetic data (DEVICE-CHECKS 23, 24); A1 near-duplicate question guard live.
+- **Broken:** nothing known. **Not verified:** the first real v2 run (DEVICE-CHECKS 21, 22, 25) and the first `task` write reaching D1 (26) — smoke cannot reach either; no component tests for the strip/Daily; DEVICE-CHECKS 10, 13–17.
 - **Blocker:** none.
-- **Next:** S3-2 Dashboard v2 + the switch in one merge (owner 2026-10-12, no flag): strip (questions + proposals, one at a time), Daily (done · tomorrow · drop, tap-edit, + task, Edit summary with preview), notes below; remove `LoopCard`/`NoteMarks`. S3-1 groundwork (`loop2.ts`, A1, v2 Dexie types) built — §11. Parked: `feat/s3b-dashboard-loop` (strip to reuse).
+- **Next:** the owner's first real day on v2 → read the paste count (§7) and check 26 (a Task read back from the server). Then S4 acceptance (three consecutive days, §11) and the exit week. Parked: `feat/s3b-dashboard-loop` (superseded, delete after the first v2 day); §9 point 9.
 ---
 
 ## Context
@@ -60,6 +60,8 @@
 ## Decision log
 
 Full log: PROJECT.md → Decisions log. Latest:
+
+- 2026-10-12 (s3v2-S3) — Dashboard v2 shipped in two slices: S3-1 device layer + A1 (#89), S3-2 the screens and the switch (owner: switch on merge, no flag — the first real run is also its first test). Calls made under vibe-code: proposals asked in the strip as yes/no; the optional journal kept as a collapsed Summarize (another session improved its prompt the same night, #88); notes keep only drop/restore. CodeReview on each slice: S3-1 2 high (A1 dropped thread follow-ups naming their Task; owner taps wrote the screen's stale copy) + 3, S3-2 8 UI-state findings; all fixed, mutation-checked (S3-1) or re-checked in the browser (S3-2).
 
 - 2026-10-11 (s3v2-S2) — Worker contract for Tasks built and merged (#86): kinds `task` + `taskProposal`, `taskId` with the exactly-one rule, question `kind`, run `taskIds`; D-77 (an added field may be absent; the Worker keeps the stored value when an older device omits it); Dexie v6. The building session ended at the merge, so the deploy ran in a follow-up session: Worker `b5215cb` (version `dbf95eea`), no migration, smoke 16/16. Pages had built `b5215cb` ten minutes before the Worker — harmless here because no client writes a Task yet; from S3 on, the RUNBOOK order (Worker first) binds.
 
