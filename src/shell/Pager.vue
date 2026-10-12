@@ -209,9 +209,15 @@ const trackStyle = computed(() => ({
   /* touch-action does not inherit past a scroll container, so the pager's pan-y has to be restated here; without it
      the browser treats a horizontal drag on the page as its own scroll and fights the pager for the gesture. */
   touch-action: pan-y;
+  /* No scrollbar: the box reaches 56px into the neighbouring page for shadows, so its bar would be drawn on that page
+     (calibration 2026-10-12: a stray vertical line on Widgets). Touch-first; the wheel and keyboard still scroll. */
+  scrollbar-width: none;
   margin: -24px -56px calc(-1 * var(--shadow-room));
   padding: 24px 56px calc(var(--nav-zone) + var(--shadow-room));
   scroll-padding-bottom: calc(var(--nav-zone) + var(--shadow-room)); /* a focused input is scrolled above the band */
+}
+.sheet::-webkit-scrollbar {
+  display: none;
 }
 @media (prefers-reduced-motion: reduce) {
   .track,
