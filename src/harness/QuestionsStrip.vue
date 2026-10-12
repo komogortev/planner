@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { isBodyTap } from '@/composables/bodyTap'
 import { syncSoon } from '@/sync'
 import { applyHarnessReply2, pendingHarness2, startHarness2 } from './loop2'
 import { proposalLabel, runSummary2 } from './queue2'
@@ -46,8 +47,8 @@ const preview = computed(() => {
 
 /** A tap on the body (not on a control): line ↔ open; in work, only the header line collapses it. */
 function onBody(e: MouseEvent) {
+  if (!isBodyTap(e, '[data-test="strip-toggle"]')) return
   const t = e.target as HTMLElement
-  if (t.closest('button:not([data-test="strip-toggle"]), input, textarea, select, a, label, summary')) return
   if (mode.value === 'work') {
     if (t.closest('[data-test="strip-line"]')) mode.value = 'line'
     return

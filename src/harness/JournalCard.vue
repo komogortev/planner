@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { isBodyTap } from '@/composables/bodyTap'
 import { computed, ref } from 'vue'
 import { db } from '@/db'
 import { useLiveQuery } from '@/composables/useLiveQuery'
@@ -44,13 +45,21 @@ async function storeJournal(reply: string) {
   syncSoon()
   return { ok: true as const, message: 'Journal stored.' }
 }
+
+// A body tap (calibration 2026-10-12) does what Open / Hide does: closed, a tap anywhere on the card opens it; open, only
+// the header closes it — the open card holds the run's fields and the written report, which are read and typed in.
+function onBody(e: MouseEvent) {
+  if (!isBodyTap(e)) return
+  if (!open.value) open.value = true
+  else if ((e.target as Element).closest('[data-test="journal-head"]')) open.value = false
+}
 </script>
 
 <template>
-  <section class="card loop" data-test="journal-card" aria-label="Summarize">
-    <header class="flex items-baseline justify-between">
+  <section class="card loop" :class="{ 'tap-to-open': !open }" data-test="journal-card" aria-label="Summarize" @click="onBody">
+    <header class="flex items-baseline justify-between" data-test="journal-head">
       <h3 class="font-semibold">Summarize <span class="sub">optional</span></h3>
-      <button type="button" class="btn-ghost btn-xs" :aria-expanded="open" data-test="journal-toggle" @click="open = !open">{{ open ? 'Hide' : writtenToday ? 'Show' : 'Open' }}</button>
+      <button type="button" class="btn-ghost btn-xs" :aria-expanded="open" data-test="journal-toggle" @click.stop="open = !open">{{ open ? 'Hide' : writtenToday ? 'Show' : 'Open' }}</button>
     </header>
     <div v-show="open">
       <div v-if="latest" class="report" data-test="journal-report">
@@ -75,6 +84,7 @@ async function storeJournal(reply: string) {
 </template>
 
 <style scoped>
+.tap-to-open { cursor: pointer; }
 .loop { color: var(--glass-text); }
 .sub { font-size: 0.78rem; color: var(--glass-sub); }
 .flag { color: #fbbf24; }
