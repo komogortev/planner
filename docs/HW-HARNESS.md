@@ -136,7 +136,7 @@ The prompt is built only from the signed-in account's on-device notes. The run h
 
 **Not covered by the notes:** whether the harness's questions are worth answering (no run yet), the paste count per day (§7), and what the owner's other journaling tool's yearly view does — a note equates it with the yearly horizon; it was not read in this session, so the equivalence is the owner's claim, uncalibrated.
 
-## 11. S3 v2 — tasks derived from notes (DRAFT for owner read, 2026-10-11)
+## 11. S3 v2 — tasks derived from notes (D-69…D-72 accepted 2026-10-11; open points below)
 
 **Why.** The first real run (12 notes, 10 questions, 1 carry) showed the owner the S3a shape is wrong in three ways (owner,
 2026-10-11): the surface is the notes themselves (raw input, often several topics in one note); questions sit on note rows
@@ -196,14 +196,36 @@ equals an open task's is turned into an `attach` (dedupe within the day).
 (D-63). An edit marks the task as waiting, and the questions strip shows **"N changes waiting for feedback"** with the Get
 feedback button. A truly automatic re-run is H5 (API executor), whose re-entry is evidence: §7's paste count.
 
-**Dashboard v2.** Top: questions strip, one question at a time with the Task it isolates shown above it, reply · skip · next, and a list view. Middle: **Daily** — today's Tasks with
+**Dashboard v2.** Top: questions strip, one question at a time with the Task it isolates shown above it, reply · skip · next, and a list view. Middle: **Daily** — the editable summary (D-71) over today's Tasks with
 done · tomorrow · drop, tap-to-edit text, "+ task". Bottom: notes (input history, "+ Today" removed).
 
+**Owner decisions (2026-10-11):**
+- **D-69** Tasks are stored records (new kind `task`, option (a)), derived by the harness (P1).
+- **D-70** Questions stay one at a time, one reply each, keyed to the Task they isolate. A reply may correct scope (split,
+  merge, re-scope) and may grow into a short **thread** on that Task: a follow-up question from the next run is asked
+  under the same Task, one at a time, never as a batch. Skipping is always fine (mood is a valid reason).
+- **D-71** Daily carries an **editable summary**. "Edit summary" opens it as text; the owner may override it, add lines or
+  remove lines. Saving matches the text against today's Tasks: a changed line edits its Task, a new line adds a Task
+  (`by: owner`), a removed line takes its Task out of today. Every edited or added Task enters the next run (constraint 5).
+- **D-72 (direction, assessment pending)** Re-run on edit: **automatic by default, the owner can switch it to manual** to
+  save tokens. Automatic needs a model call without a paste, i.e. the API executor (H5), which D-63 put off for cost and
+  key handling. Until it exists, every run is manual (the strip shows "N changes waiting for feedback").
+
 **Open — each with the default I would proceed under:**
-1. "Edit of an already registered daily summary" = editing a Task in Daily (or adding one) — *default yes*; the
-   alternative is a stored free-text day summary the owner edits, which would then be a note-like input to the next run.
-2. Do answered questions still reopen their note (S1 rule)? *Default: they reopen the task they belong to, else the note.*
-3. The S3a records already in production (assessments, questions, links on 12 notes) stay valid; v2 reads them, nothing migrates.
+1. **Matching the edited summary (D-71).** *Default: on the device, deterministic.* The summary is one line per Task in a
+   fixed order; saving diffs old lines against new ones (unchanged = kept, same position changed = edit, inserted = add,
+   deleted = removed). No model call is needed to apply it; the edited Tasks go to the next run for re-evaluation. A
+   free-form rewrite that the diff cannot place becomes added Tasks plus removed ones, shown before saving.
+2. **A removed line (D-71)** — *default: the Task is dropped, reopenable from the notes/tasks list*; the alternative is
+   "not today" (carry to tomorrow). Owner's call.
+3. **Automatic re-run (D-72) assessment** — what it must answer before H5 is built: the per-run token cost on the observed
+   note rate (measured from stored prompts, not estimated), where the key lives (Worker secret, owner-only per D-21), the
+   debounce (one run per burst of edits, not per keystroke), and the failure mode (a failed call leaves the change waiting,
+   as manual). Re-entry: S3 v2 domain merged.
+4. Answered questions reopen the Task they belong to, else the note (S1 rule carried over). *Default yes.*
+5. The S3a records already in production stay valid; v2 reads them, nothing migrates. *Default yes.*
+6. P2 (one paste per run, Daily without a stage-2 call) and P4 (note states stop being an owner surface) — *not yet
+   answered; default accept, both follow from D-69.*
 
 **Slices.** S0 this section + VOCABULARY/DECISION rows on acceptance · S1 domain (`tasks.ts`, harness v2 compose/parse/apply,
 pure, tests incl. dedupe + owner-text guard) · S2 Worker kind `task` + `questions.taskId` (additive, deployed first) · S3

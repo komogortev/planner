@@ -304,6 +304,10 @@ Ids start at D-03: D-01/D-02 were dropped while drafting (merged into D-18 and D
 | D-66 | **Accepted (same), C2:** a due date written in a note's text gives a `followUp` to that day **and** one question asking which earlier day to pick it up; the answer sets `followUpOn`. No new field | HW-HARNESS S3 |
 | D-67 | **Accepted (same), C3:** entry state `dropped` gets UI in S3, inside the evening pass; the harness never sets it | HW-HARNESS S3 |
 | D-68 | **Accepted (same), C4:** daily windows run on capture date and `followUpOn`, never on `occurredAt` (no captured note has one; capture is typeless, D-07) | HW-HARNESS S3 |
+| D-69 | **Accepted (owner 2026-10-11), HW-HARNESS §11:** Tasks are stored records (kind `task`) the harness derives from notes; notes are input only. Supersedes D-39's accept-a-hook gate and pulls H4 into HW | HW-HARNESS S3 v2 |
+| D-70 | **Accepted (same):** questions one at a time, one reply each, keyed to the Task they isolate; a reply may re-scope (split/merge) and may grow into a thread on that Task; no answer sheet | HW-HARNESS S3 v2 |
+| D-71 | **Accepted (same):** Daily has an editable summary; saving matches it against today's Tasks (edit · add · remove); edited/added Tasks enter the next run | HW-HARNESS S3 v2 |
+| D-72 | **Direction (same), assessment pending:** re-run on edit automatic by default, owner may switch to manual to save tokens; needs the API executor (H5), so manual until then | After S3 v2 domain |
 | D-23 (amended) | **Agreed (a):** the vertical slice derives the time zone from the device; the explicit setting arrives with H2 windows | H2 S2 |
 | D-24 | **Agreed (b):** own capped `/log` route into D1 on the existing rate limit; error type, route and build id only, never entry text | Before the exit week |
 | D-25 | **Agreed:** write `docs/DEVICE-CHECKS.md` from the "not verified" list in STATE, run on the phone at every UI-affecting PR | Next UI PR |
