@@ -1,8 +1,10 @@
 # H5-S1 step 0 — Spike
 
-**Status: open, 2026-10-12.** Step 0 of H5 S1 ([H5-MODELS.md](H5-MODELS.md) §9). The spike runs on its own Worker
-(`planner-spike-ai`) and its own D1 (`planner-spike`), so production is never touched; both are deleted when the spike
-closes. Code: [`api/spike-ai/index.ts`](../api/spike-ai/index.ts).
+**Status: closed 2026-10-12 — A ✅ B (openai-chat) ✅ C (openai-chat) ✅ D ✅ E ✅; `anthropic-messages` carried to S1 (D-93).**
+Step 0 of H5 S1 ([H5-MODELS.md](H5-MODELS.md) §9). The spike ran on its own Worker (`planner-spike-ai`), D1
+(`planner-spike`) and Workflow (`planner-spike-call`); production was never touched. All three were deleted at close
+(the Worker URL returns 404; production `/health` 200). The spike code (`api/spike-ai/`) was removed from the tree at
+close; it stays in the commits of the PR that closed the spike.
 
 ## 1. What the spike must answer
 
@@ -26,7 +28,7 @@ What the docs predict (read 2026-10-12): HTTP requests have no wall-clock limit 
 `waitUntil` extends execution for up to 30 s after the response is sent or the client disconnects; a Workflow step has
 no wall-clock limit (10 ms CPU per step, free plan); a cron invocation may run 15 min; 5 cron triggers per account.
 
-## 3. Owner setup — needed for B, C, D only (A and E need nothing)
+## 3. Owner setup (as run) — needed for B, C, D only (A and E need nothing)
 
 **Never paste a key into chat.** Keys go only into a file you create yourself, then into the spike Worker's secrets.
 
@@ -102,4 +104,14 @@ Provider calls used: 16 of 20.
 
 ## 5. Decision
 
-*At close.*
+| # | Decision (Claude under vibe-code, 2026-10-12; the owner closed the spike) | Changes |
+|---|---|---|
+| D-91 | **Every model call runs as a Workflow instance.** `POST /ai/calls` writes the `pending` row, starts the instance and answers at once with the call id; the device fetches the reply with `GET /ai/calls/:id`. Why: a harness-sized call took 10–58 s, a plain await dies with the client and `waitUntil` lasts ~30 s after it (A); a Workflow ran 5 minutes and a real call with no client attached. S3 routines start the same Workflow from cron | Amends D-83 (the reply is still written to the call row before anything reads it); H5-MODELS §4, §6, §8 |
+| D-92 | **The model list is not the truth; a test call is.** The Models page's **Test** call decides whether a model is usable (a listed model returned 404; three returned 503 every time). An instant 503 `UNAVAILABLE` maps to a new category **`model_unavailable`** ("this model is not available to your key — pick another"), apart from `provider_down` | Extends D-88 |
+| D-93 | **`anthropic-messages` gets its first real call through S1's Test route, before S1 merges.** Disconnect, cut-off and CPU behaviour do not depend on the provider, so the spike closes without it | Re-entry: the owner adds an Anthropic key during S1 |
+
+**Carried into S1, not decided here:**
+- **Retry policy for 503/429 inside the Workflow step.** Free-tier `gemini-3.5-flash` failed 6 of 7 harness calls mid-generation. Whether a failed call is billed by paid providers is not checked; S1 reads each provider's billing rule before setting retries above 0.
+- **CPU of the real Workflow step** against the 10 ms free-plan step limit (the spike's p99 17 ms included its heartbeat).
+- **Gemini preset default for S2:** `gemini-3.1-flash-lite` (10 s, clean JSON, 1 of 1) over `gemini-3.5-flash` (58 s when it finished, 1 of 7). The preset must say the free tier may use prompts to improve Google's products.
+- **A cron tick starts late** (79 s seen): S3 states a routine's time as approximate.
