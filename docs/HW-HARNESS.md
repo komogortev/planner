@@ -306,6 +306,7 @@ questions, changes waiting for a run (the first run is what creates questions, s
 or a run in progress — one line at rest; a body tap = the read-only detail (what is waiting, the next question); Get
 feedback = every queued question with its own reply, then the run (the strip grows upwards); a tap outside = back to one
 line, typed input kept. **Widget rule (owner):** a tap on any widget's body toggles its detailed view when it has one,
-like its own open button (`composables/bodyTap.ts`; today the strip and Summarize). Daily on top; the app opens on the Dashboard by default (Settings → Opens on: Dashboard · Record);
+like its own open button (`composables/bodyTap.ts`; today the strip, Summarize and Notes — Notes is brief by default, removed notes behind a
+"Removed" line at the bottom of its open view). Daily on top; the app opens on the Dashboard by default (Settings → Opens on: Dashboard · Record);
 Settings is the cloth's underside (darker, folds mirrored); the bottom band is the nav's alone and the version badge is
 gone. DEVICE-CHECKS 27–31.
