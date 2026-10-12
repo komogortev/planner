@@ -56,7 +56,9 @@ onBeforeUnmount(() => ro?.disconnect())
   margin: 0 -56px calc(-1 * var(--shadow-room));
   padding: 1rem 56px var(--shadow-room);
   scroll-padding-bottom: var(--shadow-room); /* a focused input is scrolled above the band */
+  scrollbar-width: none; /* reaches 56px into the next page for shadows: its bar would be drawn there (see Pager .sheet) */
 }
+.cards::-webkit-scrollbar { display: none; }
 .cards-docked {
   margin-bottom: 0;
   padding-bottom: var(--strip-h);
