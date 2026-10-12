@@ -1,0 +1,176 @@
+<script setup lang="ts">
+import { computed, ref } from 'vue'
+import { addDays } from '@/domain/harness'
+import { summaryText, type SummaryPlan } from '@/domain/summary'
+import type { Task, TaskState } from '@/domain/tasks'
+import { syncSoon } from '@/sync'
+import type { Outcome } from './loop'
+import { addTask2, editTask2, previewSummary, saveSummary, setTaskState2 } from './loop2'
+import type { Loop2 } from './useLoop2'
+
+// Daily (HW-HARNESS §11, D-69/D-71): the open Tasks whose day has come, computed on the device — no paste. Each Task:
+// done · tomorrow · drop, tap the text to edit it (owner text from then on; it enters the next run). "+ task" adds one by
+// hand. "Edit summary" opens the list as text: a changed line edits its Task, a new line adds one, and a removed line
+// carries its Task to tomorrow with a question (D-73) — shown before saving.
+const props = defineProps<{ loop: Loop2 }>()
+const tasks = computed(() => props.loop.day.value.tasks)
+const day = computed(() => props.loop.day.value.day)
+
+const error = ref<string | null>(null)
+const busy = ref(false)
+// Taps run one after another, never dropped: the blur that saves an edit and the ✓ tapped right after both happen, in that
+// order, and each re-reads its row (loop2), so neither writes over the other.
+let chain: Promise<unknown> = Promise.resolve()
+function act(fn: () => Promise<Outcome<number>>): Promise<boolean> {
+  const run = chain.then(async () => {
+    busy.value = true
+    error.value = null
+    try {
+      const r = await fn()
+      if (!r.ok) {
+        error.value = r.error
+        return false
+      }
+      syncSoon()
+      return true
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : String(err)
+      return false
+    } finally {
+      busy.value = false
+    }
+  })
+  chain = run
+  return run
+}
+
+// done · tomorrow · drop take the Task off Daily; the last one can be undone (a thumb on the wrong button). One tap per
+// Task at a time: a double tap is one action.
+const undo = ref<{ task: Task; label: string } | null>(null)
+const tapping = new Set<string>()
+async function close(t: Task, label: string, state: TaskState, followUpOn: string | null = null) {
+  if (tapping.has(t.id)) return
+  tapping.add(t.id)
+  try {
+    if (await act(() => setTaskState2(t, state, followUpOn))) undo.value = { task: { ...t }, label }
+  } finally {
+    tapping.delete(t.id)
+  }
+}
+const done = (t: Task) => close(t, 'Done', 'done')
+const tomorrow = (t: Task) => close(t, 'Moved to tomorrow', 'open', addDays(day.value, 1))
+const drop = (t: Task) => close(t, 'Dropped', 'dropped')
+async function undoLast() {
+  const u = undo.value
+  if (u && (await act(() => setTaskState2(u.task, 'open', u.task.followUpOn)))) undo.value = null
+}
+
+// Tap-to-edit: one Task at a time.
+const editingId = ref<string | null>(null)
+const draft = ref('')
+function startEdit(t: Task) {
+  editingId.value = t.id
+  draft.value = t.text
+}
+async function saveEdit(t: Task) {
+  if (editingId.value !== t.id) return // Enter already saved; the blur that follows the input's removal is not a second edit
+  const text = draft.value // read now: tapping another Task's text replaces the draft before this save resolves
+  if (text.trim() === t.text) editingId.value = null
+  else if ((await act(() => editTask2(t, { text }))) && editingId.value === t.id) editingId.value = null
+}
+
+const newText = ref('')
+async function add() {
+  if (newText.value.trim() && (await act(() => addTask2(newText.value)))) newText.value = ''
+}
+
+// The summary editor works on the list as it was when it opened: saving is refused if any of it changed meanwhile.
+const summaryOpen = ref(false)
+const shown = ref<Task[]>([])
+const summary = ref('')
+const plan = ref<SummaryPlan | null>(null)
+function openSummary() {
+  shown.value = tasks.value.map((t) => ({ ...t }))
+  summary.value = summaryText(shown.value)
+  plan.value = null
+  error.value = null
+  summaryOpen.value = true
+}
+const previewIt = () => (plan.value = previewSummary(shown.value, summary.value))
+const changesCount = computed(() => (plan.value ? plan.value.edits.length + plan.value.adds.length + plan.value.removes.length : 0))
+async function saveIt() {
+  if (await act(() => saveSummary(shown.value, summary.value))) {
+    summaryOpen.value = false
+    plan.value = null
+    return
+  }
+  // Refused (most often: the list changed meanwhile). The owner's text stays; the diff is redone against the list as it is now.
+  shown.value = tasks.value.map((t) => ({ ...t }))
+  plan.value = null
+  error.value = `${error.value ?? ''} Your text is kept — Preview again to see it against the list as it is now.`.trim()
+}
+</script>
+
+<template>
+  <section class="card daily" data-test="daily-card" aria-label="Daily">
+    <header class="flex items-center justify-between gap-2">
+      <h3 class="font-semibold">Daily <span class="sub">{{ day }}</span></h3>
+      <button v-if="!summaryOpen" type="button" class="btn-ghost btn-xs" :disabled="!tasks.length" data-test="daily-edit-summary" @click="openSummary">Edit summary</button>
+    </header>
+
+    <template v-if="!summaryOpen">
+      <ul class="tasks" data-test="daily-tasks">
+        <li v-for="t in tasks" :key="t.id" class="task" data-test="daily-task">
+          <input v-if="editingId === t.id" v-model="draft" class="input in" aria-label="Task text" data-test="daily-task-input" @keydown.enter="saveEdit(t)" @keydown.esc="editingId = null" @blur="saveEdit(t)" />
+          <button v-else type="button" class="text" :title="'Edit'" data-test="daily-task-text" @click="startEdit(t)">
+            {{ t.text }}<span v-if="t.due" class="due"> · due {{ t.due }}</span>
+          </button>
+          <div class="acts">
+            <button type="button" class="btn-ghost btn-xs" aria-label="Done" title="Done" data-test="daily-done" @click="done(t)">✓</button>
+            <button type="button" class="btn-ghost btn-xs" aria-label="Tomorrow" title="Tomorrow" data-test="daily-tomorrow" @click="tomorrow(t)">→</button>
+            <button type="button" class="btn-ghost btn-xs" aria-label="Drop" title="Drop" data-test="daily-drop" @click="drop(t)">✕</button>
+          </div>
+        </li>
+      </ul>
+      <p v-if="undo" class="sub mt-1" data-test="daily-undo-line">
+        {{ undo.label }}: “{{ undo.task.text }}” · <button type="button" class="link" data-test="daily-undo" @click="undoLast">Undo</button>
+      </p>
+      <p v-if="!tasks.length" class="sub mt-1" data-test="daily-empty">Nothing for today. Tasks come from your notes after Get feedback, or add one here.</p>
+      <div class="flex gap-1.5 mt-2">
+        <input v-model="newText" class="input in" placeholder="+ task" aria-label="New task" data-test="daily-add-input" @keydown.enter="add" />
+        <button type="button" class="btn-ghost btn-xs" :disabled="busy || !newText.trim()" data-test="daily-add" @click="add">Add</button>
+      </div>
+    </template>
+
+    <div v-else data-test="daily-summary">
+      <textarea v-model="summary" class="input mt-2 text-sm" rows="6" spellcheck="true" aria-label="Today's summary" data-test="daily-summary-text" @input="plan = null" />
+      <ul v-if="plan" class="plan" data-test="daily-summary-plan">
+        <li v-for="e in plan.edits" :key="`e-${e.task.id}`">Edit: “{{ e.task.text }}” → “{{ e.text }}”</li>
+        <li v-for="(a, i) in plan.adds" :key="`a-${i}`">Add: “{{ a }}”</li>
+        <li v-for="r in plan.removes" :key="`r-${r.id}`">Off today: “{{ r.text }}” — moved to tomorrow, and you’ll be asked whether to drop it</li>
+        <li v-if="!changesCount">No changes.</li>
+      </ul>
+      <div class="flex gap-1.5 mt-2">
+        <button type="button" class="btn-ghost btn-xs" data-test="daily-summary-cancel" @click="summaryOpen = false">Cancel</button>
+        <button v-if="!plan" type="button" class="btn-ghost btn-xs" data-test="daily-summary-preview" @click="previewIt">Preview</button>
+        <button v-else type="button" class="btn-primary btn-xs" :disabled="busy || !changesCount" data-test="daily-summary-save" @click="saveIt">Save</button>
+      </div>
+    </div>
+    <p v-if="error" class="err" data-test="daily-error">{{ error }}</p>
+  </section>
+</template>
+
+<style scoped>
+.daily { color: var(--glass-text); }
+.sub { font-size: 0.75rem; color: var(--glass-sub); font-weight: 400; }
+.tasks { margin-top: 0.4rem; display: flex; flex-direction: column; }
+.task { display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0; border-top: 1px solid var(--glass-edge); }
+.text { flex: 1; text-align: left; font-size: 0.92rem; overflow-wrap: anywhere; background: none; color: inherit; padding: 0.1rem 0; }
+.due { font-size: 0.75rem; color: #fbbf24; }
+.acts { display: flex; gap: 0.25rem; flex-shrink: 0; }
+.in { padding: 0.3rem 0.6rem; font-size: 0.85rem; flex: 1; }
+.plan { font-size: 0.8rem; margin-top: 0.5rem; padding-left: 1rem; list-style: disc; display: flex; flex-direction: column; gap: 0.15rem; }
+.btn-xs { padding: 0.3rem 0.65rem; font-size: 0.78rem; border-radius: 0.6rem; }
+.link { text-decoration: underline; color: var(--glass-text); background: none; padding: 0; }
+.err { font-size: 0.75rem; color: #fda4af; margin-top: 0.35rem; }
+</style>

@@ -2,7 +2,7 @@
 // the Task they isolate, Daily as an editable summary. The pure rules live in `domain/harness2*.ts`, `domain/tasks.ts` and
 // `domain/summary.ts`; this file only reads the device's tables, keeps the waiting run (pending.ts) and writes through
 // `writeRecords` (one transaction, outbox included). It never starts a sync itself: callers call `syncSoon()`.
-// Until Dashboard v2 is wired, nothing imports it; `loop.ts` (v1) stays the shipped path.
+// Dashboard v2 (QuestionsStrip, DailyCard) is its only caller; `loop.ts` keeps the optional journal (stage 2) and v1's reads.
 import { db } from '@/db'
 import { writeRecords, type RecordWrite, type WriteResult } from '@/db/records'
 import { answerQuestion, dismissQuestion, localDay } from '@/domain/harness'
@@ -202,7 +202,7 @@ export async function saveSummary(shown: Task[], edited: string, now = new Date(
   const byId = new Map(data.tasks.map((t) => [t.id, t]))
   const fresh = shown.map((t) => byId.get(t.id))
   if (fresh.some((t, i) => t === undefined || t.state !== 'open' || t.updatedAt !== shown[i].updatedAt)) {
-    return { ok: false, error: 'Today’s list changed while you were editing. Nothing was saved: open the summary again.' }
+    return { ok: false, error: 'Today’s list changed while you were editing. Nothing was saved.' }
   }
   const r = applySummary(planSummary(fresh as Task[], edited), { today: localDay(now, deviceZone()), now, newId: uuid, questions: data.questions })
   if (!r.ok) return r
