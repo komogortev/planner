@@ -5,7 +5,7 @@
 - **Working:** prod = Worker `b5215cb` + D1 `0008`; Pages `f2058bf`, smoke 16/16 (2026-10-12). `pnpm check` app 572 · Worker 176. Local-dev browser checks at 375px (DEVICE-CHECKS 23, 24, 27–32); owner confirmed on live: the Widgets scrollbar line is gone.
 - **Broken:** nothing known. **Not verified:** any v2 run on prod (D1 had 0 `task` rows, 2026-10-12) — DEVICE-CHECKS 21, 22, 25, 26; checks 27–32 on the phone; no component tests (no test-utils; interaction checked in the browser only); DEVICE-CHECKS 10, 13–17.
 - **Blocker:** none.
-- **Next:** the owner tests calibration 1 live (DEVICE-CHECKS 27–32) and runs the first real Get feedback (21) → read the paste count (§7) and check 26 from D1. Then S4 acceptance (three consecutive days, §11) and the exit week. Light-theme amber due dates are hard to read (not fixed). Parked: `feat/s3b-dashboard-loop` (delete after the first v2 day); §9 point 9.
+- **Next:** the owner tests calibration 1 live (DEVICE-CHECKS 27–32) and runs the first real Get feedback (21) → read the paste count (§7) and check 26 from D1. Then S4 acceptance (three consecutive days, §11) and the exit week. Light-theme amber due dates are hard to read (not fixed). **H5 (bring your own model) S0 drafted** ([H5-MODELS.md](H5-MODELS.md), D-78…D-88); S1 after the owner reads §10 O1, O6. Parked: `feat/s3b-dashboard-loop` (delete after the first v2 day); §9 point 9.
 ---
 
 ## Context
@@ -31,7 +31,8 @@
 | HW Widgets | design session pending (four-page pager, system widgets, notes widget as proof) | PROJECT.md §Tiers, DECISION-TREE §5.2 |
 | H1b Organise | **conditional** — built only if the lens trial shows the AI needs categories/tags | PROJECT.md §Tiers |
 | H2 Lenses | S0 draft, Q1–Q7 open; starts after H1 exits | H2-LENSES.md |
-| H3 Agent surface · H4 Curation & tasks · H5 In-app AI | each built only on named evidence (DECISION-TREE §5.2) | PROJECT.md §Tiers |
+| H5 Bring your own model | **next, unconditional (D-78, 2026-10-12).** S0 drafted; S1 opens with the step-0 spike | H5-MODELS.md |
+| H3 Agent surface · H4 Curation & tasks | H3 optional since D-78; H4 Task record pulled into HW (D-69) | PROJECT.md §Tiers |
 
 ## Carried follow-ups (still relevant after the pivot)
 
@@ -61,6 +62,7 @@
 
 Full log: PROJECT.md → Decisions log. Latest:
 
+- 2026-10-12 (H5 S0) — Owner direction: the planner is a wrapper for declared runs; each user registers their own model (Claude, GPT, Gemini, OpenAI-compatible) by API key. Accepted D-78 (supersedes D-21, D-63, D-42; H3 optional), D-79 (key encrypted on the Worker, write-only), D-80 (owner first). Checked: a subscription cannot power a third-party app (Anthropic terms 2026-02-19 / 2026-04-04). Seam found: `RunStep` compose/check/store props, `executor: 'copy-prompt'` the only value the shared validator accepts. Claude's calls D-81…D-88; open O1–O8.
 - 2026-10-12 (calibration 1b) — Owner's live pass on 10bbd92: strip states reworked (body tap = read-only detail, Get feedback = every question + the run, tap away = line, typed input kept; docked over a measured cards box so nothing renders below it) #93; widget rule — a body tap toggles a widget's detail view (`composables/bodyTap.ts`); scrollbar bleeding 56px into the next page hidden, Settings tint 0.55 → 0.68 over two rounds, page subtitles readable (#95, #96); Notes brief by default with a Removed line (#97). CodeReview passes 3–4: nothing blocking; advisories fixed (close on click not pointer-down, page-relative cap, pinned rows against a double-tap drop, removed count over all notes, midnight tick).
 - 2026-10-12 (calibration 1) — Validation found prod with no v2 run yet, so calibration ran on the owner's look at live plus a local walk with synthetic data. Found: a deadline Task was invisible until its due day (v2 cannot turn a lead-time answer into a pick-up day) → Daily Coming up + Today tap, no contract change. Owner layout calls shipped: strip docked under the cards with line/detail/work states and tap-away, Opens on (Dashboard default), Settings underside, nav band (content stops at it, shadows uncut, the revealing tap never picks a page), badge removed, widget body tap = its detail view (`composables/bodyTap.ts`). CodeReview three passes, nothing blocking; all advisories fixed (#92, #93).
 - 2026-10-12 (s3v2-S3) — Dashboard v2 shipped in two slices: S3-1 device layer + A1 (#89), S3-2 the screens and the switch (owner: switch on merge, no flag — the first real run is also its first test). Calls made under vibe-code: proposals asked in the strip as yes/no; the optional journal kept as a collapsed Summarize (another session improved its prompt the same night, #88); notes keep only drop/restore. CodeReview on each slice: S3-1 2 high (A1 dropped thread follow-ups naming their Task; owner taps wrote the screen's stale copy) + 3, S3-2 8 UI-state findings; all fixed, mutation-checked (S3-1) or re-checked in the browser (S3-2).

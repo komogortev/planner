@@ -78,14 +78,15 @@ Changed 2026-10-09 (owner): entries live on a hosted backend, not in `data.json`
 | Mode | Who runs the model | Cost | Used for | Tier |
 |---|---|---|---|---|
 | **Outside** | Claude Code (desktop) or the Claude phone app, reaching the data through the backend's remote MCP endpoint | existing Claude subscription | curation sessions, on-demand lens runs | H2 trial (read-only), H3 |
-| **Inside** | the app, through `callAI` | API key, billed per token | runs with no session open: scheduled lenses, notifications | H5 |
+| **Inside** | the app, through the Worker's `/ai/calls` (the `callAI` gate, A7) with the model **the user registered** (D-78) | the user's own API key, billed per token by their provider; key encrypted on the Worker, write-only (D-79) | every declared run without a paste (S1–S2); routines with the app closed (S3) | H5, [H5-MODELS.md](H5-MODELS.md) |
 
-First in-app executor (D-35, 2026-10-10): **copy-prompt**. A prompt widget's Run builds the prompt with the one composer, copies it, the owner pastes it into Claude and pastes the answer back, and the app checks citations against the slice before storing an immutable report. H3 (remote MCP) is built only on evidence that paste friction blocks lens use, for the owner's account only; H5 only when widgets go stale for lack of a manual run (D-37, D-42).
+**Since 2026-10-12 (D-78): bring your own model is the core path; copy-prompt stays as the free executor `manual`, and H3 is optional.** Earlier text, kept for its reasoning — first in-app executor (D-35, 2026-10-10): **copy-prompt**. A prompt widget's Run builds the prompt with the one composer, copies it, the owner pastes it into Claude and pastes the answer back, and the app checks citations against the slice before storing an immutable report. H3 (remote MCP) is built only on evidence that paste friction blocks lens use, for the owner's account only; H5 only when widgets go stale for lack of a manual run (D-37, D-42).
 
 Environment facts that bound these choices:
 
 - The Claude subscription that powers Claude Code does not extend to an app's own model calls; inside mode needs a
-  separate API key and its spend.
+  separate API key and its spend. Confirmed 2026-10-12: Anthropic's terms limit subscription OAuth to Claude Code and
+  Claude.ai (2026-02-19) and block it in third-party apps (2026-04-04); consumer ChatGPT plans likewise are not API access.
 - Claude's phone and web apps can reach only **remote** MCP servers. With the hosted backend (2026-10-09) the H3
   endpoint can be remote, so phone chat no longer needs a separate hosting decision; it needs the MCP OAuth flow in H3.
 - Phone **capture** depends on neither: it is the PWA.
