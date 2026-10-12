@@ -5,7 +5,7 @@ import { recordTables } from '@/db/records'
 import type { Entry } from '@/domain/entry'
 import { JOURNAL_LENS } from '@/domain/journal'
 import { clearDeviceSafely } from '@/auth/account'
-import { answer, applyHarnessReply, applyJournalReply, confirm, markNote, pendingHarness, pendingJournal, startHarness, startJournal } from '../loop'
+import { answer, applyHarnessReply, applyJournalReply, confirm, loadHarnessData, markNote, pendingHarness, pendingJournal, startHarness, startJournal } from '../loop'
 import { loadPending, savePending } from '../pending'
 
 // The suite runs in node: a minimal localStorage (the pending run lives there, like the capture draft).
@@ -150,6 +150,24 @@ describe('stage 1 on the device', () => {
     const next = (await startHarness('2026-10-11T13:10:00.000Z'))!
     expect(next.header.toAssessIds).toEqual([OLD])
     expect(next.prompt).toContain('A: The corner one')
+  })
+})
+
+describe('v2 rows on a device still running the v1 loop (S3 v2 S3)', () => {
+  it('a Task question or assessment is invisible to v1; the S3a note rows are not', async () => {
+    const base = { state: 'open', answer: null, createdAt: NOW, answeredAt: null, runId: 'r2', deletedAt: null, serverVersion: 1 } as const
+    await db.questions.bulkPut([
+      { id: 'q-task', entryId: null, taskId: 't1', kind: 'harness', text: 'Which bulb?', ...base },
+      { id: 'q-note', entryId: OLD, text: 'Which shop?', ...base },
+    ])
+    await db.assessments.bulkPut([
+      { id: 'a-task', entryId: null, taskId: 't1', harnessVersion: 2, runId: 'r2', at: NOW, deletedAt: null, serverVersion: 1 },
+      { id: 'a-note', entryId: NEW, harnessVersion: 1, runId: 'r1', at: NOW, deletedAt: null, serverVersion: 1 },
+    ])
+    const d = await loadHarnessData()
+    expect(d.questions.map((q) => q.id)).toEqual(['q-note'])
+    expect(d.assessments.map((a) => a.id)).toEqual(['a-note'])
+    expect((await startHarness(NOW))?.prompt).toContain('Which shop?')
   })
 })
 

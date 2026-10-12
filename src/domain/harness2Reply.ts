@@ -94,6 +94,30 @@ export function parseHarnessOutput2(text: string): ParseResult2 {
   return { ok: true, value: { tasks, questions } }
 }
 
+// ── Near-repeat questions (A1, umbrella docs/architecture/06 §3 L7) ─────────────────────────────────────────────────
+// The prompt says "never repeat a question"; a reworded repeat slips past the exact match, and D-70 threads make rewordings
+// likely. Content words: runs of 4+ letters or digits, minus common English question words. Two questions repeat when their
+// shared content words — other than the Task's own — are at least half of the shorter question's. Under 3 content words only the exact match applies:
+// too few words to tell a rewording from a different question. It drops model output only, never owner text.
+const NEAR_MIN_WORDS = 3
+const NEAR_OVERLAP = 0.5
+const FUNCTION_WORDS = new Set(
+  'what which when where whom whose would should could will shall must might your yours this that these those with from have does there their them they then than about into just still also very'.split(' '),
+)
+
+export function contentWords(text: string): Set<string> {
+  return new Set((normalizeQuestion(text).match(/[\p{L}\p{N}]{4,}/gu) ?? []).filter((w) => !FUNCTION_WORDS.has(w)))
+}
+
+const without = (a: Set<string>, b: Set<string>): Set<string> => new Set([...a].filter((w) => !b.has(w)))
+
+export function nearRepeat(a: Set<string>, b: Set<string>): boolean {
+  if (a.size < NEAR_MIN_WORDS || b.size < NEAR_MIN_WORDS) return false
+  let shared = 0
+  for (const w of a) if (b.has(w)) shared++
+  return shared >= NEAR_OVERLAP * Math.min(a.size, b.size)
+}
+
 // ── Validation + apply ─────────────────────────────────────────────────────────────────────────────────────────────
 
 export type DropReason2 =
@@ -318,9 +342,14 @@ export function applyHarness2(output: HarnessOutput2, run: RunScope2, data: Harn
 
   // Questions, after the operations so a question can name the ref of a task created above.
   const asked = new Map<string, number>()
-  const seen = new Map<string, Set<string>>()
+  const seen = new Map<string, { exact: Set<string>; words: Set<string>[]; topic: Set<string> }>()
   const askedOn = (subject: string) => {
-    if (!seen.has(subject)) seen.set(subject, new Set(data.questions.filter((q) => (q.taskId ?? q.entryId) === subject).map((q) => normalizeQuestion(q.text))))
+    if (!seen.has(subject)) {
+      // A thread's follow-ups name their Task ("the bulbs"): the Task's own words say nothing about a repeat.
+      const topic = contentWords(working.get(subject)?.text ?? '')
+      const texts = data.questions.filter((q) => (q.taskId ?? q.entryId) === subject).map((q) => q.text)
+      seen.set(subject, { exact: new Set(texts.map(normalizeQuestion)), words: texts.map((t) => without(contentWords(t), topic)), topic })
+    }
     return seen.get(subject)!
   }
   for (const q of output.questions) {
@@ -342,11 +371,14 @@ export function applyHarness2(output: HarnessOutput2, run: RunScope2, data: Harn
     }
     const norm = normalizeQuestion(q.text)
     const line = oneLine(q.text)
+    const prior = askedOn(subject)
+    const words = without(contentWords(q.text), prior.topic)
     if (!isWellFormed(q.text) || norm === '' || Array.from(line).length > QUESTION_MAX_CHARS) drop('bad-text', subject)
-    else if (askedOn(subject).has(norm)) drop('repeated-question', subject)
+    else if (prior.exact.has(norm) || prior.words.some((w) => nearRepeat(words, w))) drop('repeated-question', subject)
     else if ((asked.get(subject) ?? 0) >= QUESTIONS_MAX) drop('too-many-questions', subject)
     else {
-      askedOn(subject).add(norm)
+      prior.exact.add(norm)
+      prior.words.push(words)
       asked.set(subject, (asked.get(subject) ?? 0) + 1)
       const onTask = q.taskId !== null
       res.questions.push({

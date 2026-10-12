@@ -44,6 +44,9 @@ export type StoredQuestion = Omit<Question, 'taskId' | 'kind'> & { taskId?: stri
 export type StoredAssessment = Omit<Assessment, 'taskId'> & { taskId?: string | null }
 export const readQuestion = (q: StoredQuestion): Question => ({ ...q, taskId: q.taskId ?? null, kind: q.kind ?? 'harness' })
 export const readAssessment = (a: StoredAssessment): Assessment => ({ ...a, taskId: a.taskId ?? null })
+/** A row the S3a (v1) code can read: about a note, not a Task. Until Dashboard v2 replaces it, v1 sees only these. */
+export const isNoteQuestion = <Q extends StoredQuestion>(q: Q): q is Q & { entryId: string } => q.entryId !== null && (q.taskId ?? null) === null
+export const isNoteAssessment = <A extends StoredAssessment>(a: A): a is A & { entryId: string } => a.entryId !== null && (a.taskId ?? null) === null
 
 export interface HarnessData2 {
   entries: Entry[]

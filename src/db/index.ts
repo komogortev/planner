@@ -12,7 +12,8 @@ import type {
   SyncMeta,
 } from './schema'
 import type { Entry } from '@/domain/entry'
-import type { Assessment, EntryState, Link, Question } from '@/domain/harness'
+import type { EntryState, Link } from '@/domain/harness'
+import type { StoredAssessment, StoredQuestion } from '@/domain/harness2'
 import type { Report } from '@/domain/journal'
 import type { RunRecord, SyncFields, WidgetRecord } from '@/domain/records'
 import type { Task, TaskProposal } from '@/domain/tasks'
@@ -53,8 +54,10 @@ export class PlannerDb extends Dexie {
   entries!: Table<Entry, string>
   outbox!: Table<OutboxRow, number>
   syncMeta!: Table<SyncMeta, string>
-  assessments!: Table<Assessment & SyncFields, string>
-  questions!: Table<Question & SyncFields, string>
+  // Stored v2 shapes (S3 v2 S3): a row is about a note or a Task, and S3a rows lack `taskId`/`kind`. Read through
+  // `readQuestion`/`readAssessment`; the S3a screens take only the note rows (`isNoteQuestion`/`isNoteAssessment`).
+  assessments!: Table<StoredAssessment & SyncFields, string>
+  questions!: Table<StoredQuestion & SyncFields, string>
   links!: Table<Link & SyncFields, string>
   entryStates!: Table<EntryState & SyncFields, string>
   widgets!: Table<WidgetRecord & SyncFields, string>

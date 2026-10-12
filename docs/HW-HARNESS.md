@@ -258,3 +258,24 @@ refused by the validator), fixed in the domain with a test; two tests that could
 mutated, all red. **Not covered:** restore combined with a lost push race (each half tested alone). **Latent for S3:** the
 Dexie `questions`/`assessments` tables are still typed with the v1 rows (`entryId: string`); S3 switches them to the
 stored v2 types before any code reads a Task question from them.
+
+**S3 plan (2026-10-12).** S3-1 groundwork (invisible) · S3-2 Dashboard v2 **and the switch in the same merge** (owner,
+2026-10-12: no `?v2` flag; the first real run on v2 is also its first test) · old loop screens (`LoopCard`, `NoteMarks`)
+removed in S3-2. S3a carry-over: open note questions stay in the strip; the first v2 run re-reads 7 days of notes (D-75);
+S3a `links` proposals are left unshown, nothing migrates. Proposals (close · revise · split · merge) are asked in the
+questions strip, one at a time, as yes/no items (Claude, vibe-code: the spec placed no surface for them).
+
+**S3-1 built (2026-10-12).** Dexie `questions`/`assessments` typed as the stored v2 rows; v1 (`loop.ts`, `NotesDialog`)
+reads only note rows (`isNoteQuestion`/`isNoteAssessment`). `harness/loop2.ts`: compose · check/store (run carries
+`taskIds`) · answer/skip · removal answer · task add/edit/state · summary save · proposal confirm/reject · `harnessWork` (a
+count that does not touch the waiting run). Every owner action re-reads its rows by id: `writeRecords` writes what it is
+given over the held version, so the screen's copy would undo a sync or confirm a proposal rejected elsewhere. A summary save
+is refused when a shown Task changed meanwhile; a Task that arrived meanwhile is not read as removed. Waiting run: v1 and v2
+share one slot, each loader takes only its own version; a v1 reply pasted after the switch is refused with its reason. **A1**
+(near-duplicate questions, umbrella `docs/architecture/06`): content words (4+ letters, minus English question words, minus
+the Task's own words) overlapping ≥ half of the shorter question's, against every earlier question on the same subject;
+under 3 content words, exact match only. CodeReview: 2 high (A1 dropped real thread follow-ups that name the Task; owner
+actions wrote the screen's stale copy) + 3 lower, all fixed with tests. Mutations: 19 run, all killed except three that a
+second mechanism covers (v2 loader version check ⊂ shape check; topic subtraction on either side alone — both off is killed). **Not covered:** a
+sync landing between a reply's check and its store (as v1); A1's word list is English, so for other languages only the
+length filter removes question words.
