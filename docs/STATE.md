@@ -5,7 +5,7 @@
 - **Working:** prod = Worker `f098057` + D1 `0008`, Pages `663ea57` (S3a loop + scroll fix); `pnpm check` app 530 · Worker 169. Owner's prod run: 12 notes → 10 questions, 1 carry, stored, answered on the device. **S3 v2 S1 domain built** (pure, unwired): `tasks.ts`, `harness2.ts` + `harness2Reply.ts`, `summary.ts`; D-74…D-76.
 - **Broken:** nothing known. **Not verified:** that the owner's answers reached D1 (no server read made); clipboard write on a phone; DEVICE-CHECKS 10, 13–20; a live D1 restore; the tester's first sync.
 - **Blocker:** none.
-- **Next:** (1) S2 Worker, additive, deployed before the client: kinds `task` + `taskProposal`; question/assessment `taskId`, nullable `entryId`, exactly-one rule; question `kind`; run task ids (§11 "S2 scope"). (2) S3 Dashboard v2 wires the S1 domain. Parked: local branch `feat/s3b-dashboard-loop` (strip + day logic to reuse); §9 point 9.
+- **Next:** (1) S2 Worker (D-74 accepted by the owner), additive, deployed before the client: kinds `task` + `taskProposal`; question/assessment `taskId`, nullable `entryId`, exactly-one rule; question `kind`; run task ids (§11 "S2 scope"). (2) S3 Dashboard v2 wires the S1 domain. Parked: local branch `feat/s3b-dashboard-loop` (strip + day logic to reuse); §9 point 9.
 ---
 
 ## Context
