@@ -6,8 +6,8 @@ compatibility_date = "2026-10-01"
 
 [vars]
 ANTHROPIC_MODEL = "claude-opus-5-5"
-OAI_BASE = ""
-OAI_MODEL = ""
+OAI_BASE = "https://generativelanguage.googleapis.com/v1beta/openai"
+OAI_MODEL = "gemini-3.8-flash"
 OAI_MAX_FIELD = "max_tokens"
 PROVIDER_CALL_CAP = "20"
 

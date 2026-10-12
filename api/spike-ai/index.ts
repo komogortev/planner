@@ -33,6 +33,7 @@ interface Job {
   ms?: number
   fmt?: Fmt
   size?: Size
+  model?: string
 }
 
 const SCHEMA = `CREATE TABLE IF NOT EXISTS runs (
@@ -50,8 +51,8 @@ async function ensureSchema(db: D1Database): Promise<void> {
 
 async function insertRow(env: Env, j: Job): Promise<void> {
   await env.DB.prepare(
-    'INSERT INTO runs (id, kind, mode, fmt, size, target_ms, status, started_at, last_beat) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)',
-  ).bind(j.id, j.kind, j.mode, j.fmt ?? null, j.size ?? null, j.ms ?? null, 'running', Date.now()).run()
+    'INSERT INTO runs (id, kind, mode, fmt, size, target_ms, status, started_at, last_beat, reply_head) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8, ?9)',
+  ).bind(j.id, j.kind, j.mode, j.fmt ?? null, j.size ?? null, j.ms ?? null, 'running', Date.now(), j.model ? `model=${j.model}` : null).run()
 }
 
 // A heartbeat every 5 s while the job runs: when the runtime cancels the job, the last beat says when.
@@ -106,16 +107,16 @@ async function callAnthropic(env: Env, size: Size): Promise<CallResult> {
   return { http: res.status, stop: body?.stop_reason ?? null, err: null, tokensIn: body?.usage?.input_tokens ?? null, tokensOut: body?.usage?.output_tokens ?? null, text }
 }
 
-async function callOpenAi(env: Env, size: Size): Promise<CallResult> {
+async function callOpenAi(env: Env, size: Size, model?: string): Promise<CallResult> {
   const p = PROMPTS[size]
   const res = await fetch(`${env.OAI_BASE.replace(/\/$/, '')}/chat/completions`, {
     method: 'POST',
     headers: { authorization: `Bearer ${env.OAI_KEY ?? ''}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ model: env.OAI_MODEL, [env.OAI_MAX_FIELD]: p.maxTokens, messages: [{ role: 'user', content: p.prompt() }] }),
+    body: JSON.stringify({ model: model ?? env.OAI_MODEL, [env.OAI_MAX_FIELD]: p.maxTokens, messages: [{ role: 'user', content: p.prompt() }] }),
   })
   const raw = (await res.json().catch(() => null)) as unknown
   const body = (Array.isArray(raw) ? raw[0] : raw) as Record<string, any> | null // some compatibility layers wrap errors in a list
-  if (!res.ok) return { http: res.status, stop: null, err: String(body?.error?.code ?? body?.error?.type ?? body?.error?.status ?? 'unparsed'), tokensIn: null, tokensOut: null, text: '' }
+  if (!res.ok) return { http: res.status, stop: null, err: [body?.error?.code, body?.error?.status ?? body?.error?.type].filter((x) => x != null).join('/') || 'unparsed', tokensIn: null, tokensOut: null, text: '' }
   const choice = body?.choices?.[0]
   return { http: res.status, stop: choice?.finish_reason ?? null, err: null, tokensIn: body?.usage?.prompt_tokens ?? null, tokensOut: body?.usage?.completion_tokens ?? null, text: String(choice?.message?.content ?? '') }
 }
@@ -130,7 +131,7 @@ async function runJob(env: Env, j: Job): Promise<void> {
   }
   let r: CallResult
   try {
-    r = await withBeat(env, j.id, j.fmt === 'anthropic' ? callAnthropic(env, j.size!) : callOpenAi(env, j.size!))
+    r = await withBeat(env, j.id, j.fmt === 'anthropic' ? callAnthropic(env, j.size!) : callOpenAi(env, j.size!, j.model))
   } catch (e) {
     r = { http: 0, stop: null, err: `fetch: ${e instanceof Error ? e.name : 'error'}`, tokensIn: null, tokensOut: null, text: '' }
   }
@@ -191,13 +192,22 @@ export default {
       if (!['anthropic', 'openai'].includes(fmt) || !(size in PROMPTS)) return json({ error: 'fmt/size' }, 400)
       if (fmt === 'anthropic' ? !env.ANTHROPIC_KEY : !env.OAI_KEY || !env.OAI_BASE) return json({ error: 'no_key' }, 409)
       if ((await providerCallsLeft(env)) <= 0) return json({ error: 'cap_reached' }, 429)
-      return start(env, ctx, { id, kind: 'call', mode, fmt, size })
+      const model = q.get('model') ?? undefined // spike only: an id from /t/models
+      if (model && !/^[a-z0-9.\-]{3,60}$/.test(model)) return json({ error: 'model' }, 400)
+      return start(env, ctx, { id, kind: 'call', mode, fmt, size, model })
     }
     if (req.method === 'POST' && url.pathname === '/t/cron/arm') {
       // Arms one cron run: the next scheduled tick runs this job once, then disarms (proves cron wall time for S3).
       const ms = Math.min(Number(q.get('ms') ?? 60000), 600000)
       await env.DB.prepare('INSERT OR REPLACE INTO cron_arm (one, job) VALUES (1, ?1)').bind(JSON.stringify({ kind: 'timer', ms })).run()
       return json({ armed: true, ms })
+    }
+    if (req.method === 'GET' && url.pathname === '/t/models') {
+      // The model ids the openai-chat key can see, so the spike picks a real one instead of guessing. Ids only.
+      if (!env.OAI_KEY || !env.OAI_BASE) return json({ error: 'no_key' }, 409)
+      const res = await fetch(`${env.OAI_BASE.replace(/\/$/, '')}/models`, { headers: { authorization: `Bearer ${env.OAI_KEY}` } })
+      const body = (await res.json().catch(() => null)) as { data?: { id?: string }[] } | null
+      return json({ http: res.status, ids: res.ok ? (body?.data ?? []).map((m) => m.id) : [] })
     }
     if (req.method === 'GET' && url.pathname === '/t/rows') {
       const { results } = await env.DB.prepare('SELECT * FROM runs ORDER BY started_at DESC LIMIT 50').all()

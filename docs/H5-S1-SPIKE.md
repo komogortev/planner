@@ -68,7 +68,37 @@ The docs held: a plain await dies with the client; `waitUntil` buys about 30 s a
 22:50:00 UTC started at 22:51:19 — a cron tick can start more than a minute late, so a routine's time is "around",
 not exact.
 
-**B, C, D — waiting on the keys (§3).**
+**A, repeated with a real call — 2026-10-12.** A harness-sized call to `gemini-3.1-flash-lite` run as a Workflow ended
+`ok` in D1 (+9.9 s). Under `wu`, a call the client left at 2 s still wrote its row at +3.7 s (a 503), so an in-flight
+`fetch` outlives the disconnect the same way a timer does.
+
+**B — `openai-chat` ✅ (Gemini, 2026-10-12); `anthropic-messages` not run (no key yet).** Base
+`https://generativelanguage.googleapis.com/v1beta/openai`, field `max_tokens` accepted. Small call per model:
+
+| Model | Result |
+|---|---|
+| `gemini-3.5-flash` | `ok`, stop `stop`, 15 in / 5 out tokens, 1.4 s |
+| `gemini-3.1-flash-lite` | `ok`, 4.7 s |
+| `gemini-3.8-flash`, `gemini-3.7-flash`, `gemini-flash-latest` | **503 `UNAVAILABLE` in under 0.6 s**, every time |
+| `gemini-2.5-flash` | **404 `NOT_FOUND`**, though `/models` lists it |
+
+So the key's model list is not the list of models it can call, and an instant 503 means "this model is not available to
+this key", not "the provider is down".
+
+**C — `openai-chat` ✅.** The 64-token call returned `finish_reason: "length"` → `cut_off`, no text kept.
+
+**D — 2026-10-12.**
+- *Duration of a harness-sized call* (60 synthetic notes, ~1,750 tokens in): `gemini-3.5-flash` **57.6 s** (1,517 tokens
+  out, reply in a ```json fence); `gemini-3.1-flash-lite` **9.9 s** (880 out, bare JSON). Real calls run past the ~30 s
+  `waitUntil` window.
+- *Free-tier reliability:* `gemini-3.5-flash` harness calls succeeded **1 of 7**; the other six returned 503 after 4–31 s
+  of generation. `gemini-3.1-flash-lite`: 1 of 1.
+- *Worker CPU per call* (`wrangler tail`, n=14, `api/scripts/cpu-summary.mjs`): **p50 6 ms, p99 17 ms**. Both calls over
+  10 ms (16, 17 ms) were a cold start and the one successful 57 s call, whose CPU includes the spike's heartbeat (a D1
+  write every 5 s), which production does not have. A Workflow step also has a 10 ms CPU limit on the free plan, so S1
+  measures its real step.
+
+Provider calls used: 16 of 20.
 
 ## 5. Decision
 
