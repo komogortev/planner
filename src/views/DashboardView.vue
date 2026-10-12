@@ -31,7 +31,7 @@ onBeforeUnmount(() => ro?.disconnect())
     <div class="cards" :class="{ 'cards-docked': stripH > 0 }" :style="{ '--strip-h': `${stripH}px` }" data-test="dashboard-cards">
       <DailyCard :loop="loop" />
       <JournalCard />
-      <NotesDialog />
+      <NotesDialog :now="loop.now.value" />
     </div>
     <div ref="dock" class="dock" data-test="strip-dock">
       <QuestionsStrip :loop="loop" />

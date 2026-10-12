@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createSSRApp, h } from 'vue'
 import { renderToString } from 'vue/server-renderer'
 import type { Entry } from '@/domain/entry'
-import { dayKey, groupByDay } from '../group'
+import { dayKey, groupByDay, notesBrief, splitRemoved } from '../group'
 import NotesList from '../NotesList.vue'
 
 const entry = (id: string, createdAt: string, body = id, over: Partial<Entry> = {}): Entry => ({
@@ -54,5 +54,29 @@ describe('NotesList rendering (render escaping, H1-ENTRIES §10)', () => {
     expect(html).not.toContain('<img')
     expect(html).not.toContain('<script>')
     expect(html).toContain('&lt;img src=x onerror=')
+  })
+})
+
+describe('removed notes and the brief view', () => {
+  const states = new Map([['b', { state: 'dropped' }], ['c', { state: 'done' }], ['d', { state: 'open' }]])
+  it('splits removed (any state but open) from kept, keeping order', () => {
+    const rows = [entry('a', '2026-10-12T09:00:00.000Z'), entry('b', '2026-10-12T08:00:00.000Z'), entry('c', '2026-10-11T08:00:00.000Z'), entry('d', '2026-10-10T08:00:00.000Z')]
+    const { kept, removed } = splitRemoved(rows, states)
+    expect(kept.map((e) => e.id)).toEqual(['a', 'd'])
+    expect(removed.map((e) => e.id)).toEqual(['b', 'c'])
+    // just dropped (b) / just restored (d, now open but shown where it was): rows stay put until the list closes
+    const pinned = splitRemoved(rows, states, new Map([['b', 'kept'], ['c', 'kept']]))
+    expect(pinned.kept.map((e) => e.id)).toEqual(['a', 'b', 'c', 'd'])
+    expect(splitRemoved(rows, states, new Map([['a', 'removed']])).removed.map((e) => e.id)).toEqual(['a', 'b', 'c'])
+  })
+  it('a whitespace-only newest note gives no latest line', () => {
+    expect(notesBrief([entry('a', '2026-10-12T09:00:00.000Z', '  \n ')], '2026-10-12T12:00:00.000Z', 'UTC').latest).toBeNull()
+  })
+  it("brief: the newest kept note's first non-empty line, and today's count in the zone", () => {
+    const kept = [entry('a', '2026-10-12T09:00:00.000Z', '\n  Call the plumber  \nabout the sink'), entry('d', '2026-10-11T23:30:00.000Z', 'late')]
+    expect(notesBrief(kept, '2026-10-12T12:00:00.000Z', 'UTC')).toEqual({ latest: 'Call the plumber', today: 1 })
+    // 23:30 UTC on the 11th is the 12th in Asia/Tokyo: both count as today there
+    expect(notesBrief(kept, '2026-10-12T12:00:00.000Z', 'Asia/Tokyo').today).toBe(2)
+    expect(notesBrief([], '2026-10-12T12:00:00.000Z', 'UTC')).toEqual({ latest: null, today: 0 })
   })
 })
