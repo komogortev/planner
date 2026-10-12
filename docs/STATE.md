@@ -1,11 +1,11 @@
 # Personal Planner — STATE
 
 ## SNAPSHOT
-- **Phase/Last:** H1 built. **2026-10-12: S3 v2 shipped — Dashboard v2 is the owner's Dashboard (switch on merge, owner, no flag):** questions strip per Task, Daily of Tasks with an editable summary, optional Summarize, notes as input. Spec [HW-HARNESS.md](HW-HARNESS.md) §11 (S3-1, S3-2 records). Vibe-code mode.
-- **Working:** prod = Worker `b5215cb` + D1 `0008` (accepts `task`/`taskProposal`); Pages `c53b999` (Dashboard v2), smoke 16/16 (2026-10-12). `pnpm check` app 564 · Worker 176. Browser-verified on local dev with synthetic data (DEVICE-CHECKS 23, 24); A1 near-duplicate question guard live.
-- **Broken:** nothing known. **Not verified:** the first real v2 run (DEVICE-CHECKS 21, 22, 25) and the first `task` write reaching D1 (26) — smoke cannot reach either; no component tests for the strip/Daily; DEVICE-CHECKS 10, 13–17.
+- **Phase/Last:** H1 built. S3 v2 shipped 2026-10-12 (Dashboard v2, [HW-HARNESS.md](HW-HARNESS.md) §11). **2026-10-12 calibration 1 live (#92, #93):** Daily on top with Coming up (7 days, Today tap); questions strip docked under the cards (line · body tap = detail · Get feedback = all questions + run · tap away = line); Opens on (Dashboard default); Settings underside; 40px nav band; badge removed; widget body tap = its detail view. Vibe-code mode.
+- **Working:** prod = Worker `b5215cb` + D1 `0008`; Pages `dbfe893`, smoke 16/16 (2026-10-12). `pnpm check` app 569 · Worker 176. Local-dev browser checks at 375px (DEVICE-CHECKS 23, 24, 27–31).
+- **Broken:** nothing known. **Not verified:** any v2 run on prod (D1 had 0 `task` rows, 2026-10-12) — DEVICE-CHECKS 21, 22, 25, 26; checks 27–31 on the phone; no component tests (no test-utils in the repo); DEVICE-CHECKS 10, 13–17.
 - **Blocker:** none.
-- **Next:** validation pass in its own session (owner, 2026-10-12): DEVICE-CHECKS 21–26 on the owner's first real day on v2 → read the paste count (§7) and check 26 (a Task read back from the server). Then S4 acceptance (three consecutive days, §11) and the exit week. Parked: `feat/s3b-dashboard-loop` (superseded, delete after the first v2 day); §9 point 9.
+- **Next:** the owner tests calibration 1 live (DEVICE-CHECKS 27–31) and runs the first real Get feedback (21) → read the paste count (§7) and check 26 from D1. Then S4 acceptance (three consecutive days, §11) and the exit week. Light-theme amber due dates are hard to read (not fixed). Parked: `feat/s3b-dashboard-loop` (delete after the first v2 day); §9 point 9.
 ---
 
 ## Context
@@ -61,6 +61,7 @@
 
 Full log: PROJECT.md → Decisions log. Latest:
 
+- 2026-10-12 (calibration 1) — Validation found prod with no v2 run yet, so calibration ran on the owner's look at live plus a local walk with synthetic data. Found: a deadline Task was invisible until its due day (v2 cannot turn a lead-time answer into a pick-up day) → Daily Coming up + Today tap, no contract change. Owner layout calls shipped: strip docked under the cards with line/detail/work states and tap-away, Opens on (Dashboard default), Settings underside, nav band (content stops at it, shadows uncut, the revealing tap never picks a page), badge removed, widget body tap = its detail view (`composables/bodyTap.ts`). CodeReview three passes, nothing blocking; all advisories fixed (#92, #93).
 - 2026-10-12 (s3v2-S3) — Dashboard v2 shipped in two slices: S3-1 device layer + A1 (#89), S3-2 the screens and the switch (owner: switch on merge, no flag — the first real run is also its first test). Calls made under vibe-code: proposals asked in the strip as yes/no; the optional journal kept as a collapsed Summarize (another session improved its prompt the same night, #88); notes keep only drop/restore. CodeReview on each slice: S3-1 2 high (A1 dropped thread follow-ups naming their Task; owner taps wrote the screen's stale copy) + 3, S3-2 8 UI-state findings; all fixed, mutation-checked (S3-1) or re-checked in the browser (S3-2).
 
 - 2026-10-11 (s3v2-S2) — Worker contract for Tasks built and merged (#86): kinds `task` + `taskProposal`, `taskId` with the exactly-one rule, question `kind`, run `taskIds`; D-77 (an added field may be absent; the Worker keeps the stored value when an older device omits it); Dexie v6. The building session ended at the merge, so the deploy ran in a follow-up session: Worker `b5215cb` (version `dbf95eea`), no migration, smoke 16/16. Pages had built `b5215cb` ten minutes before the Worker — harmless here because no client writes a Task yet; from S3 on, the RUNBOOK order (Worker first) binds.
