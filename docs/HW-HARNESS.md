@@ -145,7 +145,10 @@ and need one action per note; Daily is either a list of notes or a second paste.
 1. **Notes are input only.** One note may hold several topics; several notes in a day may feed the same one.
 2. **The harness derives Tasks from the notes' context.** The derived information is what the owner faces, not the notes.
 3. **Daily = the Tasks due today**, plainly listed. It is computed on the device: no second paste.
-4. **Questions are one queue** across everything the harness read, answered in one sheet with one Send.
+4. **Questions stay one at a time, one reply each** (owner correction, 2026-10-11: no answer sheet). They are the visible
+   signal of how the harness isolated a topic: a question that shows a wrong split is the owner's chance to correct its
+   scope and context in the reply ("these are two things", "this belongs with the bulb task"). The action count drops
+   because questions are asked per topic, not per note.
 5. **An owner edit of a registered Task (or a Task added by hand) re-enters the next run** to be re-evaluated.
 
 **Proposed decisions (none accepted yet):**
@@ -154,7 +157,7 @@ and need one action per note; Daily is either a list of notes or a second paste.
 |---|---|---|
 | P1 | The harness creates **Task** records directly (VOCABULARY "Task"); the owner edits, completes, carries or drops them. No accept-a-hook step | D-39 (Task only on accepting a hook), D-34's "nothing extracted" for tasks; H4 is pulled into HW |
 | P2 | **One paste per run.** The harness output gains task operations; Daily needs no stage-2 call. The AI journal (stage 2) stays optional ("Summarize") | D-60's two-round-trip shape for the daily loop |
-| P3 | Questions are keyed to a Task when one exists (`taskId`), else to the note; the answer sheet stores every filled answer in one transaction | per-note answering in S3a |
+| P3 | Questions are keyed to the Task (topic) they isolate (`taskId`), else to the note, and shown with that Task's text so the split is visible. Answered one at a time, as in S3a. **An answer is scope input:** it reopens its Task, and the next run may split, merge or re-scope it from the reply (`split` / `merge` ops below, proposals only) | per-note placement of questions in S3a (the one-reply-per-question mechanic stays) |
 | P4 | `entryStates` stops being an owner surface: a note's life ends at "assessed". Dropping a junk note stays possible from the notes list | D-65/D-67 evening pass on notes (moves to Tasks) |
 
 **Task record (new kind `task`, additive: Worker validator + D1 accept it before any client writes one).**
@@ -179,6 +182,8 @@ answered questions**. Output per run:
     { op: 'attach', taskId, sourceEntryIds, due?|null },               // a later note feeds an existing task (constraint 1)
     { op: 'close',  taskId, entryId, evidence },                       // proposal: a note says it is done (owner confirms)
     { op: 'revise', taskId, text?, due? },                             // proposal on a re-evaluated task; never applied over owner text
+    { op: 'split',  taskId, into: [{ text, sourceEntryIds }] },        // proposal, usually from an answer that says "two things"
+    { op: 'merge',  taskIds, text },                                   // proposal, from an answer that joins topics
   ],
   questions: [ { taskId|null, entryId|null, text } ] }               // ≤ 3 per task or note, as today
 ```
@@ -191,7 +196,7 @@ equals an open task's is turned into an `attach` (dedupe within the day).
 (D-63). An edit marks the task as waiting, and the questions strip shows **"N changes waiting for feedback"** with the Get
 feedback button. A truly automatic re-run is H5 (API executor), whose re-entry is evidence: §7's paste count.
 
-**Dashboard v2.** Top: questions strip with a count and "Answer all" (the sheet). Middle: **Daily** — today's Tasks with
+**Dashboard v2.** Top: questions strip, one question at a time with the Task it isolates shown above it, reply · skip · next, and a list view. Middle: **Daily** — today's Tasks with
 done · tomorrow · drop, tap-to-edit text, "+ task". Bottom: notes (input history, "+ Today" removed).
 
 **Open — each with the default I would proceed under:**
