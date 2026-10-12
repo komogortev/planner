@@ -2,10 +2,10 @@
 
 ## SNAPSHOT
 - **Phase/Last:** H1 built. **2026-10-11: S3a loop shipped (#75–#77), first real harness run on prod; owner then reshaped S3 → v2 (D-69…D-73): the harness derives stored Tasks, Daily = editable summary of today's Tasks, questions one at a time per Task.** Spec [HW-HARNESS.md](HW-HARNESS.md) §11. Vibe-code mode.
-- **Working:** prod = Worker `f098057` + D1 `0008`, Pages `663ea57` (S3a loop + scroll fix); `pnpm check` app 477 · Worker 169. Owner's prod run: 12 notes → 10 questions, 1 carry, stored, answered on the device.
+- **Working:** prod = Worker `f098057` + D1 `0008`, Pages `663ea57` (S3a loop + scroll fix); `pnpm check` app 530 · Worker 169. Owner's prod run: 12 notes → 10 questions, 1 carry, stored, answered on the device. **S3 v2 S1 domain built** (pure, unwired): `tasks.ts`, `harness2.ts` + `harness2Reply.ts`, `summary.ts`; D-74…D-76.
 - **Broken:** nothing known. **Not verified:** that the owner's answers reached D1 (no server read made); clipboard write on a phone; DEVICE-CHECKS 10, 13–20; a live D1 restore; the tester's first sync.
 - **Blocker:** none.
-- **Next:** (1) S3 v2 S1 in a fresh session: pure domain `tasks.ts` + harness v2 (create · attach · close · revise · split · merge), summary diff (D-71), removal question (D-73) — input = §11 only. (2) S2 Worker kind `task` + question `taskId`, deployed before the client. (3) S3 Dashboard v2. Parked: local branch `feat/s3b-dashboard-loop` (strip + day logic to reuse); §9 point 9.
+- **Next:** (1) S2 Worker, additive, deployed before the client: kinds `task` + `taskProposal`; question/assessment `taskId`, nullable `entryId`, exactly-one rule; question `kind`; run task ids (§11 "S2 scope"). (2) S3 Dashboard v2 wires the S1 domain. Parked: local branch `feat/s3b-dashboard-loop` (strip + day logic to reuse); §9 point 9.
 ---
 
 ## Context
@@ -60,6 +60,8 @@
 ## Decision log
 
 Full log: PROJECT.md → Decisions log. Latest:
+
+- 2026-10-11 (s3v2-S1) — S3 v2 domain built, pure and unwired (v1 stays shipped until S3). §11 named six ops but no record for the four that are proposals → kind `taskProposal`; questions and assessments keyed to a Task or a note, exactly one (D-74). Dedupe against any open Task, `ref` on create, 7-day re-read of S3a notes (D-75); removal answers Drop / Keep / free text (D-76). This corrects the S2 scope: the Worker contract changes (two new kinds, two kinds widened), not only the client. CodeReview found 3 defects + 2 real edge cases (marker-prefixed text rewritten by an untouched save; a moved line consumed as an edit; merge mislabelling owner text; same-day removal id reuse; confirm over a later owner date edit), all fixed with regression tests; 11 guard mutations, all killed except one guard that a second mechanism also covers.
 
 - 2026-10-11 (s3v2) — The first real harness run (owner, prod: 12 notes, 10 questions, 1 carry) showed the S3a surface was wrong: notes as the face, per-note answering, Daily as notes or a second paste. Owner model: notes are input; the harness derives stored Tasks (D-69, supersedes D-39); questions stay one at a time per Task, a reply may re-scope or thread (D-70, the answer sheet I proposed was rejected — questions are the signal of topic isolation); Daily = editable summary matched to Tasks (D-71); removal carries + asks, never drops unconfirmed (D-73); auto re-run on edit by default is a direction needing H5 (D-72). S3b direction (a) (Daily lists notes) parked unmerged. Also shipped: reply box without spellcheck (#76), Dashboard scroll over the notes card (#77, overscroll containment on a box with no height).
 
