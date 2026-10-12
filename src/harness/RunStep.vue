@@ -113,7 +113,7 @@ async function storeReply(): Promise<void> {
       <textarea class="input mt-1 text-xs" rows="6" readonly :value="prompt" />
     </details>
     <template v-if="open || waiting">
-      <textarea v-model="reply" class="input mt-2 text-xs" rows="4" placeholder="Paste the AI reply here" aria-label="AI reply" data-test="run-reply" @input="preview = null" />
+      <textarea v-model="reply" class="input mt-2 text-xs" rows="4" spellcheck="false" autocorrect="off" autocapitalize="off" placeholder="Paste the AI reply here" aria-label="AI reply" data-test="run-reply" @input="preview = null" />
       <div class="flex gap-2 mt-2">
         <button type="button" class="btn-ghost btn-sm" :disabled="busy || !reply.trim()" data-test="run-check" @click="checkReply">Check</button>
         <button v-if="preview" type="button" class="btn-primary btn-sm" :disabled="busy" data-test="run-store" @click="storeReply">Store</button>
