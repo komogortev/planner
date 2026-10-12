@@ -6,7 +6,7 @@
 <template>
   <div class="max-w-2xl mx-auto w-full px-6 pt-8">
     <h2 class="text-xl font-bold">Widgets</h2>
-    <p class="text-sm text-slate-500 mt-1">All widgets, activated or not, will list here.</p>
+    <p class="text-sm text-slate-300 mt-1">All widgets, activated or not, will list here.</p>
     <div class="card mt-6 text-center">
       <p class="text-sm text-slate-400">No widgets yet.</p>
       <button type="button" class="btn-ghost mt-4" data-test="create-widget" aria-label="Create widget" disabled>

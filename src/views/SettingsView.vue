@@ -231,7 +231,7 @@ async function doDisconnect(): Promise<void> {
   <div class="max-w-2xl mx-auto w-full px-6 pt-8 space-y-6">
     <header>
       <h2 class="text-2xl font-bold">Settings</h2>
-      <p class="text-sm text-slate-500 mt-1">
+      <p class="text-sm text-slate-300 mt-1">
         App info and account.
       </p>
     </header>
