@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { RouterView, useRoute } from 'vue-router'
 import EnvBanner from '@/components/EnvBanner.vue'
-import VersionBadge from '@/components/VersionBadge.vue'
 import UpdateBanner from '@/components/UpdateBanner.vue'
 import SyncBanner from '@/components/SyncBanner.vue'
 import BottomNav from '@/shell/BottomNav.vue'
@@ -24,6 +23,5 @@ const route = useRoute()
       <RouterView />
     </main>
     <BottomNav v-if="!route.meta.public" />
-    <VersionBadge />
   </div>
 </template>

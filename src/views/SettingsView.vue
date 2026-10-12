@@ -16,7 +16,7 @@ import { useSettingsStore } from '@/stores/settings'
 import { useSyncStore } from '@/stores/sync'
 import { GitHubError } from '@/db/github'
 import type { SnapshotCounts } from '@/db/snapshot'
-import { setThemeChoice, themeChoice, type ThemeChoice } from '@/theme/theme'
+import PreferencesCard from '@/components/PreferencesCard.vue'
 import InstallButton from '@/components/InstallButton.vue'
 import ConfirmRestoreModal from '@/components/ConfirmRestoreModal.vue'
 import ConflictModal from '@/components/ConflictModal.vue'
@@ -42,11 +42,6 @@ async function refreshStats(): Promise<void> {
 }
 
 const router = useRouter()
-const themeOptions: { value: ThemeChoice; label: string }[] = [
-  { value: 'system', label: 'System' },
-  { value: 'light', label: 'Light' },
-  { value: 'dark', label: 'Dark' },
-]
 const me = ref<AccountLine | null>(null)
 
 // D-28: signing out clears this device's notes (D-50), so it is refused while some have not reached the server.
@@ -233,7 +228,7 @@ async function doDisconnect(): Promise<void> {
 </script>
 
 <template>
-  <div class="max-w-2xl mx-auto w-full px-6 py-8 space-y-6">
+  <div class="max-w-2xl mx-auto w-full px-6 pt-8 space-y-6">
     <header>
       <h2 class="text-2xl font-bold">Settings</h2>
       <p class="text-sm text-slate-500 mt-1">
@@ -512,23 +507,7 @@ async function doDisconnect(): Promise<void> {
 
     <!-- ============================================================ -->
     <!-- App info                                                      -->
-    <section class="card">
-      <h3 class="font-semibold mb-3">Appearance</h3>
-      <div class="theme-choice" role="radiogroup" aria-label="Theme">
-        <button
-          v-for="o in themeOptions"
-          :key="o.value"
-          role="radio"
-          :aria-checked="themeChoice === o.value"
-          class="theme-opt"
-          :class="{ 'theme-opt-on': themeChoice === o.value }"
-          :data-test="`theme-${o.value}`"
-          @click="setThemeChoice(o.value)"
-        >
-          {{ o.label }}
-        </button>
-      </div>
-    </section>
+    <PreferencesCard />
 
     <!-- ============================================================ -->
     <section class="card">
@@ -548,7 +527,7 @@ async function doDisconnect(): Promise<void> {
         </div>
         <div>
           <dt class="text-xs text-slate-500 uppercase tracking-wider">Sync backend</dt>
-          <dd class="mt-1">GitHub Contents API</dd>
+          <dd class="mt-1">Planner API</dd>
         </div>
       </dl>
     </section>
@@ -575,26 +554,3 @@ async function doDisconnect(): Promise<void> {
     />
   </div>
 </template>
-
-<style scoped>
-.theme-choice {
-  display: flex;
-  gap: 4px;
-  padding: 4px;
-  border-radius: 12px;
-  background: rgb(var(--s-800));
-}
-.theme-opt {
-  flex: 1;
-  padding: 8px 0;
-  border-radius: 9px;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: rgb(var(--s-400));
-}
-.theme-opt-on {
-  background: rgb(var(--s-950));
-  color: rgb(var(--s-100));
-  box-shadow: 0 1px 3px rgb(0 0 0 / 0.25);
-}
-</style>

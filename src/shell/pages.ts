@@ -130,3 +130,13 @@ export function pullCss(t: Pull): string {
 export function layerShiftCss(shift: number): string {
   return `${shift * 100}cqw 0`
 }
+
+/**
+ * The cloth's underside (owner, calibration 2026-10-12): Settings is the inward-facing page, so swiping onto it turns the
+ * cloth over — a darker tone with the folds mirrored. 0 on every page before the last, 1 on Settings, and in between it
+ * follows the finger across the last swipe. `p` is the drag as a fraction of the page width (negative = towards the next
+ * page), so the position is `index - p`.
+ */
+export function undersideAmount(index: number, p: number, count = PAGES.length): number {
+  return Math.max(0, Math.min(1, index - p - (count - 2)))
+}

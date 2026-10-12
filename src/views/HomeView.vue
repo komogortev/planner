@@ -55,7 +55,7 @@ function onKey(e: KeyboardEvent): void {
 </script>
 
 <template>
-  <div class="h-full flex flex-col items-center pt-3" style="padding-bottom: 12dvh">
+  <div class="h-full flex flex-col items-center pt-3 pb-2">
     <!-- Device area: the largest dictophone (521x875 photo, 0.5954) that fits, centred. -->
     <div class="device-area flex-1 min-h-0 w-full">
       <div class="device" :style="{ backgroundImage: `url(${dictophone})` }">

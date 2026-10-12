@@ -197,7 +197,7 @@ scheduled lens with no session open
 | Fork | Status |
 |---|---|
 | Client host moves to own `*.pages.dev` origin at S4; OAuth origins and CSP follow | ✅ Q8 amended |
-| Version badge in prod after cut-over | ◻ re-entry S4 |
+| Version badge in prod after cut-over | ✅ kept 2026-10-11, removed 2026-10-12 (owner) |
 | Time zone and language (composer reads language from settings; windows need a zone) | ◻ H2 Q2; no Settings field yet ⚠ [D-23] |
 | Error / crash reporting from the phone (public repo, free tier) | ⚠ [D-24] |
 | Real-device test routine (pager vs scroll, keyboard over dictophone, gate sign-in) | ⚠ [D-25] |

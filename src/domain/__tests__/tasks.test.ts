@@ -9,6 +9,7 @@ import {
   rejectProposal,
   setTaskState,
   TASK_TEXT_MAX_CHARS,
+  upcomingTasks,
   type Task,
   type TaskProposal,
 } from '../tasks'
@@ -50,6 +51,21 @@ describe('Daily', () => {
     ]
     expect(dailyTasks(rows, '2026-10-11', TZ).map((t) => t.id)).toEqual(['b', 'a'])
     expect(dailyTasks(rows, '2026-10-12', TZ).map((t) => t.id)).toEqual(['b', 'a', 'c'])
+  })
+  it('Coming up: open tasks whose day is after today and within 7 days, never one Daily already lists', () => {
+    const rows = [
+      task({ id: 'today', due: '2026-10-12' }),
+      task({ id: 'late', followUpOn: '2026-10-09' }),
+      task({ id: 'deadline', due: '2026-10-18' }),
+      task({ id: 'edge', due: '2026-10-19' }),
+      task({ id: 'far', due: '2026-10-20' }),
+      task({ id: 'carried', due: '2026-10-30', followUpOn: '2026-10-13' }),
+      task({ id: 'done', due: '2026-10-14', state: 'done' }),
+      task({ id: 'dropped', due: '2026-10-14', state: 'dropped' }),
+    ]
+    expect(upcomingTasks(rows, '2026-10-12', TZ).map((t) => t.id)).toEqual(['carried', 'deadline', 'edge'])
+    const daily = new Set(dailyTasks(rows, '2026-10-12', TZ).map((t) => t.id))
+    expect(upcomingTasks(rows, '2026-10-12', TZ).some((t) => daily.has(t.id))).toBe(false)
   })
 })
 

@@ -6,7 +6,7 @@
 // existing Task is a proposal (`TaskProposal`) that only the owner's confirmation applies. **The model never overwrites
 // owner text** — `by` records who wrote `text` last, and an owner edit (`editedAt`) puts the Task into the next run.
 import { isIsoDate, isWellFormed } from './clean'
-import { localDay, oneLine, type Result } from './harness'
+import { addDays, localDay, oneLine, type Result } from './harness'
 import { uuid5 } from './uuid5'
 
 export const TASK_TEXT_MAX_CHARS = 200
@@ -78,6 +78,22 @@ export function dayOf(task: Task, timeZone: string): string {
 export function dailyTasks(tasks: Task[], today: string, timeZone: string): Task[] {
   return tasks
     .filter((t) => t.state === 'open' && dayOf(t, timeZone) <= today)
+    .map((t) => ({ t, day: dayOf(t, timeZone) }))
+    .sort((a, b) => (a.day !== b.day ? (a.day < b.day ? -1 : 1) : a.t.createdAt !== b.t.createdAt ? (a.t.createdAt < b.t.createdAt ? -1 : 1) : a.t.id < b.t.id ? -1 : 1))
+    .map((x) => x.t)
+}
+
+export const COMING_UP_DAYS = 7
+
+/**
+ * Coming up = the open Tasks whose day falls in the next `days` days, after today (calibration 2026-10-12). Without it a
+ * Task with a deadline is invisible until the deadline day: v2 has no op that turns a lead-time answer into a pick-up
+ * day, so the owner pulls it into today from this list. Same order as Daily.
+ */
+export function upcomingTasks(tasks: Task[], today: string, timeZone: string, days = COMING_UP_DAYS): Task[] {
+  const last = addDays(today, days)
+  return tasks
+    .filter((t) => t.state === 'open' && dayOf(t, timeZone) > today && dayOf(t, timeZone) <= last)
     .map((t) => ({ t, day: dayOf(t, timeZone) }))
     .sort((a, b) => (a.day !== b.day ? (a.day < b.day ? -1 : 1) : a.t.createdAt !== b.t.createdAt ? (a.t.createdAt < b.t.createdAt ? -1 : 1) : a.t.id < b.t.id ? -1 : 1))
     .map((x) => x.t)

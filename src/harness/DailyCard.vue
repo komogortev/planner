@@ -15,6 +15,7 @@ import type { Loop2 } from './useLoop2'
 const props = defineProps<{ loop: Loop2 }>()
 const tasks = computed(() => props.loop.day.value.tasks)
 const day = computed(() => props.loop.day.value.day)
+const upcoming = computed(() => props.loop.day.value.upcoming)
 
 const error = ref<string | null>(null)
 const busy = ref(false)
@@ -60,6 +61,8 @@ async function close(t: Task, label: string, state: TaskState, followUpOn: strin
 const done = (t: Task) => close(t, 'Done', 'done')
 const tomorrow = (t: Task) => close(t, 'Moved to tomorrow', 'open', addDays(day.value, 1))
 const drop = (t: Task) => close(t, 'Dropped', 'dropped')
+// Coming up → today: the owner's own pick-up day (a carry to today), so a deadline gets its lead time. Undo puts it back.
+const pullToday = (t: Task) => close(t, 'Moved to today', 'open', day.value)
 async function undoLast() {
   const u = undo.value
   if (u && (await act(() => setTaskState2(u.task, 'open', u.task.followUpOn)))) undo.value = null
@@ -140,6 +143,15 @@ async function saveIt() {
         <input v-model="newText" class="input in" placeholder="+ task" aria-label="New task" data-test="daily-add-input" @keydown.enter="add" />
         <button type="button" class="btn-ghost btn-xs" :disabled="busy || !newText.trim()" data-test="daily-add" @click="add">Add</button>
       </div>
+      <div v-if="upcoming.length" class="upcoming" data-test="daily-upcoming">
+        <p class="sub">Coming up</p>
+        <ul>
+          <li v-for="t in upcoming" :key="t.id" class="task soon" data-test="daily-upcoming-task">
+            <span class="text">{{ t.text }}<span v-if="t.followUpOn || t.due" class="due"> · {{ t.followUpOn ?? `due ${t.due}` }}</span></span>
+            <button type="button" class="btn-ghost btn-xs" aria-label="Today" title="Today" data-test="daily-pull-today" @click="pullToday(t)">Today</button>
+          </li>
+        </ul>
+      </div>
     </template>
 
     <div v-else data-test="daily-summary">
@@ -167,6 +179,8 @@ async function saveIt() {
 .task { display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0; border-top: 1px solid var(--glass-edge); }
 .text { flex: 1; text-align: left; font-size: 0.92rem; overflow-wrap: anywhere; background: none; color: inherit; padding: 0.1rem 0; }
 .due { font-size: 0.75rem; color: #fbbf24; }
+.upcoming { margin-top: 0.6rem; }
+.soon .text { font-size: 0.85rem; color: var(--glass-sub); }
 .acts { display: flex; gap: 0.25rem; flex-shrink: 0; }
 .in { padding: 0.3rem 0.6rem; font-size: 0.85rem; flex: 1; }
 .plan { font-size: 0.8rem; margin-top: 0.5rem; padding-left: 1rem; list-style: disc; display: flex; flex-direction: column; gap: 0.15rem; }
