@@ -239,7 +239,7 @@ describe('records on this device', () => {
     await db.questions.put(asked('q1') as never)
     await db.entryStates.put({ id: 'n1', state: 'done', followUpOn: null, by: 'owner', updatedAt: NOW, deletedAt: null, serverVersion: 4 })
     const copy = await localCopy()
-    expect(Object.keys(copy.records).sort()).toEqual(['assessments', 'entryStates', 'links', 'questions', 'reports', 'runs', 'widgets'])
+    expect(Object.keys(copy.records).sort()).toEqual(['assessments', 'entryStates', 'links', 'questions', 'reports', 'runs', 'taskProposals', 'tasks', 'widgets'])
     expect(copy.records.questions).toMatchObject([{ id: 'q1', text: 'Which shop?' }])
     expect(copy.records.entryStates).toHaveLength(1)
   })

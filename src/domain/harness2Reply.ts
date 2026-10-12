@@ -287,7 +287,7 @@ export function applyHarness2(output: HarnessOutput2, run: RunScope2, data: Harn
         const parts: TaskPart[] = []
         for (const p of op.into) {
           const pt = text(p.text, t.id)
-          const src = [...new Set(p.sourceEntryIds)].filter((id) => allowed.has(id))
+          const src = [...new Set(p.sourceEntryIds)].filter((id) => allowed.has(id)).slice(0, TASK_SOURCES_MAX) // as create and attach
           if (pt === null || src.length === 0) break
           parts.push({ text: pt, sourceEntryIds: src })
         }

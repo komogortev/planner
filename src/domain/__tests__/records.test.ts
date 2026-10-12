@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest'
 import type { Entry } from '../entry'
 import { answerQuestion, applyHarness, confirmLink, dismissQuestion, rejectLink, setNoteState } from '../harness'
 import { JOURNAL_LENS, validateReport, type JournalHeader } from '../journal'
-import { cleanRecord, flatten, isRecordKind, RECORD_DATA_MAX_BYTES, RECORD_KINDS, RECORD_TABLE } from '../records'
+import { applyHarness2 } from '../harness2Reply'
+import { ADDED_FIELDS, cleanRecord, flatten, isRecordKind, RECORD_DATA_MAX_BYTES, RECORD_KINDS, RECORD_TABLE, restoreAbsent } from '../records'
+import { answerRemoval, removalQuestion } from '../summary'
+import { addTask, confirmProposal, editTask, rejectProposal, setTaskState, type Task } from '../tasks'
 
 // Synthetic fixtures only (public repo).
 const NOW = '2026-10-11T18:00:00.000Z'
@@ -144,5 +147,172 @@ describe('cleanRecord — the rules', () => {
     expect(JSON.stringify(big).length).toBeGreaterThan(RECORD_DATA_MAX_BYTES - 20_000) // near the ceiling, as a sanity check
     expect(errorsOf('report', big)).toEqual([]) // 10 KB body + 200 × 200-char quotes still fits
     expect(errorsOf('report', { ...big, entryIds: Array.from({ length: 201 }, (_, i) => `n${i}`) })).toHaveLength(1)
+  })
+})
+
+// ── S3 v2 S2: the Worker contract for Tasks (HW-HARNESS §11, D-74) ─────────────────────────────────────────────────
+
+describe('the S3 v2 S1 → S2 contract: every record the v2 domain produces passes the validator unchanged', () => {
+  const t = (id: string, text: string, sourceEntryIds: string[], over: Partial<Task> = {}): Task => ({
+    id, text, sourceEntryIds, due: null, state: 'open', followUpOn: null, by: 'harness', editedAt: null, runId: 'run-0', createdAt: '2026-10-10T08:00:00.000Z',
+    updatedAt: '2026-10-10T08:00:00.000Z', ...over,
+  })
+  const entries = [note('n0', '2026-10-10T07:00:00.000Z', 'bulbs, plumber'), note('n1', '2026-10-11T08:00:00.000Z', 'bought the bulbs'), note('n2', '2026-10-11T09:00:00.000Z', 'the tap and the boiler')]
+  const tasks = [t('t1', 'Buy bulbs', ['n0']), t('t2', 'Fix the tap', ['n0']), t('t3', 'Call about tap and boiler', ['n0']), t('t4', 'Paint the door', ['n0']), t('t5', 'Paint the gate', ['n0'])]
+  const applied = applyHarness2(
+    {
+      tasks: [
+        { op: 'create', ref: null, text: 'Book the plumber', sourceEntryIds: ['n2'], due: '2026-10-15' },
+        { op: 'attach', taskId: 't2', sourceEntryIds: ['n2'], due: null },
+        { op: 'close', taskId: 't1', entryId: 'n1', evidence: 'bought the bulbs' },
+        { op: 'revise', taskId: 't2', text: 'Fix the kitchen tap', due: null },
+        { op: 'split', taskId: 't3', into: [{ text: 'Call about the tap', sourceEntryIds: ['n2'] }, { text: 'Call about the boiler', sourceEntryIds: ['n2'] }] },
+        { op: 'merge', taskIds: ['t4', 't5'], text: 'Paint the door and the gate' },
+      ],
+      questions: [{ taskId: 't2', entryId: null, text: 'Which tap?' }, { taskId: null, entryId: 'n2', text: 'Is the boiler urgent?' }],
+    },
+    { runId: 'run-1', composedAt: NOW, toAssessIds: ['n1', 'n2'], contextIds: ['n0'], reevaluateIds: [], taskIds: tasks.map((x) => x.id) },
+    { entries, assessments: [], questions: [], tasks, proposals: [], states: [] },
+    NOW, 'UTC',
+  )
+  const same = (kind: string, r: object) => expect(flatten(must(kind, withDeleted(r))), kind).toEqual(withDeleted(r))
+
+  // Known positive: the fixture really produces every op and both question subjects, so "all pass" is not vacuous.
+  it('tasks, the four proposal ops, task and note questions, task and note assessments', () => {
+    expect(applied.dropped).toEqual([])
+    expect(applied.proposals.map((p) => p.op).sort()).toEqual(['close', 'merge', 'revise', 'split'])
+    expect(applied.questions.map((q) => (q.taskId ? 'task' : 'note')).sort()).toEqual(['note', 'task'])
+    expect(applied.tasks.length).toBeGreaterThanOrEqual(2) // the created one and the one whose sources grew
+    for (const r of applied.tasks) same('task', r)
+    for (const r of applied.proposals) same('taskProposal', r)
+    for (const r of applied.questions) same('question', r)
+    for (const r of applied.assessments) same('assessment', r)
+  })
+
+  it('every state the owner moves a task or a proposal to', () => {
+    const added = addTask('00000000-0000-4000-8000-000000000001', 'Water the plants', '2026-10-12', NOW)
+    if (!added.ok) throw new Error(added.error)
+    const edited = editTask(added.value, { text: 'Water the garden' }, NOW)
+    const carried = setTaskState(tasks[0]!, 'open', NOW, '2026-10-13')
+    const done = setTaskState(tasks[0]!, 'done', NOW)
+    if (!edited.ok || !carried.ok || !done.ok) throw new Error('transition failed')
+    for (const r of [added.value, edited.value, carried.value, done.value]) same('task', r)
+    for (const p of applied.proposals) {
+      const c = confirmProposal(p, [...tasks, ...applied.tasks], NOW)
+      if (c.ok) expect(c.value.tasks.length, p.op).toBeGreaterThan(0) // the effect path, not the no-op for a task gone meanwhile
+      const r = rejectProposal(p)
+      if (!c.ok || !r.ok) throw new Error(`answer failed: ${p.op}`)
+      same('taskProposal', c.value.proposal)
+      same('taskProposal', r.value)
+      for (const x of c.value.tasks) same('task', x)
+    }
+  })
+
+  it('a split part citing more notes than a task may hold is capped, so the proposal and its confirmed tasks still store', () => {
+    const many = Array.from({ length: 200 }, (_, i) => `m${i}`)
+    const big = t('t6', 'Sort the paperwork', many)
+    const r = applyHarness2(
+      { tasks: [{ op: 'split', taskId: 't6', into: [{ text: 'Sort the bills', sourceEntryIds: [...many, 'n1'] }, { text: 'Sort the letters', sourceEntryIds: ['m0'] }] }], questions: [] },
+      { runId: 'run-2', composedAt: NOW, toAssessIds: ['n1'], contextIds: [], reevaluateIds: [], taskIds: ['t6'] },
+      { entries, assessments: [], questions: [], tasks: [big], proposals: [], states: [] },
+      NOW, 'UTC',
+    )
+    expect(r.proposals).toHaveLength(1)
+    expect(r.proposals[0]!.parts[0]!.sourceEntryIds).toHaveLength(200)
+    same('taskProposal', r.proposals[0]!)
+    const c = confirmProposal(r.proposals[0]!, [big], NOW)
+    if (!c.ok) throw new Error(c.error)
+    for (const x of c.value.tasks) same('task', x)
+  })
+
+  it('the removal question the summary writes, open and answered', () => {
+    const q = removalQuestion(tasks[0]!, '2026-10-11', NOW)
+    same('question', q)
+    const a = answerRemoval(q, tasks[0]!, 'drop', NOW)
+    if (!a.ok) throw new Error(a.error)
+    same('question', a.value.question)
+    if (a.value.task) same('task', a.value.task)
+  })
+
+  it('a v2 harness run carrying its task ids', () => {
+    same('run', { id: 'run-1', stage: 'harness', version: 2, widgetId: null, entryIds: ['n1'], ranAt: NOW, executor: 'copy-prompt', taskIds: ['t1', 't2'] })
+  })
+})
+
+describe('rows from before tasks (ADDED_FIELDS)', () => {
+  const v1 = { id: 'q-1', entryId: 'n1', text: 'Which shop?', state: 'open', answer: null, createdAt: NOW, answeredAt: null, runId: 'run-1', deletedAt: null }
+  const v2 = { ...v1, taskId: null, kind: 'harness' }
+
+  it('an older build\'s question, assessment and run are accepted with the keys absent, and kept absent, never defaulted', () => {
+    const q = must('question', v1)
+    expect(q.absent).toEqual(['taskId', 'kind'])
+    expect(flatten(q)).toEqual(v1) // no `taskId: null` added: the stored text stays what that build would replay
+    expect(must('assessment', { id: 'a', entryId: 'n1', harnessVersion: 1, runId: 'r', at: NOW, deletedAt: null }).absent).toEqual(['taskId'])
+    expect(must('run', { id: 'r', stage: 'harness', version: 1, widgetId: null, entryIds: [], ranAt: NOW, executor: 'copy-prompt', deletedAt: null }).absent).toEqual(['taskIds'])
+    expect(must('question', v2).absent).toEqual([])
+  })
+
+  it('only the added keys may be absent', () => {
+    const { text: _t, ...noText } = v2
+    expect(errorsOf('question', noText)).toEqual(['text: missing'])
+    expect(ADDED_FIELDS.task).toBeUndefined() // a new kind has no older rows: every key is required
+  })
+
+  it('exactly one subject; an older row names its note; taskId and kind come together; a removal is about a task', () => {
+    expect(errorsOf('question', { ...v2, entryId: null })).toEqual(['names a note or a task, exactly one'])
+    expect(errorsOf('question', { ...v2, taskId: 't1' })).toEqual(['names a note or a task, exactly one'])
+    expect(errorsOf('question', { ...v2, entryId: null, taskId: 't1' })).toEqual([])
+    expect(errorsOf('question', { ...v1, entryId: null })).toEqual(['a row from before tasks names its note'])
+    const { kind: _k, ...noKind } = v2
+    expect(errorsOf('question', noKind)).toEqual(['taskId and kind come together'])
+    expect(errorsOf('question', { ...v2, kind: 'removal' })).toEqual(['a removal question is about a task'])
+    const a = { id: 'a', entryId: 'n1', taskId: null, harnessVersion: 2, runId: 'r', at: NOW, deletedAt: null }
+    expect(errorsOf('assessment', a)).toEqual([])
+    expect(errorsOf('assessment', { ...a, taskId: 't1' })).toEqual(['names a note or a task, exactly one'])
+    expect(errorsOf('assessment', { ...a, entryId: null })).toEqual(['names a note or a task, exactly one'])
+  })
+
+  it('restoreAbsent: a key the push lacks takes the stored value; a present key stays the push\'s; the result is re-validated', () => {
+    const pushed = must('question', { ...v1, state: 'answered', answer: 'the corner one', answeredAt: NOW })
+    const stored = JSON.stringify(must('question', v2).fields)
+    const r = restoreAbsent(pushed, stored)
+    if (!r.ok) throw new Error(r.errors.join('; '))
+    expect(flatten(r.value)).toEqual({ ...v2, state: 'answered', answer: 'the corner one', answeredAt: NOW })
+    expect(JSON.stringify(r.value.fields)).toBe(JSON.stringify(must('question', flatten(r.value)).fields)) // spec order kept
+    expect(restoreAbsent(must('question', v2), JSON.stringify({ taskId: 't9', kind: 'removal' }))).toEqual({ ok: true, value: must('question', v2) })
+    expect(restoreAbsent(pushed, JSON.stringify(must('question', v1).fields))).toEqual({ ok: true, value: pushed }) // stored row is old too
+    expect(restoreAbsent(pushed, JSON.stringify({ taskId: 't9', kind: 'harness' })).ok).toBe(false) // note AND task: refused
+  })
+})
+
+describe('task and taskProposal rules', () => {
+  const task = { id: 't1', text: 'Buy bulbs', sourceEntryIds: ['n1'], due: null, state: 'open', followUpOn: null, by: 'harness', editedAt: null, runId: 'run-1', createdAt: NOW, updatedAt: NOW, deletedAt: null }
+  const close = { id: 'p1', op: 'close', taskIds: ['t1'], basis: ['Buy bulbs'], text: null, due: null, parts: [], entryId: 'n2', evidence: 'bought them', state: 'proposed', runId: 'run-1', createdAt: NOW, deletedAt: null }
+  const base = { ...close, entryId: null, evidence: '' }
+  const parts = [{ text: 'A', sourceEntryIds: ['n1'] }, { text: 'B', sourceEntryIds: ['n2'] }]
+
+  it('a task: only an open one carries a follow-up date; owner text has an edit time; every key is required', () => {
+    expect(errorsOf('task', task)).toEqual([])
+    expect(errorsOf('task', { ...task, state: 'done', followUpOn: '2026-10-12' })).toEqual(['only an open task carries a follow-up date'])
+    expect(errorsOf('task', { ...task, by: 'owner' })).toEqual(['owner text has an edit time'])
+    const { runId: _r, ...noRun } = task
+    expect(errorsOf('task', noRun)).toEqual(['runId: missing'])
+  })
+
+  it('each proposal op has its own shape, and the fields it does not use are empty', () => {
+    expect(errorsOf('taskProposal', close)).toEqual([])
+    expect(errorsOf('taskProposal', { ...close, evidence: '' })).toHaveLength(1)
+    expect(errorsOf('taskProposal', { ...close, text: 'x' })).toHaveLength(1)
+    expect(errorsOf('taskProposal', { ...base, op: 'revise', text: 'Buy LED bulbs' })).toEqual([])
+    expect(errorsOf('taskProposal', { ...base, op: 'revise' })).toHaveLength(1) // nothing to revise
+    expect(errorsOf('taskProposal', { ...base, op: 'split', parts })).toEqual([])
+    expect(errorsOf('taskProposal', { ...base, op: 'split', parts: parts.slice(0, 1) })).toHaveLength(1)
+    expect(errorsOf('taskProposal', { ...base, op: 'split', parts: [parts[0], { text: 'B', sourceEntryIds: [] }] })).toHaveLength(1)
+    const merge = { ...base, op: 'merge', taskIds: ['t1', 't2'], basis: ['A', 'B'], text: 'A and B' }
+    expect(errorsOf('taskProposal', merge)).toEqual([])
+    expect(errorsOf('taskProposal', { ...merge, taskIds: ['t1', 't1'] })).toHaveLength(1)
+    expect(errorsOf('taskProposal', { ...merge, basis: ['A'] })).toHaveLength(1)
+    expect(errorsOf('taskProposal', { ...merge, text: null })).toHaveLength(1)
+    expect(errorsOf('taskProposal', { ...merge, taskIds: ['t1'], basis: ['A'] })).toHaveLength(1)
   })
 })

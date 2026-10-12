@@ -143,7 +143,7 @@ describe('one cursor over entries and records', () => {
     expect(await rows('SELECT kind FROM records ORDER BY kind')).toEqual([{ kind: 'assessment' }, { kind: 'entryState' }])
   })
 
-  it('all seven kinds sharing one id in one push are applied together (the slot key is kind + id, not id)', async () => {
+  it('all nine kinds sharing one id in one push are applied together (the slot key is kind + id, not id)', async () => {
     const a = await account('a@example.com')
     const id = 'same-id'
     const lens = { id: 'builtin-daily-task-journal', name: 'Daily task journal', version: 1, shape: 'checklist', instruction: 'List commitments.' }
@@ -155,10 +155,12 @@ describe('one cursor over entries and records', () => {
       rec('widget', { id, name: 'W', kind: 'prompt', active: true, lens, lineage: null, createdAt: iso(), updatedAt: iso(), deletedAt: null }),
       rec('report', { id, widgetId: 'w', lensVersion: 1, runId: 'run-1', entryIds: [], body: '- [ ] x', citations: [], executor: 'copy-prompt', ranAt: iso(), origin: 'ai-observation', droppedCitations: 0, deletedAt: null }),
       rec('run', { id, stage: 'harness', version: 1, widgetId: null, entryIds: [], ranAt: iso(), executor: 'copy-prompt', deletedAt: null }),
+      rec('task', { id, text: 'Buy bulbs', sourceEntryIds: ['n1'], due: null, state: 'open', followUpOn: null, by: 'harness', editedAt: null, runId: 'run-1', createdAt: iso(), updatedAt: iso(), deletedAt: null }),
+      rec('taskProposal', { id, op: 'revise', taskIds: ['t1'], basis: ['Buy bulbs'], text: 'Buy LED bulbs', due: null, parts: [], entryId: null, evidence: '', state: 'proposed', runId: 'run-1', createdAt: iso(), deletedAt: null }),
     ]
     const res = await pushOk(a, batch)
-    expect(res.map((r) => r.status)).toEqual(Array(7).fill('applied')) // seven items, four rounds: only possible if none waits for another
-    expect(await count('records')).toBe(7)
+    expect(res.map((r) => r.status)).toEqual(Array(9).fill('applied')) // nine items, four rounds: only possible if none waits for another
+    expect(await count('records')).toBe(9)
   })
 
   it('two kinds with one id, both already stored: each replay is judged against its OWN row', async () => {
@@ -312,5 +314,86 @@ describe('the entry path is untouched', () => {
     expect(await count('entries')).toBe(1)
     expect(await count('records')).toBe(0)
     expect(await count('entry_revisions')).toBe(0)
+  })
+})
+
+// ── S3 v2 S2 (HW-HARNESS §11, D-74): Tasks, and a Worker that keeps serving the build from before them ─────────────
+
+describe('S3 v2: tasks, and the build from before them', () => {
+  type V2Question = ReturnType<typeof question> & { taskId: string | null; kind: string }
+  const v2q = (over: Record<string, unknown> = {}) => question({ taskId: null, kind: 'harness', ...over }) as V2Question
+  const task = (over: Record<string, unknown> = {}) => ({
+    id: `t-${++n}`, text: 'Buy bulbs', sourceEntryIds: ['n1'], due: null, state: 'open', followUpOn: null, by: 'harness', editedAt: null, runId: 'run-1',
+    createdAt: iso(), updatedAt: iso(), deletedAt: null, ...over,
+  })
+  const stored = async (id: string) => JSON.parse(((await rows('SELECT data FROM records WHERE id = ?', id))[0] as { data: string }).data) as Record<string, unknown>
+
+  it('a task and a proposal are stored, pulled back with their fields, and a replay is a duplicate', async () => {
+    const a = await account('a@example.com')
+    const t = task()
+    const p = { id: 'p-1', op: 'close', taskIds: [t.id], basis: ['Buy bulbs'], text: null, due: null, parts: [], entryId: 'n2', evidence: 'bought them', state: 'proposed', runId: 'run-1', createdAt: iso(), deletedAt: null }
+    expect((await pushOk(a, [rec('task', t), rec('taskProposal', p)])).map((r) => r.status)).toEqual(['applied', 'applied'])
+    expect((await pushOk(a, [rec('task', t), rec('taskProposal', p)])).map((r) => r.status)).toEqual(['duplicate', 'duplicate'])
+    const page = await pull(a)
+    expect(page.records).toEqual([
+      { recordKind: 'task', ...t, serverVersion: 1 },
+      { recordKind: 'taskProposal', ...p, serverVersion: 2 },
+    ])
+  })
+
+  it('a question about a task (no note) is stored; the same shape without taskId — an older row — is refused', async () => {
+    const a = await account('a@example.com')
+    const onTask = v2q({ entryId: null, taskId: 't1' })
+    expect((await pushOk(a, [rec('question', onTask)]))[0]).toMatchObject({ status: 'applied' })
+    const { taskId: _t, kind: _k, ...old } = onTask
+    expect((await pushOk(a, [rec('question', { ...old, id: 'q-old' })]))[0]).toMatchObject({ status: 'rejected', error: 'a row from before tasks names its note' })
+  })
+
+  // Known positive: the first push really writes the older row, so the duplicate below is judged against stored text.
+  it('the older build replaying its own question is a duplicate: absent keys are stored absent, not as defaults', async () => {
+    const a = await account('a@example.com')
+    const q = question()
+    expect((await pushOk(a, [rec('question', q)]))[0]).toMatchObject({ status: 'applied', serverVersion: 1 })
+    expect(await stored(q.id)).not.toHaveProperty('taskId')
+    expect(await pushOk(a, [rec('question', q, 1)])).toEqual([{ entityId: q.id, status: 'duplicate', serverVersion: 1 }])
+  })
+
+  it('the older build replaying a v2 note question it pulled (keys dropped) is a duplicate, not an edit with a revision', async () => {
+    const a = await account('a@example.com')
+    const q = v2q()
+    await pushOk(a, [rec('question', q)])
+    const { taskId: _t, kind: _k, ...asOldBuildHoldsIt } = q
+    expect(await pushOk(a, [rec('question', asOldBuildHoldsIt, 1)])).toEqual([{ entityId: q.id, status: 'duplicate', serverVersion: 1 }])
+    expect(await count('record_revisions')).toBe(0)
+  })
+
+  it('the older build answering a v2 question keeps taskId and kind on the stored row (merge for added keys only)', async () => {
+    const a = await account('a@example.com')
+    const q = v2q()
+    await pushOk(a, [rec('question', q)])
+    const { taskId: _t, kind: _k, ...old } = q
+    const answered = { ...old, state: 'answered', answer: 'the corner one', answeredAt: iso(5) }
+    expect((await pushOk(a, [rec('question', answered, 1)]))[0]).toMatchObject({ status: 'applied', serverVersion: 2 })
+    const row = await stored(q.id)
+    expect(row).toMatchObject({ taskId: null, kind: 'harness', state: 'answered', answer: 'the corner one' })
+    // Same text as the v2 build pushing the same answer: a later replay from either build is a duplicate.
+    expect(await pushOk(a, [rec('question', { ...q, state: 'answered', answer: 'the corner one', answeredAt: iso(5) }, 2)])).toEqual([{ entityId: q.id, status: 'duplicate', serverVersion: 2 }])
+  })
+
+  it('a push whose restored row would break a rule is refused, and the stored row is left as it was', async () => {
+    const a = await account('a@example.com')
+    const onTask = v2q({ entryId: null, taskId: 't1' })
+    await pushOk(a, [rec('question', onTask)])
+    const { taskId: _t, kind: _k, ...old } = onTask
+    expect((await pushOk(a, [rec('question', { ...old, entryId: 'n1' }, 1)]))[0]).toMatchObject({ status: 'rejected', error: 'names a note or a task, exactly one' })
+    expect(await stored(onTask.id)).toMatchObject({ entryId: null, taskId: 't1' })
+    expect(await count('record_revisions')).toBe(0)
+  })
+
+  it('an older run (no taskIds) and a v2 run are both stored', async () => {
+    const a = await account('a@example.com')
+    const run = { id: 'r-old', stage: 'harness', version: 1, widgetId: null, entryIds: [], ranAt: iso(), executor: 'copy-prompt', deletedAt: null }
+    const res = await pushOk(a, [rec('run', run), rec('run', { ...run, id: 'r-new', version: 2, taskIds: ['t1'] })])
+    expect(res.map((r) => r.status)).toEqual(['applied', 'applied'])
   })
 })
