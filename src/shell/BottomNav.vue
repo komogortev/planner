@@ -8,22 +8,43 @@ import { PAGES, pageIndex } from './pages'
 const open = ref(false)
 const route = useRoute()
 let timer: number | undefined
+// The tap that reveals the bar must not also choose a page: the bar slides in under the same finger, and the click that
+// ends that tap would land on a link (calibration 2026-10-12: it read as an unwanted swipe to the next page). A reveal by
+// touch swallows the next click on the bar, however long the finger stayed; a new touch on the bar is a real tap.
+let swallow = false
 
-function show(): void {
+function show(e?: Event): void {
+  if (!open.value && e?.type === 'touchstart') swallow = true
   open.value = true
   window.clearTimeout(timer)
-  timer = window.setTimeout(() => (open.value = false), 4000)
+  timer = window.setTimeout(hide, 4000)
 }
 function hide(): void {
+  swallow = false
   open.value = false
   window.clearTimeout(timer)
+}
+// A new touch on the bar is a real tap: it ends the swallow.
+function onNavPointerDown(): void {
+  swallow = false
+}
+// The overlay behind the open bar: the revealing tap's click can land on it while the bar slides in — not a tap outside.
+function onOverlayClick(): void {
+  if (swallow) swallow = false
+  else hide()
+}
+function guardClick(e: MouseEvent): void {
+  if (!swallow) return
+  swallow = false
+  e.preventDefault() // the browser's own link navigation
+  e.stopPropagation() // capture phase on <nav>: RouterLink's handler never runs
 }
 watch(() => route.path, hide)
 onBeforeUnmount(() => window.clearTimeout(timer))
 </script>
 
 <template>
-  <!-- Reveal zone: starts above the system inset and spans 12% of the screen height; touch or tap reveals. -->
+  <!-- Reveal zone: the bottom zone (--nav-zone), which page content never scrolls into; touch or tap reveals. -->
   <div
     v-if="!open"
     class="reveal-zone"
@@ -54,8 +75,8 @@ onBeforeUnmount(() => window.clearTimeout(timer))
       </template>
     </span>
   </div>
-  <div v-else class="fixed inset-0 z-30" @touchstart.passive="hide" @click="hide" />
-  <nav class="bottom-nav" :class="{ 'bottom-nav-open': open }" aria-label="Pages">
+  <div v-else class="fixed inset-0 z-30" @touchstart.passive="hide" @click="onOverlayClick" />
+  <nav class="bottom-nav" :class="{ 'bottom-nav-open': open }" aria-label="Pages" @pointerdown="onNavPointerDown" @click.capture="guardClick">
     <RouterLink
       v-for="p in PAGES"
       :key="p.to"
@@ -73,13 +94,13 @@ onBeforeUnmount(() => window.clearTimeout(timer))
   position: fixed;
   left: 0;
   right: 0;
-  bottom: env(safe-area-inset-bottom);
-  height: 12dvh; /* owner 2026-10-10: 10-15% of the screen height */
+  bottom: 0;
+  height: var(--nav-zone); /* calibration 2026-10-12: was 12dvh over the content; now its own band */
   z-index: 40;
   display: flex;
   justify-content: center;
-  align-items: flex-end;
-  padding-bottom: 30px; /* dots ride above the system gesture bar and the version badge */
+  align-items: center;
+  padding-bottom: env(safe-area-inset-bottom); /* dots centred in the band, above the system gesture bar */
 }
 .dots {
   display: flex;
@@ -123,8 +144,8 @@ onBeforeUnmount(() => window.clearTimeout(timer))
   display: flex;
   align-items: stretch;
   gap: 4px;
-  height: calc(12dvh + env(safe-area-inset-bottom)); /* same 12% as the reveal zone */
-  padding: 8px 12px env(safe-area-inset-bottom);
+  height: var(--nav-zone); /* the same band as the reveal zone */
+  padding: 4px 12px calc(4px + env(safe-area-inset-bottom));
   background: rgb(var(--s-900));
   border-top: 1px solid rgb(var(--s-700));
   transform: translateY(100%);

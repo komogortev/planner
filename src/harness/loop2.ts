@@ -10,7 +10,7 @@ import { composeHarness2, readAssessment, readQuestion, selectCandidates2, type 
 import { applyHarness2, parseHarnessOutput2, type Applied2 } from '@/domain/harness2Reply'
 import type { RunRecord } from '@/domain/records'
 import { answerRemoval, applySummary, planSummary, type RemovalChoice, type SummaryPlan } from '@/domain/summary'
-import { addTask, confirmProposal, dailyTasks, editTask, rejectProposal, setTaskState, type Task, type TaskProposal, type TaskState } from '@/domain/tasks'
+import { addTask, confirmProposal, dailyTasks, editTask, upcomingTasks, rejectProposal, setTaskState, type Task, type TaskProposal, type TaskState } from '@/domain/tasks'
 import { uuid } from '@/utils/uuid'
 import { deviceZone, PendingStorageError, type Composed, type Outcome } from './loop'
 import { clearPending, loadPending2, pendingIsOtherVersion, savePending } from './pending'
@@ -41,10 +41,10 @@ export async function loadHarnessData2(): Promise<HarnessData2> {
 }
 
 /** Daily (D-69): the open Tasks whose day has come, in the device's zone. */
-export function today(data: Pick<HarnessData2, 'tasks'>, now = new Date().toISOString()): { day: string; tasks: Task[] } {
+export function today(data: Pick<HarnessData2, 'tasks'>, now = new Date().toISOString()): { day: string; tasks: Task[]; upcoming: Task[] } {
   const zone = deviceZone()
   const day = localDay(now, zone)
-  return { day, tasks: dailyTasks(data.tasks, day, zone) }
+  return { day, tasks: dailyTasks(data.tasks, day, zone), upcoming: upcomingTasks(data.tasks, day, zone) }
 }
 
 /** What the next run would carry, without composing one (the strip's count): composing replaces the waiting header. */

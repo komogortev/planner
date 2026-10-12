@@ -1,5 +1,6 @@
 import { storedToken } from '@/auth/signIn'
-import { createRouter, createWebHistory } from 'vue-router'
+import { START_LOCATION, createRouter, createWebHistory } from 'vue-router'
+import { landing, landingRedirect } from '@/shell/landing'
 
 // Signed-out visitors see only the sign-in screen. The check is "is there a token" (works offline); a token the
 // server rejects is cleared where /me is called (Settings), which sends the user back here.
@@ -71,7 +72,13 @@ export const router = createRouter({
   ],
 })
 
-router.beforeEach((to) => {
-  if (skipAuth || to.meta.public) return true
-  return storedToken() ? true : { name: 'signin' }
+router.beforeEach((to, from) => {
+  if (skipAuth || to.meta.public) return firstLanding(to.path, from)
+  return storedToken() ? firstLanding(to.path, from) : { name: 'signin' }
 })
+
+/** Opening the app lands on the page the owner chose (Settings → Opens on); later navigation is never redirected. */
+function firstLanding(path: string, from: { matched: unknown[] }): true | string {
+  if (from !== START_LOCATION) return true
+  return landingRedirect(path, landing.value) ?? true
+}

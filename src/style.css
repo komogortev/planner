@@ -7,6 +7,13 @@
      hovering page sheets (src/shell/Pager.vue). Dark is the default; the light theme (Settings → Appearance) sets
      html[data-theme='light'] (src/theme/theme.ts). */
   :root {
+    /* The bottom zone (calibration 2026-10-12): the nav bar and the strip that reveals it. Page content never scrolls
+       into it, so a tap there is always the nav and a tap on content never is. */
+    --nav-zone: calc(40px + env(safe-area-inset-bottom));
+    --shadow-room: 64px; /* below a scroll box's content: the cards' --float-1 reaches 28px + 34px blur */
+    /* Settings = the cloth's underside (Pager.vue): a darker tone over the backdrop, plus the folds mirrored. */
+    --underside-tint: rgb(6 4 2 / 0.55);
+    --underside-folds: 0.35;
     color-scheme: dark;
     --grain-size: 240px; /* the weave's tile edge. 3x larger (720px) lost the cloth feel — the folds layer below carries the large scale */
     --twill-step: 3px; /* diagonal twill pitch */
@@ -47,6 +54,8 @@
   /* Light = the light gate photo's cloth: a muted steel-blue wool (sampled from it: #88a1ae lit, #7390a1 in shade),
      cool ink for text, a cool glass tint. Everything that was warm cream/brown in the first light theme is cool here. */
   html[data-theme='light'] {
+    --underside-tint: rgb(16 28 36 / 0.42);
+    --underside-folds: 0.35;
     color-scheme: light;
     /* Ink = the darkest blues sampled from the light gate photo (pocket seams, fold shadows): #051b28 · #223843 · #354751 ·
        #4a6475 · #688394. Saturated deep navy-teal, not neutral black. */

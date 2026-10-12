@@ -4,7 +4,7 @@
 </script>
 
 <template>
-  <div class="max-w-2xl mx-auto w-full px-6 py-8">
+  <div class="max-w-2xl mx-auto w-full px-6 pt-8">
     <h2 class="text-xl font-bold">Widgets</h2>
     <p class="text-sm text-slate-500 mt-1">All widgets, activated or not, will list here.</p>
     <div class="card mt-6 text-center">

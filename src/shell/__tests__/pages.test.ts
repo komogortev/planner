@@ -10,6 +10,7 @@ import {
   layerShiftCss,
   pageIndex,
   pullCss,
+  undersideAmount,
   pullTransform,
   settle,
 } from '../pages'
@@ -154,5 +155,18 @@ describe('layerShift (the cloth keeps where the swipe ended)', () => {
   })
   it('the CSS is a translate in pager widths', () => {
     expect(layerShiftCss(-0.25)).toBe('-25cqw 0')
+  })
+})
+
+describe('the underside (Settings)', () => {
+  it('is 0 before the last swipe, 1 on Settings, and follows the finger across the last swipe only', () => {
+    expect(undersideAmount(0, 0)).toBe(0)
+    expect(undersideAmount(1, 0)).toBe(0)
+    expect(undersideAmount(2, 0)).toBe(0)
+    expect(undersideAmount(3, 0)).toBe(1)
+    expect(undersideAmount(2, -0.5)).toBeCloseTo(0.5) // half way from Widgets to Settings
+    expect(undersideAmount(3, 0.25)).toBeCloseTo(0.75) // dragging back from Settings
+    expect(undersideAmount(1, -0.9)).toBe(0) // Dashboard → Widgets never darkens
+    expect(undersideAmount(3, -0.3)).toBe(1) // rubber-band past the end stays at 1
   })
 })

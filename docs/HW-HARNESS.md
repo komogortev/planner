@@ -294,3 +294,16 @@ typed text; no undo for ✓/✕; blur-save racing a row tap; double-tap drop/res
 run panel lost its paste; a stale comment — all fixed, the first four re-checked in the browser. **Not covered:** no
 component tests (the UI state is checked by hand, above); the first write of the `task` kind to production (DEVICE-CHECKS 26).
 
+
+**Calibration 1 (2026-10-12, owner + Claude, on `c53b999`).** Production held no v2 run yet (D1: 0 `task` rows), so this
+pass is the owner's look at live plus a local walk with synthetic data. Found: **a Task with a deadline is invisible until
+its due day** — v2 has no op that turns the lead-time answer (D-66) into a pick-up day (`revise` carries text and due only),
+so §10 C2's failure came back. Fixed on the device, no contract change: Daily gains **Coming up** (open Tasks whose day is in
+the next 7 days) with a **Today** tap that carries the Task to today (`by` the owner, undoable). The prompt still asks the
+lead-time question; its answer re-opens the Task as scope input, as any answer does. Owner layout calls (same day): the
+questions strip is fixed under the Dashboard's scrolling cards and shows only when there is something to act on —
+questions, changes waiting for a run (the first run is what creates questions, so this is the strip's only other way in),
+or a run in progress — one line at rest, tap = the question, Get feedback = the run (the strip grows upwards); Daily on
+top; the app opens on the Dashboard by default (Settings → Opens on: Dashboard · Record);
+Settings is the cloth's underside (darker, folds mirrored); the bottom band is the nav's alone and the version badge is
+gone. DEVICE-CHECKS 27–31.

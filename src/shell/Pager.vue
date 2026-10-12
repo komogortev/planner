@@ -5,7 +5,7 @@ import HomeView from '@/views/HomeView.vue'
 import DashboardView from '@/views/DashboardView.vue'
 import WidgetsView from '@/views/WidgetsView.vue'
 import SettingsView from '@/views/SettingsView.vue'
-import { PAGES, PARALLAX, backdropShift, backdropWidth, dragOffset, layerShift, layerShiftCss, pageIndex, pullCss, pullTransform, settle } from './pages'
+import { PAGES, PARALLAX, backdropShift, backdropWidth, dragOffset, layerShift, layerShiftCss, pageIndex, pullCss, pullTransform, settle, undersideAmount } from './pages'
 
 // The four main pages sit side by side on one track. The track follows the finger while dragging and eases to the
 // settled page on release, so the next page pushes the current one away (native page-swap feel). The route is the
@@ -98,6 +98,9 @@ const accentsStyle = computed(() => ({
   transform: pullCss(pullTransform(pull.value, 'accents')),
 }))
 
+// Settings is the cloth's underside: darker, folds mirrored, fading in across the last swipe (follows the finger).
+const undersideStyle = computed(() => ({ '--u': undersideAmount(index.value, pull.value) }))
+
 const trackStyle = computed(() => ({
   transform: `translate3d(calc(${-index.value * 100}% + ${dragPx.value}px), 0, 0)`,
 }))
@@ -114,6 +117,10 @@ const trackStyle = computed(() => ({
     <div class="backdrop t-base" :class="{ 'track-dragging': dragging }" :style="backdropStyle" aria-hidden="true">
       <div class="t-folds pulled" :class="{ 'pulled-live': dragging }" :style="foldsStyle" />
       <div class="t-accents pulled" :class="{ 'pulled-live': dragging }" :style="accentsStyle" />
+      <!-- The underside sits inside the backdrop so the mirrored folds blend with the cloth itself (a wrapper with its
+           own opacity would isolate the blend); each layer carries the opacity on its own. -->
+      <div class="underside u-tint" :class="{ 'track-dragging': dragging }" :style="undersideStyle" />
+      <div class="underside u-folds" :class="{ 'track-dragging': dragging }" :style="undersideStyle" />
       <div class="t-weave" />
     </div>
     <div class="track" :class="{ 'track-dragging': dragging }" :style="trackStyle">
@@ -142,6 +149,24 @@ const trackStyle = computed(() => ({
   transition: transform 320ms cubic-bezier(0.22, 0.85, 0.28, 1);
   will-change: transform;
   pointer-events: none;
+}
+.underside {
+  position: absolute;
+  pointer-events: none;
+  transition: opacity 320ms cubic-bezier(0.22, 0.85, 0.28, 1); /* the pages' easing: it lands with the page */
+}
+.u-tint {
+  inset: 0;
+  opacity: var(--u);
+  background: var(--underside-tint);
+}
+.u-folds {
+  /* The same folds seen from the other side: mirrored, blended with the cloth like the front ones. */
+  inset: -4% -16%;
+  background: var(--folds) center / cover no-repeat;
+  mix-blend-mode: var(--fold-blend);
+  transform: scaleX(-1);
+  opacity: calc(var(--u) * var(--underside-folds)); /* full folds lift the tone back to the front's: a light hand */
 }
 .pulled {
   /* The shape is springy: it overshoots a touch on release, like cloth settling back into its folds. The position
@@ -173,21 +198,25 @@ const trackStyle = computed(() => ({
    drop-shadow, the cards' box-shadow in style.css). The sheet is only the page's own scroll container. */
 .sheet {
   position: relative;
-  height: calc(100% + 80px); /* the page's own 100% plus the 24px above and 56px below it */
+  /* Content stops where the bottom band begins (--nav-zone, calibration 2026-10-12): at the end of a scroll the lowest
+     card at most touches the band. The box itself is made larger than the page on every side (negative margin =
+     padding) so shadows fall naturally — 24px above, 56px at the sides, the band plus --shadow-room below — and only the
+     screen edge (.pager) cuts them. */
+  height: calc(100% + 24px + var(--shadow-room));
   overflow-x: hidden; /* never a horizontal scroller: horizontal drags are the pager's */
-  overflow-y: auto; /* a scroll box clips on both axes, so it is made wider/taller than the page: */
+  overflow-y: auto;
   overscroll-behavior: none; /* no edge glow / scroll chaining from the page */
   /* touch-action does not inherit past a scroll container, so the pager's pan-y has to be restated here; without it
      the browser treats a horizontal drag on the page as its own scroll and fights the pager for the gesture. */
   touch-action: pan-y;
-  /* ...the page keeps its layout (negative margin = padding), but shadows get 56px of room on every side, spilling
-     into the neighbouring page when they fall that way. Only the screen edge itself (.pager) cuts them. */
-  margin: -24px -56px -56px;
-  padding: 24px 56px 56px;
+  margin: -24px -56px calc(-1 * var(--shadow-room));
+  padding: 24px 56px calc(var(--nav-zone) + var(--shadow-room));
+  scroll-padding-bottom: calc(var(--nav-zone) + var(--shadow-room)); /* a focused input is scrolled above the band */
 }
 @media (prefers-reduced-motion: reduce) {
   .track,
   .backdrop,
+  .underside,
   .pulled {
     transition-duration: 1ms;
   }

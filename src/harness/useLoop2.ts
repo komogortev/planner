@@ -10,7 +10,7 @@ const EMPTY: HarnessData2 = { entries: [], assessments: [], questions: [], tasks
 export interface Loop2 {
   data: Ref<HarnessData2>
   now: Ref<string>
-  day: ComputedRef<{ day: string; tasks: Task[] }>
+  day: ComputedRef<{ day: string; tasks: Task[]; upcoming: Task[] }>
   items: ComputedRef<StripItem[]>
   work: ComputedRef<{ notes: number; tasks: number }>
 }

@@ -5,7 +5,7 @@ install) on the owner's Android phone **in the installed app**, and write the da
 Desktop browser emulation of a phone does not count: it cannot judge touch, keyboards, or the browser's own gestures
 (D-25, [DECISION-TREE.md](DECISION-TREE.md)).
 
-Before you start: the badge at the bottom reads the commit you mean to test. If it does not, close and reopen the app
+Before you start: Settings → App info → Version reads the commit you mean to test (the bottom badge was removed 2026-10-12). If it does not, close and reopen the app
 until it does (a new version loads on the second open), or tap Reload on the update banner.
 
 | # | Check | Do | Pass when | Last result |
@@ -36,5 +36,10 @@ until it does (a new version loads on the second open), or tap Reload on the upd
 | 24 | Edit summary | Edit summary: change a line, add a line, delete a line → Preview → Save | The preview names each change; the deleted line's Task is on tomorrow and a "Drop it, or keep it for later?" question is in the strip; Drop it drops it | local dev, synthetic data, 2026-10-12 |
 | 25 | A prompt copied before the update | Copy a prompt on the old Dashboard, let the app update, paste the reply | Refused: "for a prompt from the previous version… Copy a new prompt"; nothing stored | not run |
 | 26 | A Task reaches the server | After 21, open the app on a second device (or read D1) | The Tasks and questions are there (first prod write of the `task` kind; smoke cannot check it) | not run |
+| 27 | Bottom band | Scroll Settings to its end; on the Dashboard tap ✕ on the lowest note; press the dots band once, also with a slow press | The lowest card stops at the band and its shadow falls into it uncut; ✕ drops the note and nothing else happens; a press on the band shows the bar and does **not** change page, however long the press (calibration 2026-10-12) | local dev (DOM measures + tap guard), 2026-10-12; not run on a phone |
+| 28 | Questions dock | Dashboard with open questions: scroll the cards to the end; tap the line, type half an answer, tap the line, tap it again; tap Get feedback | The strip shows only with questions, changes waiting or a run in progress; it never scrolls: the cards stop at its top edge, their shadows run under it; at rest one line (Questions · count · Get feedback); the half answer is still there; Get feedback grows the strip upwards with the run; a pasted reply survives collapsing it | local dev, 2026-10-12; not run on a phone |
+| 29 | Settings underside | Swipe slowly from Widgets to Settings and back | The cloth darkens and its folds turn over across that one swipe, following the finger; Home → Dashboard → Widgets never darken | local dev (end states), 2026-10-12; the drag not run on a phone |
+| 30 | Opens on | Settings → Opens on → Record; close the app fully and reopen; then Dashboard and reopen | Opens on Home, then on the Dashboard; a fresh install opens on the Dashboard | local dev, 2026-10-12 |
+| 31 | Coming up | A Task with a deadline within 7 days: Daily → Coming up → Today; then Undo | It moves onto Daily (its due date still shown); Undo puts it back under Coming up | local dev, synthetic data, 2026-10-12 |
 
 An iPhone round trip of the sign-in (H1-ENTRIES Q2) is separate and deferred until an invitee uses one.

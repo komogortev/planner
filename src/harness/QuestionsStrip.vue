@@ -10,6 +10,14 @@ import type { Loop2 } from './useLoop2'
 // The questions strip (HW-HARNESS §11 Dashboard v2, D-70): one question or proposal at a time, under the Task it isolates;
 // the list view shows them all. "Get feedback" is the harness run (copy-prompt, D-63): new notes and the Tasks changed since
 // their last run ("N changes waiting for feedback", D-72 until an automatic run exists).
+//
+// Docked under the Dashboard's scrolling cards (owner, calibration 2026-10-12): a suggestion to start a context round,
+// never a demand on the eye. Fixed below the cards' scroll box, like a pager under a list: it never scrolls and never
+// covers a card at rest. Shown only when there is something to act on — questions in the queue, changes waiting for a
+// run (the only way to start the first run, which is what creates questions), or a run in progress. Three states:
+// `line` — one line, Questions · count · Get feedback; `open` (tap the line) — the waiting count and the current
+// question; `work` (Get feedback) — the run as well, the strip growing upwards (capped; it scrolls inside). A run waiting
+// for its reply opens in `work`, so the paste box is there when the owner comes back.
 const props = defineProps<{ loop: Loop2 }>()
 const items = computed(() => props.loop.items.value)
 // The current item is followed by id, not position: a sync or a tap elsewhere reorders the queue, and the owner may be
@@ -31,12 +39,18 @@ const index = computed(() => Math.max(0, items.value.findIndex((i) => i.id === c
 const current = computed(() => items.value.find((i) => i.id === currentId.value) ?? items.value[0] ?? null)
 const expanded = ref(false)
 const waiting = ref(pendingHarness2() !== null)
-const feedback = ref(waiting.value)
+type Mode = 'line' | 'open' | 'work'
+const mode = ref<Mode>(waiting.value ? 'work' : 'line')
+const onLine = () => (mode.value = mode.value === 'line' ? 'open' : 'line')
+const onFeedback = () => (mode.value = mode.value === 'work' ? 'open' : 'work')
+const visible = computed(() => items.value.length > 0 || changes.value > 0 || waiting.value || mode.value === 'work')
 const changes = computed(() => props.loop.work.value.notes + props.loop.work.value.tasks)
-const changesLabel = computed(() => {
+// One kind: say it once ("3 new notes waiting for feedback"); both: the total, then the parts.
+const changesLine = computed(() => {
   const { notes, tasks } = props.loop.work.value
   const parts = [notes ? `${notes} new note${notes === 1 ? '' : 's'}` : '', tasks ? `${tasks} changed task${tasks === 1 ? '' : 's'}` : ''].filter(Boolean)
-  return parts.join(' · ')
+  if (parts.length < 2) return `${parts[0] ?? ''} waiting for feedback`
+  return `${changes.value} changes waiting for feedback: ${parts.join(' · ')}`
 })
 
 const next = () => {
@@ -73,36 +87,41 @@ async function store(reply: string) {
 </script>
 
 <template>
-  <section class="card strip" data-test="questions-strip" aria-label="Questions">
-    <header class="flex items-center justify-between gap-2">
-      <h3 class="font-semibold text-sm">
+  <section v-if="visible" class="card strip" :class="`strip-${mode}`" data-test="questions-strip" :data-mode="mode" aria-label="Questions">
+    <header class="line" data-test="strip-line" @click="onLine">
+      <button type="button" class="title" :aria-expanded="mode !== 'line'" data-test="strip-toggle">
         Questions <span class="count" data-test="strip-count">{{ items.length }}</span>
-      </h3>
-      <div class="flex gap-1.5">
-        <button v-if="expanded || items.length > 1" type="button" class="btn-ghost btn-xs" :aria-pressed="expanded" data-test="strip-expand" @click="expanded = !expanded">
-          {{ expanded ? 'One at a time' : 'All' }}
-        </button>
-        <button type="button" class="btn-ghost btn-xs" :aria-pressed="feedback" data-test="strip-feedback" @click="feedback = !feedback">Get feedback</button>
-      </div>
+      </button>
+      <button type="button" class="btn-ghost btn-xs" :aria-pressed="mode === 'work'" data-test="strip-feedback" @click.stop="onFeedback">Get feedback</button>
     </header>
-    <p v-if="changes" class="waiting" data-test="strip-changes">{{ changes }} change{{ changes === 1 ? '' : 's' }} waiting for feedback · {{ changesLabel }}</p>
 
-    <template v-if="!expanded">
-      <div v-if="current" class="mt-2">
-        <StripItemView :key="current.id" :item="current" />
-        <div v-if="items.length > 1" class="flex items-center justify-between mt-1.5">
-          <span class="sub">{{ index + 1 }} of {{ items.length }}</span>
-          <button type="button" class="btn-ghost btn-xs" data-test="strip-next" @click="next">Next</button>
+    <!-- v-show, not v-if: a half-typed answer must survive collapsing the strip to its line. -->
+    <div v-show="mode !== 'line'">
+      <p v-if="changes" class="waiting" data-test="strip-changes">{{ changesLine }}</p>
+      <template v-if="!expanded">
+        <div v-if="current" class="mt-2">
+          <StripItemView :key="current.id" :item="current" />
+          <div v-if="items.length > 1" class="flex items-center justify-between mt-1.5">
+            <span class="sub">{{ index + 1 }} of {{ items.length }}</span>
+            <span class="flex gap-1.5">
+              <button type="button" class="btn-ghost btn-xs" :aria-pressed="false" data-test="strip-expand" @click="expanded = true">All</button>
+              <button type="button" class="btn-ghost btn-xs" data-test="strip-next" @click="next">Next</button>
+            </span>
+          </div>
         </div>
+        <p v-else class="sub mt-1" data-test="strip-empty">No open questions.</p>
+      </template>
+      <div v-else class="mt-2">
+        <div class="list" data-test="strip-list">
+          <StripItemView v-for="it in items" :key="it.id" :item="it" />
+          <p v-if="!items.length" class="sub" data-test="strip-empty">No open questions.</p>
+        </div>
+        <button type="button" class="btn-ghost btn-xs mt-1.5" :aria-pressed="true" data-test="strip-expand" @click="expanded = false">One at a time</button>
       </div>
-      <p v-else class="sub mt-1" data-test="strip-empty">No open questions.</p>
-    </template>
-    <div v-else class="list mt-2" data-test="strip-list">
-      <StripItemView v-for="it in items" :key="it.id" :item="it" />
-      <p v-if="!items.length" class="sub" data-test="strip-empty">No open questions.</p>
     </div>
 
-    <div v-show="feedback" class="mt-2" data-test="strip-run">
+    <!-- v-show, not v-if: a run's pasted reply must survive collapsing the strip. -->
+    <div v-show="mode === 'work'" class="mt-2" data-test="strip-run">
       <RunStep title="Read my new notes and changed tasks" :waiting="waiting" :compose="compose" :check="check" :store="store" />
     </div>
   </section>
@@ -110,9 +129,24 @@ async function store(reply: string) {
 
 <style scoped>
 .strip { color: var(--glass-text); }
+.strip-line { padding: 0.55rem 0.75rem 0.55rem 1rem; } /* one line: the dock at rest */
+.strip-open { padding: 0.9rem 1rem; }
+.strip {
+  position: relative;
+  z-index: 1; /* above the cards' shadow room, which runs under it */
+  max-height: 72%; /* grows upwards in work mode, never off the top */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  touch-action: pan-y; /* a scroll container: restate pan-y or a sideways swipe on it fights the pager */
+  /* The theme's solid surface (the nav bar's), not glass: the last card's shadow and a card mid-scroll pass under it. */
+  background: rgb(var(--s-900) / 0.96);
+}
+.line { position: sticky; top: 0; z-index: 1; background: inherit; } /* stays in reach while a long run scrolls */
+.line { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; cursor: pointer; }
+.title { flex: 1; text-align: left; font-weight: 600; font-size: 0.875rem; background: none; color: inherit; padding: 0.15rem 0; }
 .count { font-size: 0.75rem; color: var(--glass-sub); margin-left: 0.25rem; }
 .waiting { font-size: 0.78rem; color: #fbbf24; margin-top: 0.3rem; }
 .sub { font-size: 0.75rem; color: var(--glass-sub); }
-.list { display: flex; flex-direction: column; gap: 0.75rem; max-height: 60dvh; overflow-y: auto; }
+.list { display: flex; flex-direction: column; gap: 0.75rem; max-height: 60dvh; overflow-y: auto; touch-action: pan-y; }
 .btn-xs { padding: 0.3rem 0.65rem; font-size: 0.78rem; border-radius: 0.6rem; }
 </style>
