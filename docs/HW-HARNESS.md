@@ -245,3 +245,16 @@ to leave dropped notes out (P4).
 writes: kinds `task` and `taskProposal`; `question` gains `taskId` and `kind`, and its `entryId` becomes nullable;
 `assessment` gains `taskId`, and its `entryId` becomes nullable; both get an exactly-one rule; the `run` record gains the
 task ids it sent. The validators read old rows without the new fields as before.
+
+**S2 built (2026-10-11), Worker contract + device storage, no UI, no client writes a Task yet.** Shared validator
+(`domain/records.ts`): kinds `task` and `taskProposal` with the per-op proposal shape; `taskId` on questions and assessments
+with the exactly-one rule; question `kind` (a removal is about a Task); run `taskIds`; `ADDED_FIELDS` + `restoreAbsent`
+(D-77). Worker push restores absent added keys against the row it read, each round. Dexie v6 (`tasks`, `taskProposals`,
+`taskId` index, cursor reset). Correction to the scope as first stated: the "older build drops keys, then erases them" loss
+is narrower than it sounded — a v5 build refuses any row with `entryId: null`, so the only v2 rows it can hold carry
+`taskId: null, kind: harness`, the values `readQuestion` defaults to anyway. What the restore prevents is a mixed-shape row
+and a replay counted as an edit (revision + conflict). CodeReview: one real mismatch (a split part could cite > 200 notes,
+refused by the validator), fixed in the domain with a test; two tests that could not fail, fixed or removed. 17 guards
+mutated, all red. **Not covered:** restore combined with a lost push race (each half tested alone). **Latent for S3:** the
+Dexie `questions`/`assessments` tables are still typed with the v1 rows (`entryId: string`); S3 switches them to the
+stored v2 types before any code reads a Task question from them.

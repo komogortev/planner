@@ -15,6 +15,7 @@ import type { Entry } from '@/domain/entry'
 import type { Assessment, EntryState, Link, Question } from '@/domain/harness'
 import type { Report } from '@/domain/journal'
 import type { RunRecord, SyncFields, WidgetRecord } from '@/domain/records'
+import type { Task, TaskProposal } from '@/domain/tasks'
 import { BUILT_IN_CATEGORIES, USER_CATEGORY_SORT_ORDER } from './categorySeed'
 import {
   backfillCommitmentRow,
@@ -59,6 +60,8 @@ export class PlannerDb extends Dexie {
   widgets!: Table<WidgetRecord & SyncFields, string>
   reports!: Table<Report & SyncFields, string>
   runs!: Table<RunRecord & SyncFields, string>
+  tasks!: Table<Task & SyncFields, string>
+  taskProposals!: Table<TaskProposal & SyncFields, string>
 
   /** `name` is only ever overridden by tests that need a second device. */
   constructor(name = 'personal-planner') {
@@ -207,6 +210,19 @@ export class PlannerDb extends Dexie {
       // A build from before v5 asks a newer Worker for changes, ignores the `records` it cannot read, and still moves its cursor
       // past them. Left alone, that device would upgrade with a cursor that is already beyond records it never stored. Pulling
       // again from 0 once is safe (upserts are idempotent; a queued local edit is never overwritten) and costs one fetch.
+      .upgrade((tx) => tx.table('syncMeta').toCollection().modify((m: { cursor: number }) => { m.cursor = 0 }))
+
+    // v6 — S3 v2 Tasks (HW-HARNESS §11): two new tables, and a `taskId` index on questions and assessments (a Task's thread).
+    // Rows from before carry no `taskId` and are simply not in that index. The cursor goes back to 0 for the same reason as
+    // v5, and one more: a v5 build drops the keys it does not know (`taskId`, `kind`) from the rows it pulls, and refuses a
+    // row whose `entryId` is null. Pulling again replaces those copies with the full rows.
+    this.version(6)
+      .stores({
+        assessments: 'id, entryId, taskId, runId, serverVersion',
+        questions: 'id, entryId, taskId, state, serverVersion',
+        tasks: 'id, state, due, followUpOn, serverVersion',
+        taskProposals: 'id, state, runId, serverVersion',
+      })
       .upgrade((tx) => tx.table('syncMeta').toCollection().modify((m: { cursor: number }) => { m.cursor = 0 }))
 
     // ---------------------------------------------------------------------

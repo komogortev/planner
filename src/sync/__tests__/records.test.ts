@@ -302,3 +302,23 @@ describe('writeRecords', () => {
     expect((await a.db.questions.get('q-del'))!.deletedAt).toBe(NOW)
   })
 })
+
+describe('S3 v2 kinds (HW-HARNESS §11)', () => {
+  // Without a Dexie table for a kind, the pull transaction would throw on the first row of it and every pull would fail.
+  it('a device receives tasks, proposals and task questions into their own tables; older question rows keep their absent keys', async () => {
+    const task = { id: 't1', text: 'Buy bulbs', sourceEntryIds: ['n1'], due: null, state: 'open', followUpOn: null, by: 'harness', editedAt: null, runId: 'run-1', createdAt: NOW, updatedAt: NOW, deletedAt: null }
+    server.seedRecord('task', task)
+    server.seedRecord('taskProposal', { id: 'p1', op: 'revise', taskIds: ['t1'], basis: ['Buy bulbs'], text: 'Buy LED bulbs', due: null, parts: [], entryId: null, evidence: '', state: 'proposed', runId: 'run-1', createdAt: NOW, deletedAt: null })
+    server.seedRecord('question', { ...question({ id: 'q-task', entryId: null, taskId: 't1', kind: 'harness' }), deletedAt: null })
+    server.seedRecord('question', { ...question({ id: 'q-old' }), deletedAt: null })
+    const b = device(server)
+    await b.engine.run()
+    expect(b.engine.state.phase).toBe('idle')
+    expect(await b.db.tasks.toArray()).toMatchObject([{ ...task, serverVersion: 1 }])
+    expect(await b.db.taskProposals.toArray()).toMatchObject([{ id: 'p1', op: 'revise', serverVersion: 2 }])
+    expect(await b.db.questions.where('taskId').equals('t1').primaryKeys()).toEqual(['q-task'])
+    expect(await b.db.questions.get('q-old')).toMatchObject({ id: 'q-old', entryId: 'n1' })
+    expect(await b.db.questions.get('q-old')).not.toHaveProperty('taskId')
+    expect((await b.db.syncMeta.toArray())[0]!.cursor).toBe(4)
+  })
+})

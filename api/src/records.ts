@@ -5,15 +5,17 @@
 // (compare-and-swap on the row's own `server_version`), so a push that raced another device's is retried, never applied blindly.
 //
 // Differences from entries, all on purpose: no cleaning of free text beyond what `cleanRecord` does (the validator is the
-// shared authority); content is compared as the validator's fixed-order JSON text.
-import { cleanRecord, isRecordKind, type CleanRecord, type RecordKind } from '../../src/domain/records'
+// shared authority); content is compared as the validator's fixed-order JSON text; a key added to a kind later
+// (`ADDED_FIELDS`) that a push lacks keeps the stored value instead of being erased (`restoreAbsent`).
+import { cleanRecord, isRecordKind, restoreAbsent, type CleanRecord, type RecordKind } from '../../src/domain/records'
 import { COLS, toEntry, type PushResult, type Raw } from './entries'
 
 // Rounds per push: several mutations of one record in a request take one round each, and a lost race costs one more.
 const ROUNDS = 4
 
 type Stored = { data: string; deletedAt: string | null; version: number }
-type Item = { index: number; recordKind: RecordKind; id: string; baseVersion: number | null; rec: CleanRecord; data: string }
+// `pushed` is the record as validated; `rec`/`data` are what this round would write (after `restoreAbsent` against the row read).
+type Item = { index: number; recordKind: RecordKind; id: string; baseVersion: number | null; pushed: CleanRecord; rec: CleanRecord; data: string }
 type Apply = { kind: 'apply'; deletedAt: string | null; cur: Stored | undefined; revision: boolean; conflict: boolean }
 type Decision = { kind: 'duplicate'; version: number } | Apply
 
@@ -72,7 +74,7 @@ export async function pushRecords(db: D1Database, userId: string, mutations: unk
     if (!cleaned.ok) return reject(cleaned.errors.join('; '))
     if (cleaned.value.id !== entityId) return reject('entityId: does not match the payload id')
     if (r.op === 'delete' && cleaned.value.deletedAt === null) return reject('delete: payload has no deletedAt')
-    todo.push({ index, recordKind: r.recordKind, id: entityId, baseVersion: baseVersion as number | null, rec: cleaned.value, data: JSON.stringify(cleaned.value.fields) })
+    todo.push({ index, recordKind: r.recordKind, id: entityId, baseVersion: baseVersion as number | null, pushed: cleaned.value, rec: cleaned.value, data: JSON.stringify(cleaned.value.fields) })
   })
 
   for (let round = 0; round < ROUNDS && todo.length > 0; round++) {
@@ -90,7 +92,16 @@ export async function pushRecords(db: D1Database, userId: string, mutations: unk
 
     const plans: { item: Item; d: Apply }[] = []
     for (const item of current) {
-      const d = decide(rows.get(slot(item.recordKind, item.id)), item)
+      const cur = rows.get(slot(item.recordKind, item.id))
+      // Recomputed every round from what was pushed: a lost race means the stored row (and its values) may have changed.
+      const restored = cur ? restoreAbsent(item.pushed, cur.data) : { ok: true as const, value: item.pushed }
+      if (!restored.ok) {
+        results[item.index] = { entityId: item.id, status: 'rejected', error: restored.errors.join('; ') }
+        continue
+      }
+      item.rec = restored.value
+      item.data = JSON.stringify(restored.value.fields)
+      const d = decide(cur, item)
       if (d.kind === 'duplicate') results[item.index] = { entityId: item.id, status: 'duplicate', serverVersion: d.version }
       else plans.push({ item, d })
     }
