@@ -1,11 +1,11 @@
 # Personal Planner — STATE
 
 ## SNAPSHOT
-- **Phase/Last:** H1 built. **2026-10-11: HW-HARNESS S3a thin loop built** (Dashboard journal card: harness + journal copy-paste steps, per-note questions/proposals, owner pick-up date). S1 (#68) + S2 (#69) deployed (Worker `f098057`, D1 `0008`). D-60…D-68, [HW-HARNESS.md](HW-HARNESS.md) §9. Vibe-code mode.
-- **Working:** prod = Worker `f098057` + D1 `0008` (S3a is client-only, no Worker change); `pnpm check` app 477 · Worker 169; the loop clicked through on a local build with synthetic notes.
-- **Broken:** nothing known. **Not verified:** a harness run on production from the phone (first real model reply, first record push from a signed-in device, the clipboard write on a phone); DEVICE-CHECKS 10, 13–17; a live D1 restore; the tester's first sync.
-- **Blocker:** none. The Worker-before-client gate for S3 is met.
-- **Next:** (1) owner runs the loop once on the phone with real notes (step 1 → answer → step 2). (2) S3b: evening pass (D-65, D-67), Widgets create + activate, DEVICE-CHECKS 18–20. (3) S4 exit week. Deferred: §9 point 9 (re-entry: first client record delete).
+- **Phase/Last:** H1 built. **2026-10-11: S3a loop shipped (#75–#77), first real harness run on prod; owner then reshaped S3 → v2 (D-69…D-73): the harness derives stored Tasks, Daily = editable summary of today's Tasks, questions one at a time per Task.** Spec [HW-HARNESS.md](HW-HARNESS.md) §11. Vibe-code mode.
+- **Working:** prod = Worker `f098057` + D1 `0008`, Pages `663ea57` (S3a loop + scroll fix); `pnpm check` app 477 · Worker 169. Owner's prod run: 12 notes → 10 questions, 1 carry, stored, answered on the device.
+- **Broken:** nothing known. **Not verified:** that the owner's answers reached D1 (no server read made); clipboard write on a phone; DEVICE-CHECKS 10, 13–20; a live D1 restore; the tester's first sync.
+- **Blocker:** none.
+- **Next:** (1) S3 v2 S1 in a fresh session: pure domain `tasks.ts` + harness v2 (create · attach · close · revise · split · merge), summary diff (D-71), removal question (D-73) — input = §11 only. (2) S2 Worker kind `task` + question `taskId`, deployed before the client. (3) S3 Dashboard v2. Parked: local branch `feat/s3b-dashboard-loop` (strip + day logic to reuse); §9 point 9.
 ---
 
 ## Context
@@ -60,6 +60,8 @@
 ## Decision log
 
 Full log: PROJECT.md → Decisions log. Latest:
+
+- 2026-10-11 (s3v2) — The first real harness run (owner, prod: 12 notes, 10 questions, 1 carry) showed the S3a surface was wrong: notes as the face, per-note answering, Daily as notes or a second paste. Owner model: notes are input; the harness derives stored Tasks (D-69, supersedes D-39); questions stay one at a time per Task, a reply may re-scope or thread (D-70, the answer sheet I proposed was rejected — questions are the signal of topic isolation); Daily = editable summary matched to Tasks (D-71); removal carries + asks, never drops unconfirmed (D-73); auto re-run on edit by default is a direction needing H5 (D-72). S3b direction (a) (Daily lists notes) parked unmerged. Also shipped: reply box without spellcheck (#76), Dashboard scroll over the notes card (#77, overscroll containment on a box with no height).
 
 - 2026-10-11 (s3a) — S3 scoped by the owner as a POC of the loop's interaction/data model on the existing infrastructure (carte blanche on the client; the irreversible edge is what reaches D1). Built the thin loop: two copy-prompt steps on the Dashboard, pending header in localStorage, questions/proposals on notes, report as plain lines. Found: D-66's answer cannot become a second carry (derived link id) → owner pick-up date in UI. CodeReview: 6 improvements, 5 fixed (storage-refused compose, stale pick-up field, silent tap errors, clipboard-read prompt, preview passing what Store refuses), 1 deferred with re-entry (§9 point 9). Widget activation not built: the journal shows unconditionally.
 
