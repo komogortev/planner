@@ -32,12 +32,12 @@ cannot call the first account's model (negative control).
 | D-80 | **Owner, same (an assumption he accepted with D-79): the owner's account first.** Invitees get model registration after S2 acceptance, once the tester notice says where a run sends notes (§7) | — |
 | D-81 | **Claude: two request formats, no SDKs.** `openai-chat` (OpenAI-compatible chat completions: OpenAI, OpenRouter, Gemini's compatibility endpoint, Mistral, Groq, and any custom base URL) and `anthropic-messages`. Plain `fetch` in the Worker, matching the S1 choice of own code over libraries (bundle size, CPU) | — |
 | D-82 | **Claude: the device composes and checks; the Worker only calls the model.** An on-demand run sends the composed prompt; the reply comes back to the same `check` and `store` a paste goes through (`RunStep.vue`). No new parser, no Worker-side apply until S3 | — |
-| D-83 | **Claude: a paid reply is never lost.** The Worker writes the reply to the call row before it answers. A client that dropped the connection (the phone killed the app) fetches it by call id; the run's `waiting` state, which already exists for a late paste, covers it | — |
+| D-83 | **Claude: a paid reply is never lost.** *(Amended 2026-10-12 by D-91: the call runs as a Workflow instance; the device fetches the reply by call id.)* The Worker writes the reply to the call row before it answers. A client that dropped the connection (the phone killed the app) fetches it by call id; the run's `waiting` state, which already exists for a late paste, covers it | — |
 | D-84 | **Claude: the key is bound to its endpoint.** Changing a model's format or base URL clears its key; the user enters it again. The base URL is inside the encryption's associated data, so a stored key cannot be decrypted for any other host. Why: a stolen session token must not be able to redirect a stored key to the attacker's server | — |
 | D-85 | **Claude: a cut-off reply is refused before parsing.** `finish_reason: "length"` (openai-chat) or `stop_reason: "max_tokens"` (anthropic-messages) marks the call `cut_off`; nothing is parsed or stored. This lands with the cut-off parser tests (workspace `docs/architecture/06`, A7), which come due with the first API-driven run | — |
 | D-86 | **Claude: code decides when a model runs, and a cap bounds it.** A Worker rate limit on the call route plus a daily call cap per user (default in §10 O3). It protects the user's own money from a client loop or a stolen session. The model never schedules itself (06 L8) | — |
 | D-87 | **Claude: the call row is the audit for model calls (A5).** It holds who, which model, which stage and run, how many notes, prompt bytes, the provider's token counts, the outcome and the duration. **No prompt text is stored.** The reply text is kept until the device stores the run or 7 days pass, then cleared | — |
-| D-88 | **Claude: provider error bodies are never passed through or logged.** They are mapped to a category (`key_rejected`, `rate_limited`, `model_not_found`, `provider_down`, `bad_request`). Some providers echo part of the key in an error message | — |
+| D-88 | **Claude: provider error bodies are never passed through or logged.** They are mapped to a category (`key_rejected`, `rate_limited`, `model_not_found`, `model_unavailable` (D-92), `provider_down`, `bad_request`). Some providers echo part of the key in an error message | — |
 | D-89 | **Owner, 2026-10-12 (O1): the word is Routine** — a declared run (harness, a widget's run, a lens) bound to a time. `Routine`, table `routines`; ARCHITECTURE A8's scheduler registry is `ROUTINES` | VOCABULARY's 2026-10-09 rejection of *Routine* as a name for Lens |
 | D-90 | **Owner, same (O6): D-22 (list own sessions, sign out everywhere) is built before any invitee can register a model** | D-22's re-entry "invitee #4" |
 
@@ -75,8 +75,11 @@ check(reply) → preview → store
 PATCH /ai/calls/:id {stored: true} ────▶ reply text cleared
 ```
 
-A dropped connection: on the next open, the run is `waiting`; the device calls `GET /ai/calls/:id` and continues from
-`check`. Whether the provider call survives the client disconnecting is the first thing S1 measures (§9, step 0).
+**Since the spike (D-91):** `POST /ai/calls` does not wait for the provider. It writes the `pending` row, starts a Workflow
+instance that makes the call and writes the reply, and answers at once with the call id; the device polls
+`GET /ai/calls/:id`. The diagram's middle column runs inside that Workflow step. A closed app loses nothing: on the next
+open the run is `waiting` and the device continues from `check`. Measured in [H5-S1-SPIKE.md](H5-S1-SPIKE.md): a
+harness-sized call takes 10–58 s; a request handler dies with its client and `waitUntil` lasts ~30 s after it.
 
 ## 5. Data
 
@@ -102,7 +105,7 @@ any `model` run is written (§10 O5).
 | `PUT /me/models/:id` | Create or edit label, format, base URL, model id, max tokens; `key` optional. A format or base URL change without a new key clears the key (D-84) | session; base URL is `https:`, no user info, hostname not an IP literal and not `localhost` |
 | `DELETE /me/models/:id` | Remove the model and its key | session |
 | `POST /me/models/:id/test` | A minimal call (a few tokens) to prove key, endpoint and model id; returns ok or a D-88 category | session; counts toward the cap |
-| `POST /ai/calls` | Run the model on a prompt the device composed (§4) | session · rate limit · daily cap · prompt size ceiling |
+| `POST /ai/calls` | Start a model call on a prompt the device composed: writes the row, starts the Workflow, answers with the call id (§4, D-91) | session · rate limit · daily cap · prompt size ceiling |
 | `GET /ai/calls/:id`, `PATCH /ai/calls/:id` | Fetch a reply after a drop; mark it stored (clears the text) | session; own rows only |
 
 **Secret.** `MODEL_KEY_SECRET` (32 random bytes, base64) — a new Worker secret the owner creates in a secrets file and loads with
@@ -132,7 +135,7 @@ any `model` run is written (§10 O5).
 | `src/domain/records.ts` (shared validator) | `executor: 'model'`, optional `modelId`, `callId` | — | — |
 | Worker `api/src/` | new `models.ts`, `aiCalls.ts`, provider adapters, crypto; routes in `index.ts` | — | cron handler, Worker-side compose and apply |
 | D1 | `0009` | — | schedule rows (A11 amendment D-44) |
-| `wrangler.toml` | new rate limit binding; new secret | — | `[triggers] crons` |
+| `wrangler.toml` | new rate limit binding; new secret; `[[workflows]]` binding (D-91) | — | `[triggers] crons` |
 | Device | — | Settings → Models; executor switch in `RunStep.vue`; run picker | notification permission (D-16) |
 | `public/_headers` CSP | none | none | Web Push endpoints only if D-16 is built |
 | Tester notice | — | updated before invitees (D-80) | — |
@@ -144,7 +147,7 @@ undone by turning the executor switch back to `manual`.
 
 | Slice | Content | Known positive first |
 |---|---|---|
-| **S1 step 0 — spike** | From the deployed Worker: one call per format against a real provider with the owner's key; **a 60-second provider call with the client disconnected after 2 s** (does `ctx.waitUntil` keep it alive?); CPU per call; free-plan cron limits for S3 | the disconnected call either lands in D1 or the fallback is chosen with evidence (Durable Object, or keep the connection open and accept the loss) |
+| **S1 step 0 — spike** ✅ closed 2026-10-12 ([H5-S1-SPIKE.md](H5-S1-SPIKE.md); D-91 … D-93) | From the deployed Worker: one call per format against a real provider with the owner's key; **a 60-second provider call with the client disconnected after 2 s** (does `ctx.waitUntil` keep it alive?); CPU per call; free-plan cron limits for S3 | the disconnected call either lands in D1 or the fallback is chosen with evidence (Durable Object, or keep the connection open and accept the loss) |
 | **S1 Worker** | `0009`; models CRUD with encrypted key; `/ai/calls` with both adapters, D-85 cut-off handling, D-88 error mapping, cap; A13 coverage; validator accepts `model` | key-never-returned test; second-account negative control; cut-off reply → `cut_off` and no reply kept; endpoint change clears key; a provider error echoing a fake key never appears in a response or log |
 | **S1 parser tests** | 06 A7: a reply cut off mid-string is refused by both parsers, nothing stored | the cut-off fixture fails before the test is trusted |
 | **S2 client** | Settings → Models (add, test, remove); executor switch and model picker on Run; waiting-state recovery via `GET /ai/calls/:id`; DEVICE-CHECKS rows | a run with a wrong key shows `key_rejected` and stores nothing |
@@ -158,7 +161,7 @@ undone by turning the executor switch back to `manual`.
 | O1 ✅ D-89 | **The word for a declared run on a schedule.** The owner says "routine". VOCABULARY rejected *Routine* as a name for Lens because it "implies a schedule", which is exactly this concept; ARCHITECTURE A8 says `SCHEDULES` in code | **Routine** for the concept, in UI and code (`Routine`, table `routines`); A8's `SCHEDULES` renamed with it. **Owner, 2026-10-12: Routine** | — |
 | O2 | Which presets the Models page offers | Anthropic, OpenAI, Google Gemini (compatibility endpoint), OpenRouter, plus "Custom (OpenAI-compatible)". A preset fills format and base URL; the user types the model id | Claude |
 | O3 | Default daily call cap | 30 calls per user per day, changeable in Settings. A full day is about 3–6 calls (harness, Daily, a few re-runs) | Claude |
-| O4 | Whether a provider call survives a client disconnect | Measured in S1 step 0, not assumed | S1 |
+| O4 ✅ D-91 | Whether a provider call survives a client disconnect | Measured: only inside a Workflow. Every model call runs as one | — |
 | O5 | What a device running an older build does when it pulls a run with `executor: 'model'` | Read the pull path in S1; if the old validator rejects the row, deploy the accepting client a day before the first model run (the owner's devices update on open) | S1 |
 | O6 ✅ D-90 | Pull D-22 (list sessions, sign out everywhere) forward from "invitee #4" | **Owner, 2026-10-12: yes**, built before any invitee can register a model (D-80): a stored key raises what a stolen session is worth | — |
 | O7 | Prompts were tuned on Claude; other models may miss the JSON shape | Measure, don't pre-tune: `ai_calls` outcome per model gives the refusal rate. If refusals appear, 06 A5 (accept exactly one `{…}` span) is the first lever | Claude |
