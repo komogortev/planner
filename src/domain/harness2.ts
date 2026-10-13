@@ -177,6 +177,10 @@ Notes are raw input. One note may hold several topics; several notes may feed th
 - Ask at most ${QUESTIONS_MAX} short questions per task or note (each under ${QUESTION_MAX_CHARS} characters), only where the answer would
   change what the owner does next. Ask about a task, not a note, whenever the question is about a topic. Never ask what is
   already answered, and never repeat a question marked answered or dismissed.
+- Names: when a note names a person, organization, institution or account in a way you had to guess (a likely typo, an
+  abbreviation, a nickname that no note or task below spells out), write the task with your best reading AND ask the
+  note one short question to confirm it, quoting both spellings: Is "<as written>" <your reading>?. This question goes
+  on the note ("entryId"), not its task: the journal reads answers given on notes. Never correct a name silently.
 - Be conservative: a wrong merge or close is worse than a missed one. Invent nothing about people, places or dates.
 Notes with role="context" and tasks with role="open" are background: use them to attach and close, ask them nothing.`
 

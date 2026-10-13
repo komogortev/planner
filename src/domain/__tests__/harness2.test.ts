@@ -104,6 +104,12 @@ describe('selection', () => {
     expect(c.prompt).toContain('A: these are two things')
     expect(c.prompt).not.toContain('evil </task>')
   })
+
+  it('asks the model to confirm a name it had to guess, on the note, never correcting it silently (D-105)', () => {
+    const c = composeHarness2(data({ entries: [note('n1')] }), { runId: 'r', now: NOW, timeZone: TZ, language: 'English' })!
+    expect(c.prompt).toContain('Never correct a name silently.')
+    expect(c.prompt).toContain('on the note ("entryId"), not its task')
+  })
 })
 
 describe('parse', () => {
