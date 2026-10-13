@@ -1,8 +1,10 @@
 // H1-S1 spike sign-in: the app half of the Worker's /auth flow (api/src/auth.ts).
 // Kept for S3, which replaces the test screen with the real account UI.
 
+// A parallel session's dev pair runs its own Worker on another port (RUNBOOK "Parallel sessions"): VITE_API_URL points the
+// dev app at it. Development only; a production build always talks to the deployed Worker.
 export const API_URL = import.meta.env.DEV
-  ? 'http://localhost:8787'
+  ? ((import.meta.env.VITE_API_URL as string | undefined) ?? 'http://localhost:8787')
   : 'https://planner-api.komogortev.workers.dev'
 
 export type Provider = 'github' | 'google'

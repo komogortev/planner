@@ -4,6 +4,7 @@
 // `writeRecords` (one transaction, outbox included). It never starts a sync itself: callers call `syncSoon()`.
 // Dashboard v2 (QuestionsStrip, DailyCard) is its only caller; `loop.ts` keeps the optional journal (stage 2) and v1's reads.
 import { db } from '@/db'
+import { executorFields, type ModelVia } from '@/ai/runWith'
 import { writeRecords, type RecordWrite, type WriteResult } from '@/db/records'
 import { answerQuestion, dismissQuestion, localDay } from '@/domain/harness'
 import { composeHarness2, readAssessment, readQuestion, selectCandidates2, type HarnessData2, type Question, type RunHeader2 } from '@/domain/harness2'
@@ -97,7 +98,7 @@ export const pendingHarness2 = (): RunHeader2 | null => loadPending2()
  * transaction and the run stops waiting. The check is recomputed from the tables at the moment of storing, so a stale
  * preview can never store more than a fresh check allows.
  */
-export async function applyHarnessReply2(text: string, opts: { store: boolean; now?: string }): Promise<Outcome<{ applied: Applied2; header: RunHeader2; written: number }>> {
+export async function applyHarnessReply2(text: string, opts: { store: boolean; now?: string; via?: ModelVia }): Promise<Outcome<{ applied: Applied2; header: RunHeader2; written: number }>> {
   const header = loadPending2()
   if (!header) {
     return pendingIsOtherVersion()
@@ -116,7 +117,7 @@ export async function applyHarnessReply2(text: string, opts: { store: boolean; n
     widgetId: null,
     entryIds: [...header.toAssessIds, ...header.contextIds],
     ranAt: header.composedAt,
-    executor: 'copy-prompt',
+    ...executorFields(opts.via),
     taskIds: header.taskIds,
   }
   const w = await writeRecords(

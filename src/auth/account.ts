@@ -4,6 +4,7 @@ import { db } from '@/db'
 import { recordTables } from '@/db/records'
 import { RECORD_KINDS, RECORD_TABLE } from '@/domain/records'
 import { clearDraft, flushDrafts, hasDraft, isBlank, loadDraft } from '@/capture/draft'
+import { clearRunWith } from '@/ai/runWith'
 import { clearPending } from '@/harness/pending'
 import { syncEngine } from '@/sync'
 import { API_URL, revokeSession, signOutLocally, storedToken, storeToken } from './signIn'
@@ -132,6 +133,7 @@ async function clearAccountData(o: { refuseIfUnsynced?: boolean; expect?: { entr
     if (r.kind === 'cleared') {
       clearDraft()
       clearPending() // a waiting run names this account's notes
+      clearRunWith() // this account's model choice and waiting calls (H5)
     }
     return r
   } catch (err) {

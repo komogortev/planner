@@ -78,6 +78,21 @@ describe('harness v2 on the device', () => {
     expect(pendingHarness2()).toBeNull()
   })
 
+  it('H5: a reply from a registered model stores a model run naming its model and call; a paste names neither', async () => {
+    await startHarness2(NOW)
+    expect((await applyHarnessReply2(firstReply, { store: true, now: LATER, via: { modelId: 'm1', callId: 'c-1' } })).ok).toBe(true)
+    const [run] = await db.runs.toArray()
+    expect(run).toMatchObject({ executor: 'model', modelId: 'm1', callId: 'c-1' })
+    const queued = (await db.outbox.toArray()).find((o) => o.recordKind === 'run')
+    expect(queued?.payload).toMatchObject({ executor: 'model', modelId: 'm1', callId: 'c-1' }) // what the Worker will validate
+    await Promise.all([db.outbox.clear(), ...recordTables(db).map((t) => t.clear())])
+    await startHarness2(NOW)
+    await applyHarnessReply2(firstReply, { store: true, now: LATER })
+    const [paste] = await db.runs.toArray()
+    expect(paste.executor).toBe('copy-prompt')
+    expect(paste).not.toHaveProperty('modelId') // left out, as an older build would: the shared rule accepts both
+  })
+
   it('negative control: Check without Store writes nothing and the run keeps waiting', async () => {
     await startHarness2(NOW)
     const r = await applyHarnessReply2(firstReply, { store: false, now: LATER })

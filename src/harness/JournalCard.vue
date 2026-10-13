@@ -8,23 +8,25 @@ import { JOURNAL_LENS } from '@/domain/journal'
 import { syncSoon } from '@/sync'
 import { applyJournalReply, deviceZone, pendingJournal, startJournal } from './loop'
 import { ageLabel, reportLines } from './report'
+import { opensOnArrival, type ModelVia } from '@/ai/runWith'
 import RunStep, { type Check } from './RunStep.vue'
 
 // The AI journal (HW-HARNESS §11 P2: optional since Dashboard v2): a written summary of today's notes, one copy-prompt round
 // trip (D-63). Daily itself needs no paste — the harness run lives in the questions strip. Collapsed unless a run is waiting.
 const journalWaiting = ref(pendingJournal() !== null)
+const journalRunId = pendingJournal()?.runId ?? null
 
 const reports = useLiveQuery(() => db.reports.where('widgetId').equals(JOURNAL_LENS.id).sortBy('ranAt'), [])
 const latest = computed(() => [...reports.value].reverse().find((r) => !r.deletedAt) ?? null)
 const lines = computed(() => (latest.value ? reportLines(latest.value.body) : []))
 const writtenToday = computed(() => latest.value !== null && localDay(latest.value.ranAt, deviceZone()) === localDay(new Date().toISOString(), deviceZone()))
-const open = ref(journalWaiting.value)
+const open = ref(opensOnArrival('widget', journalRunId))
 
 async function composeJournalPrompt() {
   const out = await startJournal()
   journalWaiting.value = out !== null
   if (!out) return null
-  return { prompt: out.prompt, notes: out.header.entryIds.length, note: out.header.truncated ? `${out.header.truncated} older notes were left out (cap).` : undefined }
+  return { prompt: out.prompt, notes: out.header.entryIds.length, note: out.header.truncated ? `${out.header.truncated} older notes were left out (cap).` : undefined, runId: out.header.runId }
 }
 async function checkJournal(reply: string): Promise<Check> {
   const r = await applyJournalReply(reply, { store: false })
@@ -38,8 +40,8 @@ async function checkJournal(reply: string): Promise<Check> {
     ],
   }
 }
-async function storeJournal(reply: string) {
-  const r = await applyJournalReply(reply, { store: true })
+async function storeJournal(reply: string, via?: ModelVia) {
+  const r = await applyJournalReply(reply, { store: true, via })
   if (!r.ok) return r
   journalWaiting.value = false
   syncSoon()
@@ -77,7 +79,7 @@ function onBody(e: MouseEvent) {
       </div>
       <p v-else class="sub" data-test="journal-empty">No summary yet.</p>
       <div data-test="step-journal">
-        <RunStep title="Write today's summary" :waiting="journalWaiting" :compose="composeJournalPrompt" :check="checkJournal" :store="storeJournal" />
+        <RunStep title="Write today's summary" stage="widget" :waiting="journalWaiting" :waiting-run-id="journalRunId" :compose="composeJournalPrompt" :check="checkJournal" :store="storeJournal" />
       </div>
     </div>
   </section>

@@ -201,6 +201,14 @@ describe('stage 2 on the device', () => {
     expect(await counts()).toMatchObject({ reports: 1, runs: 1, outbox: 2 })
   })
 
+  it('H5: a model-written report and its run both say executor model', async () => {
+    await startJournal(NOW)
+    const r = await applyJournalReply(report(), { store: true, now: LATER, via: { modelId: 'm1', callId: 'c-2' } })
+    expect(r).toMatchObject({ ok: true, value: { report: { executor: 'model' } } })
+    expect((await db.reports.toArray())[0]).toMatchObject({ executor: 'model' })
+    expect((await db.runs.toArray())[0]).toMatchObject({ executor: 'model', modelId: 'm1', callId: 'c-2' })
+  })
+
   it('a report the record validator would refuse fails at Check, not after it (over 200 citations)', async () => {
     // 201 distinct quotes that all occur in the note (identical ones are deduped, so each pair of words is its own quote)
     await db.entries.put(note(OLD, '2026-10-11T11:00:00.000Z', Array.from({ length: 210 }, (_, i) => `item${i}`).join(' ')))

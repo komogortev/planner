@@ -40,7 +40,11 @@ Local sign-in needs an invite in the **local** D1 (the `.wrangler/` state):
 One session, one worktree off `origin/main` (`git worktree add E:/Projects/apps/planner-wt-<tag> origin/main`, a short
 path). Never `git switch` in the shared checkout. After creating one, run `pnpm install --frozen-lockfile` and
 `pnpm --dir api install --frozen-lockfile`. Sign-in works only from `http://localhost:5176/planner/` (the API's
-allow-list); other ports can test UI with a planted token but cannot sign in. The Browser pane allows five dev servers per
+allow-list); other ports can test UI with a planted token but cannot sign in. A full dev pair on other ports: the Worker with
+`wrangler dev --port 8788 --var ALLOWED_APP_URLS:http://localhost:5179/planner/ --var APP_ENV:local --var MODEL_KEY_SECRET:<the dev value in api/package.json>`
+and the app with `VITE_API_URL=http://localhost:8788` on port 5179 (`src/auth/signIn.ts`; launch entries `planner-wt-s2-api` / `planner-wt-s2`).
+Plant a token by inserting a `users` + `sessions` row in that worktree's local D1 (`sessions.token_hash` = base64url SHA-256 of the token)
+and `localStorage['planner.signIn.token']`. The Browser pane allows five dev servers per
 folder: stop the ones whose branch has merged. A worktree cannot be deleted while
 `planner-api` runs (a hardlinked `workerd.exe`).
 
