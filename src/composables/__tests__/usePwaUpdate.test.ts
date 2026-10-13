@@ -1,39 +1,35 @@
 import { describe, expect, it } from 'vitest'
-import { UPDATE_EVERY_MS, watchForUpdates } from '../usePwaUpdate'
+import { watchForUpdates } from '../usePwaUpdate'
 
-function setup(o: { visible?: boolean; online?: boolean } = {}) {
+function setup(o: { online?: boolean; update?: () => Promise<unknown> } = {}) {
   const listeners: Array<[string, () => void]> = []
-  const timers: Array<[() => void, number]> = []
-  const doc = { visibilityState: (o.visible ?? true) ? 'visible' : 'hidden', addEventListener: (t: string, fn: () => void) => void listeners.push([t, fn]) }
+  const doc = { visibilityState: 'visible', addEventListener: (t: string, fn: () => void) => void listeners.push([t, fn]) }
   let updates = 0
-  const check = watchForUpdates({ update: async () => { updates++; return undefined as never } }, {
-    doc: doc as never,
-    online: () => o.online ?? true,
-    every: (fn, ms) => void timers.push([fn, ms]),
-  })
-  return { listeners, timers, doc, check, updates: () => updates }
+  watchForUpdates({ update: (o.update ?? (async () => { updates++ })) as never }, { doc: doc as never, online: () => o.online ?? true })
+  const go = (state: 'visible' | 'hidden') => { doc.visibilityState = state; for (const [, fn] of listeners) fn() }
+  return { listeners, go, updates: () => updates }
 }
 
 describe('watchForUpdates', () => {
-  it('looks for a new build when the app comes to the front, and every half hour', () => {
+  it('looks for a new build when the app goes to the background', () => {
     const s = setup()
     expect(s.listeners.map(([t]) => t)).toEqual(['visibilitychange'])
-    expect(s.timers.map(([, ms]) => ms)).toEqual([UPDATE_EVERY_MS])
-    s.listeners[0][1]()
-    s.timers[0][0]()
-    expect(s.updates()).toBe(2)
+    s.go('hidden')
+    expect(s.updates()).toBe(1)
   })
 
-  it('does not look while hidden or offline', () => {
-    expect((() => { const s = setup({ visible: false }); s.check(); return s.updates() })()).toBe(0)
-    expect((() => { const s = setup({ online: false }); s.check(); return s.updates() })()).toBe(0)
+  it('never while he is using it (a check in front reloads mid-typing), and not offline', () => {
+    const s = setup()
+    s.go('visible')
+    expect(s.updates()).toBe(0)
+    const off = setup({ online: false })
+    off.go('hidden')
+    expect(off.updates()).toBe(0)
   })
 
-  it('a failed look is swallowed (the next one tries again)', async () => {
-    const check = watchForUpdates({ update: () => Promise.reject(new Error('offline')) }, {
-      doc: { visibilityState: 'visible', addEventListener: () => {} } as never, online: () => true, every: () => 0,
-    })
-    expect(() => check()).not.toThrow()
+  it('a failed look, rejected or thrown, is swallowed', async () => {
+    expect(() => setup({ update: () => Promise.reject(new Error('offline')) }).go('hidden')).not.toThrow()
+    expect(() => setup({ update: () => { throw new Error('sync') } }).go('hidden')).not.toThrow()
     await new Promise((r) => setTimeout(r, 0)) // an unhandled rejection would fail the run
   })
 })
