@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useOnline } from '@/composables/useOnline'
 import { storedToken } from '@/auth/signIn'
 import { awaitCall, deleteModel, listModels, ModelsError, outcomeText, presetOf, PRESETS, saveModel, testModel, type ModelView, type Preset } from './models'
-import { runModel, setRunModel } from './runWith'
+import { reconcileRunModel, runModel, setRunModel, unsetRunModel } from './runWith'
 
 // Settings → AI models (H5-MODELS §6, S2). Register a model with its API key, test it, remove it, and choose which one this
 // device runs with ("Copy and paste" is always there). The key goes to the Worker once, on save, and never comes back: the
@@ -22,10 +22,8 @@ async function refresh(): Promise<void> {
   listError.value = null
   try {
     models.value = await listModels()
-    // The device's choice must still exist with a key; otherwise runs fall back to copy and paste.
-    const chosen = runModel.value && models.value.find((m) => m.id === runModel.value!.id && m.hasKey)
-    if (runModel.value && !chosen) setRunModel(null)
-    else if (chosen && chosen.label !== runModel.value!.label) setRunModel({ id: chosen.id, label: chosen.label })
+    // The device's choice must still exist with a key; a device that never chose follows the account's only model (D-102).
+    reconcileRunModel(models.value)
   } catch (err) {
     listError.value = err instanceof ModelsError ? err.message : String(err)
   } finally {
@@ -109,7 +107,7 @@ async function remove(m: ModelView): Promise<void> {
   removing.value = null
   try {
     await deleteModel(m.id)
-    if (runModel.value?.id === m.id) setRunModel(null)
+    if (runModel.value?.id === m.id) unsetRunModel() // not left chosen if the list below fails (CodeReview A1)
     delete tests[m.id]
     await refresh()
   } catch (err) {
@@ -140,8 +138,8 @@ const choose = (m: ModelView | null) => setRunModel(m ? { id: m.id, label: m.lab
         >{{ m.label }}</button>
       </div>
       <p class="text-xs text-amber-300 mt-2" data-test="run-with-warning">
-        Choose a model only after every device you use has opened this version of the app once: an older version drops runs
-        made by a model when it syncs.
+        A device that has not chosen runs with your only model. Add or choose a model only after every device you use has
+        opened this version of the app once: an older version drops runs made by a model when it syncs.
       </p>
 
       <ul class="list" data-test="models-list">
