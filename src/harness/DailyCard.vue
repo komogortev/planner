@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { addDays } from '@/domain/harness'
 import { summaryText, type SummaryPlan } from '@/domain/summary'
 import type { Task, TaskState } from '@/domain/tasks'
@@ -16,17 +16,14 @@ import type { Loop2 } from './useLoop2'
 const props = defineProps<{ loop: Loop2 }>()
 const tasks = computed(() => props.loop.day.value.tasks)
 const day = computed(() => props.loop.day.value.day)
-const upcoming = computed(() => props.loop.day.value.upcoming)
 // A task on Daily is due today by being here: its date shows only when it is another day (overdue). Owner, 2026-10-13.
-// D-101: a widget shows a few lines until tapped open. Three across both lists, today's first, then Coming up.
+// D-101: a widget shows a few lines until tapped open. D-106: today's tasks only (Coming up removed: Daily is today's
+// commitments), and the add box only in the open view.
 const COLLAPSED_LINES = 3
 const expanded = ref(false)
 const shownTasks = computed(() => (expanded.value ? tasks.value : tasks.value.slice(0, COLLAPSED_LINES)))
-const shownUpcoming = computed(() => (expanded.value ? upcoming.value : upcoming.value.slice(0, Math.max(0, COLLAPSED_LINES - tasks.value.length))))
-const hiddenCount = computed(() => tasks.value.length + upcoming.value.length - shownTasks.value.length - shownUpcoming.value.length)
-const canCollapse = computed(() => tasks.value.length + upcoming.value.length > COLLAPSED_LINES)
+const hiddenCount = computed(() => tasks.value.length - shownTasks.value.length)
 // Back to a few lines once the list fits, and on a new day (the card can stay mounted past midnight).
-watch(canCollapse, (c) => { if (!c) expanded.value = false })
 watch(day, () => (expanded.value = false))
 const menuOpen = ref(false)
 const menuRoot = ref<HTMLElement | null>(null)
@@ -95,7 +92,6 @@ const done = (t: Task) => close(t, 'Done', 'done')
 const tomorrow = (t: Task) => close(t, 'Moved to tomorrow', 'open', addDays(day.value, 1))
 const drop = (t: Task) => close(t, 'Dropped', 'dropped')
 // Coming up → today: the owner's own pick-up day (a carry to today), so a deadline gets its lead time. Undo puts it back.
-const pullToday = (t: Task) => close(t, 'Moved to today', 'open', day.value)
 async function undoLast() {
   const u = undo.value
   if (u && (await act(() => setTaskState2(u.task, 'open', u.task.followUpOn)))) undo.value = null
@@ -121,6 +117,16 @@ async function saveEdit(t: Task) {
 }
 
 const newText = ref('')
+const addInput = ref<HTMLInputElement | null>(null)
+/** Open: every task and the add box (focused when it is what the link offered). Close: back to three lines. */
+async function toggle() {
+  const offeredAdd = !expanded.value && hiddenCount.value === 0
+  expanded.value = !expanded.value
+  if (offeredAdd) {
+    await nextTick()
+    addInput.value?.focus()
+  }
+}
 async function add() {
   if (newText.value.trim() && (await act(() => addTask2(newText.value)))) {
     newText.value = ''
@@ -198,26 +204,15 @@ async function saveIt() {
       <p v-if="undo" class="sub mt-1" data-test="daily-undo-line">
         {{ undo.label }}: “{{ undo.task.text }}” · <button type="button" class="link" data-test="daily-undo" @click="undoLast">Undo</button>
       </p>
-      <p v-if="!tasks.length" class="sub mt-1" data-test="daily-empty">Nothing for today. Tasks come from your notes after Get feedback, or add one here.</p>
-      <div class="flex gap-1.5 mt-2">
-        <input v-model="newText" class="input in" placeholder="+ task" aria-label="New task" data-test="daily-add-input" @keydown.enter="add" />
+      <p v-if="!tasks.length" class="sub mt-1" data-test="daily-empty">Nothing for today. Tasks come from your notes after Get feedback, or add one with + task.</p>
+      <!-- D-106: the add box belongs to the open (expanded) card; the short view is today's list only. -->
+      <div v-if="expanded" class="flex gap-1.5 mt-2">
+        <input ref="addInput" v-model="newText" class="input in" placeholder="+ task" aria-label="New task" data-test="daily-add-input" @keydown.enter="add" />
         <button type="button" class="btn-ghost btn-xs" :disabled="busy || !newText.trim()" data-test="daily-add" @click="add">Add</button>
       </div>
-      <div v-if="shownUpcoming.length" class="upcoming" data-test="daily-upcoming">
-        <p class="sub">Coming up</p>
-        <ul>
-          <li v-for="t in shownUpcoming" :key="t.id" class="task soon" data-test="daily-upcoming-task">
-            <button type="button" class="text" title="Show actions" :aria-expanded="activeId === t.id" data-test="daily-upcoming-text" @click="activeId = activeId === t.id ? null : t.id">
-              {{ t.text }}<span v-if="t.followUpOn || t.due" class="due"> · {{ t.followUpOn ?? `due ${t.due}` }}</span>
-            </button>
-            <button v-if="activeId === t.id" type="button" class="btn-ghost btn-xs" aria-label="Today" title="Today" data-test="daily-pull-today" @click="pullToday(t)">Today</button>
-          </li>
-        </ul>
-      </div>
-      <button
-        v-if="canCollapse" type="button" class="link more" :aria-expanded="expanded" :data-test="expanded ? 'daily-less' : 'daily-more'"
-        @click="expanded = !expanded"
-      >{{ expanded ? 'Show less' : `+${hiddenCount} more` }}</button>
+      <button type="button" class="link more" :aria-expanded="expanded" :data-test="expanded ? 'daily-less' : 'daily-more'" @click="toggle">
+        {{ expanded ? 'Show less' : hiddenCount ? `+${hiddenCount} more` : '+ task' }}
+      </button>
     </template>
 
     <div v-else data-test="daily-summary">
@@ -245,8 +240,6 @@ async function saveIt() {
 .task { display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0; border-top: 1px solid var(--glass-edge); }
 .text { flex: 1; text-align: left; font-size: 0.92rem; overflow-wrap: anywhere; background: none; color: inherit; padding: 0.1rem 0; }
 .due { font-size: 0.75rem; color: var(--glass-warn); }
-.upcoming { margin-top: 0.6rem; }
-.soon .text { font-size: 0.85rem; color: var(--glass-sub); }
 .acts { display: flex; gap: 0.25rem; flex-shrink: 0; }
 .in { padding: 0.3rem 0.6rem; font-size: 0.85rem; flex: 1; }
 .plan { font-size: 0.8rem; margin-top: 0.5rem; padding-left: 1rem; list-style: disc; display: flex; flex-direction: column; gap: 0.15rem; }
