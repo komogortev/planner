@@ -3,6 +3,7 @@
 // file only reads the device's tables, keeps the waiting run (pending.ts) and writes through `writeRecords` (one
 // transaction, outbox included). It never starts a sync itself: callers call `syncSoon()`, as capture does.
 import { db } from '@/db'
+import { executorFields, type ModelVia } from '@/ai/runWith'
 import { writeRecords, type RecordWrite, type WriteResult } from '@/db/records'
 import {
   answerQuestion,
@@ -119,13 +120,14 @@ export async function startJournal(now = new Date().toISOString()): Promise<Comp
 export const pendingJournal = (): JournalHeader | null => loadPending('widget')
 
 /** Validate a pasted report; with `store`, keep it (immutable: a second reply for the same run is refused). */
-export async function applyJournalReply(text: string, opts: { store: boolean; now?: string }): Promise<Outcome<{ report: Report; written: number }>> {
+export async function applyJournalReply(text: string, opts: { store: boolean; now?: string; via?: ModelVia }): Promise<Outcome<{ report: Report; written: number }>> {
   const header = loadPending('widget')
   if (!header) return { ok: false, error: 'No journal run is waiting for a reply. Copy a new prompt first.' }
   const now = opts.now ?? new Date().toISOString()
   const known = new Set((await db.reports.toArray()).map((r) => r.id))
-  const r = validateReport(text, header, await db.entries.toArray(), now, known)
-  if (!r.ok) return r
+  const v = validateReport(text, header, await db.entries.toArray(), now, known)
+  if (!v.ok) return v
+  const r = { ok: true as const, value: { ...v.value, executor: executorFields(opts.via).executor } } // the report says who wrote it too
   // The shared record validator has limits `validateReport` does not (citation count, 64 KB): run it now, so a preview that
   // passes is one that Store can keep.
   const rec = cleanRecord('report', { ...r.value, deletedAt: null })
@@ -138,7 +140,7 @@ export async function applyJournalReply(text: string, opts: { store: boolean; no
     widgetId: header.widgetId,
     entryIds: header.entryIds,
     ranAt: header.composedAt,
-    executor: 'copy-prompt',
+    ...executorFields(opts.via),
   }
   const w = await writeRecords(db, [...asWrites('report', [r.value]), ...asWrites('run', [run])], now)
   if (!w.ok) return { ok: false, error: failed(w) }

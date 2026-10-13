@@ -4,6 +4,7 @@ import { isBodyTap } from '@/composables/bodyTap'
 import { syncSoon } from '@/sync'
 import { applyHarnessReply2, pendingHarness2, startHarness2 } from './loop2'
 import { proposalLabel, runSummary2 } from './queue2'
+import type { ModelVia } from '@/ai/runWith'
 import RunStep, { type Check } from './RunStep.vue'
 import StripItemView from './StripItemView.vue'
 import type { Loop2 } from './useLoop2'
@@ -26,6 +27,7 @@ const props = defineProps<{ loop: Loop2 }>()
 const items = computed(() => props.loop.items.value)
 const first = computed(() => items.value[0] ?? null)
 const waiting = ref(pendingHarness2() !== null)
+const waitingRunId = pendingHarness2()?.runId ?? null
 type Mode = 'line' | 'open' | 'work'
 const mode = ref<Mode>(waiting.value ? 'work' : 'line')
 const root = ref<HTMLElement | null>(null)
@@ -72,14 +74,14 @@ async function compose() {
   if (!out) return null
   const tasks = out.header.reevaluateIds.length
   const extra = [tasks ? `${tasks} changed task${tasks === 1 ? '' : 's'} go with them.` : '', out.header.remaining > 0 ? `${out.header.remaining} more notes wait for the next run.` : '']
-  return { prompt: out.prompt, notes: out.header.toAssessIds.length + out.header.contextIds.length, note: extra.filter(Boolean).join(' ') || undefined }
+  return { prompt: out.prompt, notes: out.header.toAssessIds.length + out.header.contextIds.length, note: extra.filter(Boolean).join(' ') || undefined, runId: out.header.runId }
 }
 async function check(reply: string): Promise<Check> {
   const r = await applyHarnessReply2(reply, { store: false })
   return r.ok ? { ok: true, lines: runSummary2(r.value.applied, r.value.header) } : r
 }
-async function store(reply: string) {
-  const r = await applyHarnessReply2(reply, { store: true })
+async function store(reply: string, via?: ModelVia) {
+  const r = await applyHarnessReply2(reply, { store: true, via })
   if (!r.ok) return r
   waiting.value = false
   syncSoon()
@@ -119,7 +121,7 @@ async function store(reply: string) {
         <StripItemView v-for="it in items" :key="it.id" :item="it" />
       </div>
       <div class="mt-3" data-test="strip-run">
-        <RunStep title="Read my new notes and changed tasks" :waiting="waiting" :compose="compose" :check="check" :store="store" />
+        <RunStep title="Read my new notes and changed tasks" stage="harness" :waiting="waiting" :waiting-run-id="waitingRunId" :compose="compose" :check="check" :store="store" />
       </div>
     </div>
   </section>

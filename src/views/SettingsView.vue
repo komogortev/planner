@@ -17,6 +17,7 @@ import { useSyncStore } from '@/stores/sync'
 import { GitHubError } from '@/db/github'
 import type { SnapshotCounts } from '@/db/snapshot'
 import PreferencesCard from '@/components/PreferencesCard.vue'
+import ModelsCard from '@/ai/ModelsCard.vue'
 import InstallButton from '@/components/InstallButton.vue'
 import ConfirmRestoreModal from '@/components/ConfirmRestoreModal.vue'
 import ConflictModal from '@/components/ConflictModal.vue'
@@ -508,6 +509,8 @@ async function doDisconnect(): Promise<void> {
     <!-- ============================================================ -->
     <!-- App info                                                      -->
     <PreferencesCard />
+
+    <ModelsCard />
 
     <!-- ============================================================ -->
     <section class="card">
