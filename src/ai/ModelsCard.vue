@@ -45,6 +45,15 @@ const DEFAULT_MAX_TOKENS = 16000
 const form = reactive({ preset: 'gemini' as Preset['id'], label: '', model: '', baseUrl: '', key: '', maxTokens: DEFAULT_MAX_TOKENS })
 const preset = computed(() => PRESETS.find((p) => p.id === form.preset)!)
 const saving = ref(false)
+/** The base URL as the Worker stores it (`api/src/modelRules.ts`: origin + path, no trailing slash), for the duplicate check. */
+function cleanUrl(raw: string): string {
+  try {
+    const u = new URL(raw)
+    return `${u.origin}${u.pathname.replace(/\/+$/, '')}`
+  } catch {
+    return raw
+  }
+}
 const addBox = ref<HTMLDetailsElement | null>(null)
 const formError = ref<string | null>(null)
 function pickPreset(): void {
@@ -58,8 +67,14 @@ async function add(): Promise<void> {
   saving.value = true
   try {
     const p = preset.value
+    const baseUrl = p.id === 'custom' ? form.baseUrl.trim() : p.baseUrl
+    const same = models.value.find((m) => m.format === p.format && m.baseUrl === cleanUrl(baseUrl) && m.model === form.model.trim())
+    if (same) {
+      formError.value = `Already added as "${same.label}". To change its key, remove it and add it again.`
+      return
+    }
     const saved = await saveModel(crypto.randomUUID(), {
-      label: form.label.trim(), format: p.format, baseUrl: p.id === 'custom' ? form.baseUrl.trim() : p.baseUrl, model: form.model.trim(), maxTokens: form.maxTokens, key: form.key.trim(),
+      label: form.label.trim(), format: p.format, baseUrl, model: form.model.trim(), maxTokens: form.maxTokens, key: form.key.trim(),
     })
     form.key = '' // never kept in the page longer than the save
     await refresh()
