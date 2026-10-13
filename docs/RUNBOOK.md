@@ -82,6 +82,20 @@ D1 Time Travel (point-in-time restore of the whole database), so migrations only
 Secrets: production via `pnpm --dir api exec wrangler secret bulk <file>` (then delete the file); local in `api/.env`,
 which only the owner edits.
 
+**`MODEL_KEY_SECRET` (H5, encrypts users' model API keys — [H5-MODELS.md](H5-MODELS.md) §6).** 32 random bytes, base64.
+Without it, saving a model key and every model call answer 503 `not configured`; nothing else breaks. Create it so the
+value is never printed (run from `apps/personal-planner`):
+
+```bash
+node -e "process.stdout.write('MODEL_KEY_SECRET='+require('crypto').randomBytes(32).toString('base64'))" > api/.env.production
+pnpm --dir api exec wrangler secret bulk .env.production
+```
+
+Then delete `api/.env.production`. Check by name only: `pnpm --dir api exec wrangler secret list`. **Never rotate it by
+overwriting**: every stored key was sealed with it and would stop opening (each would read as `no_key` until re-entered).
+A rotation adds a second secret and `key_version` 2 (`api/src/keyBox.ts`). Local dev: add the same line, with its own
+value, to `api/.env`.
+
 ## After a D1 restore (Time Travel) or a hand edit of the version counter
 
 The clients notice (D-58): a pull whose `head` is below the device's cursor — or a push given a version at or below it — starts a sweep from 0, and the notes the server lost are uploaded again from the devices that still hold them. A restore needs nothing else from you. Two things do not heal on their own: if you edit `users.version_seq` by hand, set it to **at least `max(server_version)` of that account** (below it, every device sweeps again on every poll); and edits or deletes that were acknowledged inside the lost window are not reconciled (notes are create-only today; re-entry: before an edit or delete UI ships).

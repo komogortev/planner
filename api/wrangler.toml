@@ -8,6 +8,8 @@ compatibility_date = "2026-10-01"
 ALLOWED_APP_URLS = "https://koplanner.pages.dev/"
 # Which environment this Worker is (favicon cue, src/env/appEnv.ts). The local `dev` script overrides it to `local`.
 APP_ENV = "prod"
+# Model calls per user per rolling 24 h (src/aiCalls.ts, H5-MODELS D-86). A full day is about 3–6 calls.
+AI_DAILY_CAP = "30"
 
 [[d1_databases]]
 binding = "DB"
@@ -33,6 +35,19 @@ simple = { limit = 60, period = 60 }
 name = "RL_PUSH_USER"
 namespace_id = "1003"
 simple = { limit = 20, period = 60 }
+
+# Model calls per user (src/aiCalls.ts): a looping client or a stolen session spends the user's own key; the daily cap bounds
+# the total, this bounds the burst.
+[[ratelimits]]
+name = "RL_AI_USER"
+namespace_id = "1004"
+simple = { limit = 10, period = 60 }
+
+# Every model call runs as one instance of this Workflow (H5-MODELS D-91): it outlives the request that started it.
+[[workflows]]
+name = "planner-model-call"
+binding = "MODEL_CALL"
+class_name = "ModelCallWorkflow"
 
 [observability]
 enabled = true

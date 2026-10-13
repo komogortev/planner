@@ -6,7 +6,7 @@
 import type { Context, MiddlewareHandler } from 'hono'
 import type { Env } from './index'
 
-type Binding = 'RL_AUTH_IP' | 'RL_PUSH_IP' | 'RL_PUSH_USER'
+type Binding = 'RL_AUTH_IP' | 'RL_PUSH_IP' | 'RL_PUSH_USER' | 'RL_AI_USER'
 
 /** Over the limit? A limiter that is missing or throws lets the request through and says so — a personal app prefers
  *  availability to a lockout, and the log keeps the failure from being silent. */

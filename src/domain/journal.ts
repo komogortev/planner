@@ -6,6 +6,7 @@ import { cleanBody, isWellFormed } from './clean'
 import type { Entry } from './entry'
 import { localDay, oneLine, sliceChars, stateOf, type EntryState, type HarnessData, type Link, type Question } from './harness'
 import { uuid5 } from './uuid5'
+import type { Executor } from './records'
 
 export const JOURNAL_SLICE_CAP = 80
 export const REPORT_BODY_MAX_CHARS = 10_000
@@ -131,7 +132,7 @@ export interface Report {
   entryIds: string[] // the slice as it was sent
   body: string
   citations: Citation[]
-  executor: 'copy-prompt'
+  executor: Executor
   ranAt: string
   origin: 'ai-observation'
   droppedCitations: number // > 0 flags the report: the model cited something the slice does not support

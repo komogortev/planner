@@ -112,6 +112,15 @@ describe('validateReport', () => {
   const run: JournalHeader = { runId: 'run-1', stage: 'widget', widgetId: 'w-1', lensVersion: 1, composedAt: NOW, entryIds: ['n1', 'n2'], truncated: 0 }
   const reply = (body: string, citations: unknown[]) => JSON.stringify({ body, citations })
 
+  // 06 A7 (L11): a cut-off reply stores nothing.
+  it('refuses a reply cut off mid-string', () => {
+    const whole = reply('- [ ] Call the bank about the card', [{ entryId: 'n1', quote: 'call the bank' }])
+    expect(validateReport(whole, run, entries, NOW).ok).toBe(true) // known positive
+    for (const cut of [whole.slice(0, 20), whole.slice(0, whole.indexOf('call the') + 4), whole.slice(0, -1)]) {
+      expect(validateReport(cut, run, entries, NOW).ok, cut).toBe(false)
+    }
+  })
+
   it('stores a well-supported report, immutable shape and all', () => {
     const r = validateReport(reply('- [ ] Call the bank', [{ entryId: 'n1', quote: 'call the bank' }]), run, entries, NOW)
     expect(r).toMatchObject({
