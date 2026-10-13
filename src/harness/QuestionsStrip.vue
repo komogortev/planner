@@ -161,7 +161,7 @@ async function store(reply: string, via?: ModelVia) {
 .strip-work .line { position: sticky; top: 0; z-index: 1; background: inherit; padding: 0.9rem 0 0.4rem; cursor: pointer; } /* stays in reach */
 .title { flex: 1; text-align: left; background: none; color: inherit; font-weight: 600; font-size: 0.875rem; padding: 0.15rem 0; }
 .count { font-size: 0.75rem; color: var(--glass-sub); margin-left: 0.25rem; }
-.waiting { font-size: 0.78rem; color: #fbbf24; margin-top: 0.3rem; }
+.waiting { font-size: 0.78rem; color: var(--glass-warn); margin-top: 0.3rem; }
 .detail .about { font-size: 0.75rem; color: var(--glass-sub); margin-top: 0.5rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tag { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.06em; color: #a7f3d0; }
 .ask { font-size: 0.9rem; margin-top: 0.15rem; overflow-wrap: anywhere; }

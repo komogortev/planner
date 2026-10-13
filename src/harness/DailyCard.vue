@@ -17,6 +17,7 @@ const props = defineProps<{ loop: Loop2 }>()
 const tasks = computed(() => props.loop.day.value.tasks)
 const day = computed(() => props.loop.day.value.day)
 const upcoming = computed(() => props.loop.day.value.upcoming)
+// A task on Daily is due today by being here: its date shows only when it is another day (overdue). Owner, 2026-10-13.
 // D-101: a widget shows a few lines until tapped open. Three across both lists, today's first, then Coming up.
 const COLLAPSED_LINES = 3
 const expanded = ref(false)
@@ -185,7 +186,7 @@ async function saveIt() {
             v-else type="button" class="text" :title="activeId === t.id ? 'Edit' : 'Show actions'" :aria-expanded="activeId === t.id"
             data-test="daily-task-text" @click="tapRow(t)"
           >
-            {{ t.text }}<span v-if="t.due" class="due"> · due {{ t.due }}</span>
+            {{ t.text }}<span v-if="t.due && t.due !== day" class="due"> · due {{ t.due }}</span>
           </button>
           <div v-if="activeId === t.id || editingId === t.id" class="acts" data-test="daily-task-acts">
             <button type="button" class="btn-ghost btn-xs" aria-label="Done" title="Done" data-test="daily-done" @click="done(t)">✓</button>
@@ -243,7 +244,7 @@ async function saveIt() {
 .tasks { margin-top: 0.4rem; display: flex; flex-direction: column; }
 .task { display: flex; align-items: center; gap: 0.5rem; padding: 0.3rem 0; border-top: 1px solid var(--glass-edge); }
 .text { flex: 1; text-align: left; font-size: 0.92rem; overflow-wrap: anywhere; background: none; color: inherit; padding: 0.1rem 0; }
-.due { font-size: 0.75rem; color: #fbbf24; }
+.due { font-size: 0.75rem; color: var(--glass-warn); }
 .upcoming { margin-top: 0.6rem; }
 .soon .text { font-size: 0.85rem; color: var(--glass-sub); }
 .acts { display: flex; gap: 0.25rem; flex-shrink: 0; }
