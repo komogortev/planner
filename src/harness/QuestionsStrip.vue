@@ -67,7 +67,8 @@ function onDocClick(e: MouseEvent) {
 }
 onMounted(() => document.addEventListener('click', onDocClick, true))
 
-// Daily's Refresh (the owner asks for an update where the Tasks are): open the run and start it. Check and Store stay his.
+// Daily's Refresh (the owner asks for an update where the Tasks are): open the run and start it. With a model it
+// checks and stores by itself (D-103); a copied prompt leaves Check and Store to him.
 const runStep = ref<InstanceType<typeof RunStep> | null>(null)
 watch(() => props.loop.refresh.value, async () => {
   mode.value = 'work'
