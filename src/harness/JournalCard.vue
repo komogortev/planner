@@ -89,7 +89,7 @@ function onBody(e: MouseEvent) {
 .tap-to-open { cursor: pointer; }
 .loop { color: var(--glass-text); }
 .sub { font-size: 0.78rem; color: var(--glass-sub); }
-.flag { color: #fbbf24; }
+.flag { color: var(--glass-warn); }
 .btn-xs { padding: 0.3rem 0.65rem; font-size: 0.78rem; border-radius: 0.6rem; }
 .report { margin: 0.5rem 0 0.75rem; }
 .lines { margin-top: 0.4rem; font-size: 0.9rem; display: flex; flex-direction: column; gap: 0.2rem; }

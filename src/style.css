@@ -42,6 +42,7 @@
     /* Text and outlined buttons ON the glass (sign-in dialog): the ink flips with the theme. */
     --glass-text: #f4e8d6;
     --glass-sub: rgb(244 232 214 / 0.62);
+    --glass-warn: #fbbf24; /* a due date, a flag, "waiting for feedback": amber that reads on the dark glass */
     --glass-btn-edge: rgb(236 200 150 / 0.5);
     --glass-btn-bg: rgb(255 220 170 / 0.08);
     --glass-dark: rgb(0 0 0 / 0.3);
@@ -74,6 +75,7 @@
     --glass-lit: rgb(255 255 255 / 0.7);
     --glass-text: #051b28;
     --glass-sub: rgb(5 27 40 / 0.68);
+    --glass-warn: #8a4600; /* the same amber, dark enough for the light glass (bright #fbbf24 washed out, owner 2026-10-13) */
     --glass-btn-edge: rgb(5 27 40 / 0.45);
     --glass-btn-bg: rgb(255 255 255 / 0.25);
     --glass-dark: rgb(5 27 40 / 0.22);
