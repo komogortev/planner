@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { addDays } from '@/domain/harness'
 import { summaryText, type SummaryPlan } from '@/domain/summary'
 import type { Task, TaskState } from '@/domain/tasks'
@@ -16,6 +16,16 @@ const props = defineProps<{ loop: Loop2 }>()
 const tasks = computed(() => props.loop.day.value.tasks)
 const day = computed(() => props.loop.day.value.day)
 const upcoming = computed(() => props.loop.day.value.upcoming)
+// D-101: a widget shows a few lines until tapped open. Three across both lists, today's first, then Coming up.
+const COLLAPSED_LINES = 3
+const expanded = ref(false)
+const shownTasks = computed(() => (expanded.value ? tasks.value : tasks.value.slice(0, COLLAPSED_LINES)))
+const shownUpcoming = computed(() => (expanded.value ? upcoming.value : upcoming.value.slice(0, Math.max(0, COLLAPSED_LINES - tasks.value.length))))
+const hiddenCount = computed(() => tasks.value.length + upcoming.value.length - shownTasks.value.length - shownUpcoming.value.length)
+const canCollapse = computed(() => tasks.value.length + upcoming.value.length > COLLAPSED_LINES)
+// Back to a few lines once the list fits, and on a new day (the card can stay mounted past midnight).
+watch(canCollapse, (c) => { if (!c) expanded.value = false })
+watch(day, () => (expanded.value = false))
 const menuOpen = ref(false)
 const menuRoot = ref<HTMLElement | null>(null)
 const menuButton = ref<HTMLButtonElement | null>(null)
@@ -101,7 +111,10 @@ async function saveEdit(t: Task) {
 
 const newText = ref('')
 async function add() {
-  if (newText.value.trim() && (await act(() => addTask2(newText.value)))) newText.value = ''
+  if (newText.value.trim() && (await act(() => addTask2(newText.value)))) {
+    newText.value = ''
+    expanded.value = true // a new Task sorts last: collapsed, it would land in the hidden part and the tap would look lost
+  }
 }
 
 // The summary editor works on the list as it was when it opened: saving is refused if any of it changed meanwhile.
@@ -156,7 +169,7 @@ async function saveIt() {
 
     <template v-if="!summaryOpen">
       <ul class="tasks" data-test="daily-tasks">
-        <li v-for="t in tasks" :key="t.id" class="task" data-test="daily-task">
+        <li v-for="t in shownTasks" :key="t.id" class="task" data-test="daily-task">
           <input v-if="editingId === t.id" v-model="draft" class="input in" aria-label="Task text" data-test="daily-task-input" @keydown.enter="saveEdit(t)" @keydown.esc="editingId = null" @blur="saveEdit(t)" />
           <button v-else type="button" class="text" :title="'Edit'" data-test="daily-task-text" @click="startEdit(t)">
             {{ t.text }}<span v-if="t.due" class="due"> · due {{ t.due }}</span>
@@ -176,15 +189,19 @@ async function saveIt() {
         <input v-model="newText" class="input in" placeholder="+ task" aria-label="New task" data-test="daily-add-input" @keydown.enter="add" />
         <button type="button" class="btn-ghost btn-xs" :disabled="busy || !newText.trim()" data-test="daily-add" @click="add">Add</button>
       </div>
-      <div v-if="upcoming.length" class="upcoming" data-test="daily-upcoming">
+      <div v-if="shownUpcoming.length" class="upcoming" data-test="daily-upcoming">
         <p class="sub">Coming up</p>
         <ul>
-          <li v-for="t in upcoming" :key="t.id" class="task soon" data-test="daily-upcoming-task">
+          <li v-for="t in shownUpcoming" :key="t.id" class="task soon" data-test="daily-upcoming-task">
             <span class="text">{{ t.text }}<span v-if="t.followUpOn || t.due" class="due"> · {{ t.followUpOn ?? `due ${t.due}` }}</span></span>
             <button type="button" class="btn-ghost btn-xs" aria-label="Today" title="Today" data-test="daily-pull-today" @click="pullToday(t)">Today</button>
           </li>
         </ul>
       </div>
+      <button
+        v-if="canCollapse" type="button" class="link more" :aria-expanded="expanded" :data-test="expanded ? 'daily-less' : 'daily-more'"
+        @click="expanded = !expanded"
+      >{{ expanded ? 'Show less' : `+${hiddenCount} more` }}</button>
     </template>
 
     <div v-else data-test="daily-summary">
@@ -225,4 +242,5 @@ async function saveIt() {
 .menu-list button { display: block; width: 100%; text-align: left; padding: 0.45rem 0.65rem; border-radius: 0.5rem; font-size: 0.85rem; color: rgb(var(--s-100)); }
 .menu-list button:hover:not(:disabled) { background: rgb(var(--s-800)); }
 .menu-list button:disabled { opacity: 0.5; }
+.more { display: block; margin-top: 0.5rem; font-size: 0.8rem; }
 </style>
