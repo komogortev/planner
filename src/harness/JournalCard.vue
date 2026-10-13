@@ -8,7 +8,7 @@ import { JOURNAL_LENS } from '@/domain/journal'
 import { syncSoon } from '@/sync'
 import { applyJournalReply, deviceZone, pendingJournal, startJournal } from './loop'
 import { ageLabel, reportLines } from './report'
-import type { ModelVia } from '@/ai/runWith'
+import { opensOnArrival, type ModelVia } from '@/ai/runWith'
 import RunStep, { type Check } from './RunStep.vue'
 
 // The AI journal (HW-HARNESS §11 P2: optional since Dashboard v2): a written summary of today's notes, one copy-prompt round
@@ -20,7 +20,7 @@ const reports = useLiveQuery(() => db.reports.where('widgetId').equals(JOURNAL_L
 const latest = computed(() => [...reports.value].reverse().find((r) => !r.deletedAt) ?? null)
 const lines = computed(() => (latest.value ? reportLines(latest.value.body) : []))
 const writtenToday = computed(() => latest.value !== null && localDay(latest.value.ranAt, deviceZone()) === localDay(new Date().toISOString(), deviceZone()))
-const open = ref(journalWaiting.value)
+const open = ref(opensOnArrival('widget', journalRunId))
 
 async function composeJournalPrompt() {
   const out = await startJournal()

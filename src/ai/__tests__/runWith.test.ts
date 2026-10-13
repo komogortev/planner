@@ -10,7 +10,7 @@ Object.defineProperty(globalThis, 'localStorage', {
   },
   configurable: true,
 })
-const { clearRunWith, clearWaitingCall, executorFields, loadWaitingCall, runModel, saveWaitingCall, setRunModel } = await import('../runWith')
+const { clearRunWith, clearWaitingCall, executorFields, loadWaitingCall, markEnded, opensOnArrival, runModel, saveWaitingCall, setRunModel } = await import('../runWith')
 
 beforeEach(() => {
   store.clear()
@@ -39,6 +39,21 @@ describe('waiting calls', () => {
     expect(loadWaitingCall('widget')).toBeNull()
     clearWaitingCall('harness')
     expect(loadWaitingCall('harness')).toBeNull()
+  })
+})
+
+describe('opensOnArrival', () => {
+  it('a waiting run opens, unless a model call for that very run ended without a reply', () => {
+    expect(opensOnArrival('harness', null)).toBe(false)
+    expect(opensOnArrival('harness', 'r1')).toBe(true) // known positive: a copied prompt, or a call in flight
+    setRunModel({ id: 'm1', label: 'Gemini' })
+    expect(opensOnArrival('harness', 'r1')).toBe(true) // "Copy instead" on a device with a model (CodeReview L2)
+    markEnded('harness', 'r1')
+    expect(opensOnArrival('harness', 'r1')).toBe(false) // nothing is coming back
+    expect(opensOnArrival('harness', 'r2')).toBe(true) // a newer run
+    expect(opensOnArrival('widget', 'r1')).toBe(true) // per stage
+    clearRunWith()
+    expect(opensOnArrival('harness', 'r1')).toBe(true)
   })
 })
 

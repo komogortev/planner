@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { awaitCall, markStored, ModelsError, outcomeText, startCall, type CallView } from '@/ai/models'
-import { clearWaitingCall, loadWaitingCall, runModel, saveWaitingCall, type ModelVia, type RunStage } from '@/ai/runWith'
+import { clearEnded, clearWaitingCall, loadWaitingCall, markEnded, runModel, saveWaitingCall, type ModelVia, type RunStage } from '@/ai/runWith'
 import { copyPrompt } from './clipboard'
 
 // One run (D-35, D-63; H5): compose → get a reply → check → store. The reply comes either from a copy-prompt round trip
@@ -31,11 +31,19 @@ const error = ref<string | null>(null)
 const done = ref<string | null>(null)
 const busy = ref(false)
 const open = ref(props.waiting)
-/** A model call in flight (its model's label for the status line). */
-const calling = ref<{ label: string } | null>(null)
+/** A model call being waited on (its model's label for the status line, its run for "ended"). Never holds `busy`: the
+ *  owner can stop waiting or copy the prompt instead while it runs (CodeReview M1). */
+const calling = ref<{ label: string; runId: string } | null>(null)
 /** Set when the reply in the box came from a model call: Store records it as a model run. Cleared by a hand edit. */
 const via = ref<ModelVia | null>(null)
 let abort: AbortController | null = null
+
+/** Stop following a call (the call itself keeps running on the Worker). */
+function stopFollow(): void {
+  abort?.abort()
+  abort = null
+  calling.value = null
+}
 
 async function run<T>(fn: () => Promise<T>): Promise<T | undefined> {
   if (busy.value) return undefined
@@ -55,7 +63,9 @@ async function start(): Promise<void> {
   preview.value = null
   reply.value = '' // a reply to the previous prompt must not be checked against the new run
   via.value = null
+  stopFollow()
   clearWaitingCall(props.stage)
+  clearEnded(props.stage)
   await run(async () => {
     const out = await props.compose()
     if (!out) {
@@ -91,50 +101,71 @@ async function runWithModel(): Promise<void> {
   reply.value = ''
   via.value = null
   prompt.value = null
-  await run(async () => {
+  stopFollow()
+  const started = await run(async () => {
     const out = await props.compose()
     if (!out) {
       open.value = false
       info.value = 'Nothing to send: no note needs this step right now.'
-      return
+      return null
     }
-    info.value = `${out.notes} note${out.notes === 1 ? '' : 's'} went to ${m.label}.${out.note ? ` ${out.note}` : ''}`
+    const notes = `${out.notes} note${out.notes === 1 ? '' : 's'}`
+    info.value = `Sending ${notes} to ${m.label}…`
     let callId: string
     try {
       callId = (await startCall({ modelId: m.id, stage: props.stage, runId: out.runId, prompt: out.prompt, entryCount: out.notes })).id
     } catch (err) {
+      info.value = null // nothing left the device: do not say it did (CodeReview L4)
       error.value = err instanceof ModelsError ? `${err.message} You can copy the prompt instead.` : String(err)
-      return
+      return null
     }
+    info.value = `${notes} went to ${m.label}.${out.note ? ` ${out.note}` : ''}`
     saveWaitingCall(props.stage, { callId, modelId: m.id, runId: out.runId })
-    await follow(callId, m.id, m.label)
+    clearEnded(props.stage)
+    return { callId, runId: out.runId }
   })
+  if (started) void follow(started.callId, m.id, m.label, started.runId)
 }
 
-/** Waits for a call to finish, then fills the reply box and checks it — or says why there is no reply. */
-async function follow(callId: string, modelId: string, label: string): Promise<void> {
-  calling.value = { label }
-  abort = new AbortController()
+/**
+ * Waits for a call to finish, then fills the reply box and checks it — or says why there is no reply. Outside `run()`:
+ * waiting holds no lock. A newer follow, Stop waiting, a new prompt or leaving the page ends this one (its abort).
+ */
+async function follow(callId: string, modelId: string, label: string, runId: string): Promise<void> {
+  stopFollow()
+  const ac = new AbortController()
+  abort = ac
+  calling.value = { label, runId }
   let view: CallView
   try {
-    view = await awaitCall(callId, { signal: abort.signal })
+    view = await awaitCall(callId, { signal: ac.signal })
   } catch (err) {
-    if (abort.signal.aborted) return // left the page: the call keeps running and is picked up on the next open
+    if (ac.signal.aborted) return // replaced or left: the call keeps running and is picked up on the next open
     error.value = err instanceof ModelsError ? `${err.message} The call may still finish: reopen to check.` : String(err)
     return
   } finally {
-    calling.value = null
+    if (abort === ac) { abort = null; calling.value = null }
   }
+  if (ac.signal.aborted) return
   if (view.status !== 'ok' || view.reply === null) {
     clearWaitingCall(props.stage)
+    markEnded(props.stage, runId) // nothing is coming back: the panel need not open for this run again
     error.value = view.replyCleared ? 'This reply was already used or has expired. Run again.' : outcomeText(view.status)
     return
   }
   open.value = true
   reply.value = view.reply
   via.value = { modelId, callId }
-  busy.value = false // checkReply runs its own guarded step
   await checkReply()
+}
+
+/** The owner stops waiting: the call may still finish on the Worker, but this run no longer expects it. */
+function stopWaiting(): void {
+  const runId = calling.value?.runId
+  stopFollow()
+  clearWaitingCall(props.stage)
+  if (runId) markEnded(props.stage, runId)
+  info.value = 'Stopped waiting. Run again, or copy the prompt instead.'
 }
 
 onMounted(() => {
@@ -144,7 +175,7 @@ onMounted(() => {
     clearWaitingCall(props.stage) // the run it belonged to is gone (stored, or replaced by a new prompt)
     return
   }
-  void run(() => follow(w.callId, w.modelId, runModel.value?.id === w.modelId ? runModel.value.label : 'your model'))
+  void follow(w.callId, w.modelId, runModel.value?.id === w.modelId ? runModel.value.label : 'your model', w.runId)
 })
 onBeforeUnmount(() => abort?.abort())
 
@@ -190,19 +221,21 @@ async function storeReply(): Promise<void> {
 
 <template>
   <section class="step" :data-test="`run-step`">
-    <header class="flex items-center justify-between gap-2">
+    <header class="flex flex-wrap items-center justify-between gap-2">
       <h4 class="font-semibold text-sm">{{ title }}</h4>
       <div class="flex gap-2">
-        <button v-if="runModel" type="button" class="btn-primary btn-sm" :disabled="busy" data-test="run-model" @click="runWithModel">
+        <button v-if="calling" type="button" class="btn-ghost btn-sm whitespace-nowrap" data-test="run-stop" @click="stopWaiting">Stop waiting</button>
+        <button v-else-if="runModel" type="button" class="btn-primary btn-sm whitespace-nowrap" :disabled="busy" data-test="run-model" @click="runWithModel">
           Run with {{ runModel.label }}
         </button>
-        <button type="button" class="btn-ghost btn-sm" :disabled="busy" data-test="run-compose" @click="start">
+        <button type="button" class="btn-ghost btn-sm whitespace-nowrap" :disabled="busy" data-test="run-compose" @click="start">
           {{ prompt || waiting ? 'New prompt' : runModel ? 'Copy instead' : 'Copy prompt' }}
         </button>
       </div>
     </header>
-    <p v-if="calling" class="sub" role="status" data-test="run-calling">{{ calling.label }} is working on it — this can take a minute. You can leave this page; the answer waits for you.</p>
-    <p v-if="waiting && !prompt" class="sub" data-test="run-waiting">A prompt you copied earlier is waiting for its reply.</p>
+    <!-- Always in the page, so a screen reader announces the change rather than meeting a region that arrives full. -->
+    <p class="sub" :class="{ 'sr-only': !calling }" role="status" data-test="run-calling">{{ calling ? `${calling.label} is working on it — this can take a minute. You can leave this page; the answer waits for you.` : '' }}</p>
+    <p v-if="waiting && !prompt && !calling" class="sub" data-test="run-waiting">{{ runModel ? 'This run is waiting for its reply: run it again, or paste a reply.' : 'A prompt you copied earlier is waiting for its reply.' }}</p>
     <p v-if="info" class="sub" data-test="run-info">{{ info }}</p>
     <button v-if="prompt" type="button" class="btn-ghost btn-sm mt-2" data-test="run-copy-again" @click="copyAgain">Copy again</button>
     <details v-if="prompt" class="mt-2">
@@ -210,7 +243,7 @@ async function storeReply(): Promise<void> {
       <textarea class="input mt-1 text-xs" rows="6" readonly :value="prompt" />
     </details>
     <template v-if="open || waiting">
-      <textarea v-model="reply" class="input mt-2 text-xs" rows="4" spellcheck="false" autocorrect="off" autocapitalize="off" placeholder="Paste the AI reply here" aria-label="AI reply" data-test="run-reply" @input="onReplyInput" />
+      <textarea v-model="reply" class="input mt-2 text-xs" rows="4" spellcheck="false" autocorrect="off" autocapitalize="off" placeholder="Paste the AI reply here" aria-label="AI reply" :readonly="calling !== null" data-test="run-reply" @input="onReplyInput" />
       <div class="flex gap-2 mt-2">
         <button type="button" class="btn-ghost btn-sm" :disabled="busy || !reply.trim()" data-test="run-check" @click="checkReply">Check</button>
         <button v-if="preview" type="button" class="btn-primary btn-sm" :disabled="busy" data-test="run-store" @click="storeReply">Store</button>

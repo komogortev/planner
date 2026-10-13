@@ -55,6 +55,34 @@ describe('awaitCall', () => {
     await expect(awaitCall('c1', { client: client(f), signal: ac.signal })).rejects.toBeTruthy()
   })
 
+  it('rides out network blips and 5xx; a 404 ends the wait at once', async () => {
+    const answers: (() => Response)[] = [
+      () => { throw new TypeError('offline') },
+      () => Response.json({ error: 'x' }, { status: 502 }),
+      () => Response.json(view('pending')),
+      () => Response.json(view('ok')),
+    ]
+    const f = vi.fn(async () => answers.shift()!())
+    expect((await awaitCall('c1', { client: client(f), sleep: async () => {} })).status).toBe('ok')
+    expect(f).toHaveBeenCalledTimes(4)
+    const gone = vi.fn(async () => Response.json({ error: 'not found' }, { status: 404 }))
+    await expect(awaitCall('c1', { client: client(gone), sleep: async () => {} })).rejects.toMatchObject({ status: 404 })
+    expect(gone).toHaveBeenCalledTimes(1)
+    const down = vi.fn(async () => { throw new TypeError('offline') })
+    await expect(awaitCall('c1', { client: client(down), sleep: async () => {} })).rejects.toMatchObject({ status: null })
+    expect(down).toHaveBeenCalledTimes(7) // the first try plus POLL_RETRIES
+  })
+
+  it('an abort mid-sleep rejects at once', async () => {
+    const ac = new AbortController()
+    const f = vi.fn(async () => Response.json(view('pending')))
+    const p = awaitCall('c1', { client: client(f), signal: ac.signal, intervalMs: 60_000 })
+    await new Promise((r) => setTimeout(r, 10))
+    ac.abort()
+    await expect(p).rejects.toBeTruthy()
+    expect(f).toHaveBeenCalledTimes(1)
+  })
+
   it('a failed read is an error, not a finished call', async () => {
     await expect(getCall('c1', client(async () => Response.json({ error: 'not found' }, { status: 404 })))).rejects.toBeInstanceOf(ModelsError)
   })

@@ -4,7 +4,7 @@ import { isBodyTap } from '@/composables/bodyTap'
 import { syncSoon } from '@/sync'
 import { applyHarnessReply2, pendingHarness2, startHarness2 } from './loop2'
 import { proposalLabel, runSummary2 } from './queue2'
-import type { ModelVia } from '@/ai/runWith'
+import { opensOnArrival, type ModelVia } from '@/ai/runWith'
 import RunStep, { type Check } from './RunStep.vue'
 import StripItemView from './StripItemView.vue'
 import type { Loop2 } from './useLoop2'
@@ -29,7 +29,7 @@ const first = computed(() => items.value[0] ?? null)
 const waiting = ref(pendingHarness2() !== null)
 const waitingRunId = pendingHarness2()?.runId ?? null
 type Mode = 'line' | 'open' | 'work'
-const mode = ref<Mode>(waiting.value ? 'work' : 'line')
+const mode = ref<Mode>(opensOnArrival('harness', waitingRunId) ? 'work' : 'line')
 const root = ref<HTMLElement | null>(null)
 
 const changes = computed(() => props.loop.work.value.notes + props.loop.work.value.tasks)

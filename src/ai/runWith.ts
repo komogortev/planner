@@ -6,6 +6,7 @@ import { ref } from 'vue'
 
 const MODEL_KEY = 'planner.run.model'
 const CALL_KEY = { harness: 'planner.run.call.harness', widget: 'planner.run.call.widget' } as const
+const ENDED_KEY = { harness: 'planner.run.ended.harness', widget: 'planner.run.ended.widget' } as const
 
 export type RunStage = keyof typeof CALL_KEY
 export interface WaitingCall { callId: string; modelId: string; runId: string }
@@ -69,8 +70,27 @@ export function clearWaitingCall(stage?: RunStage): void {
   for (const s of stage ? [stage] : (Object.keys(CALL_KEY) as RunStage[])) write(CALL_KEY[s], null)
 }
 
+/** A model call for this run ended without a reply (or the owner stopped waiting): nothing is coming back for it. */
+export function markEnded(stage: RunStage, runId: string): void {
+  write(ENDED_KEY[stage], runId)
+}
+export function clearEnded(stage?: RunStage): void {
+  for (const s of stage ? [stage] : (Object.keys(ENDED_KEY) as RunStage[])) write(ENDED_KEY[s], null)
+}
+
+/**
+ * Whether a waiting run should open its panel on arrival: yes — the owner is coming back with a reply to paste
+ * (calibration 2026-10-12), or a model call for it is still running — unless a model call for this very run already ended
+ * without a reply, when nothing is coming back and an open panel is only in the way.
+ */
+export function opensOnArrival(stage: RunStage, waitingRunId: string | null): boolean {
+  if (waitingRunId === null) return false
+  return read(ENDED_KEY[stage]) !== waitingRunId
+}
+
 /** Sign-out and account deletion wipe the account's data on this device (D-50): the model choice and waiting calls too. */
 export function clearRunWith(): void {
   setRunModel(null)
   clearWaitingCall()
+  clearEnded()
 }
