@@ -73,7 +73,14 @@ async function compose() {
   waiting.value = out !== null
   if (!out) return null
   const tasks = out.header.reevaluateIds.length
-  const extra = [tasks ? `${tasks} changed task${tasks === 1 ? '' : 's'} go with them.` : '', out.header.remaining > 0 ? `${out.header.remaining} more notes wait for the next run.` : '']
+  const fresh = out.header.toAssessIds.length
+  const context = out.header.contextIds.length
+  // Say which notes are read and which only go along: "6 notes went" with nothing new read looked like the run ignored them.
+  const extra = [
+    fresh ? `${fresh} new to read${context ? `, ${context} earlier for context` : ''}.` : context ? `No new notes to read: ${context} earlier note${context === 1 ? '' : 's'} go${context === 1 ? 'es' : ''} as context.` : '',
+    tasks ? `${tasks} changed task${tasks === 1 ? '' : 's'} to re-read.` : '',
+    out.header.remaining > 0 ? `${out.header.remaining} more note${out.header.remaining === 1 ? ' waits' : 's wait'} for the next run.` : '',
+  ]
   return { prompt: out.prompt, notes: out.header.toAssessIds.length + out.header.contextIds.length, note: extra.filter(Boolean).join(' ') || undefined, runId: out.header.runId }
 }
 async function check(reply: string): Promise<Check> {

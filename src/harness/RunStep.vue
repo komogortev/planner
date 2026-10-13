@@ -18,6 +18,8 @@ const props = defineProps<{
   /** The waiting run's id, to match a model call this device was waiting on. */
   waitingRunId?: string | null
   compose: () => Promise<Composed | null>
+  /** What "nothing to send" means for this stage (compose returned null). */
+  emptyText?: string
   check: (reply: string) => Promise<Check>
   store: (reply: string, via?: ModelVia) => Promise<{ ok: true; message: string } | { ok: false; error: string }>
 }>()
@@ -71,7 +73,7 @@ async function start(): Promise<void> {
     if (!out) {
       prompt.value = null
       open.value = false
-      info.value = 'Nothing to send: no note needs this step right now.'
+      info.value = props.emptyText ?? 'Nothing to send: no note needs this step right now.'
       return
     }
     prompt.value = out.prompt
@@ -106,7 +108,7 @@ async function runWithModel(): Promise<void> {
     const out = await props.compose()
     if (!out) {
       open.value = false
-      info.value = 'Nothing to send: no note needs this step right now.'
+      info.value = props.emptyText ?? 'Nothing to send: no note needs this step right now.'
       return null
     }
     const notes = `${out.notes} note${out.notes === 1 ? '' : 's'}`
@@ -235,7 +237,7 @@ async function storeReply(): Promise<void> {
     </header>
     <!-- Always in the page, so a screen reader announces the change rather than meeting a region that arrives full. -->
     <p class="sub" :class="{ 'sr-only': !calling }" role="status" data-test="run-calling">{{ calling ? `${calling.label} is working on it — this can take a minute. You can leave this page; the answer waits for you.` : '' }}</p>
-    <p v-if="waiting && !prompt && !calling" class="sub" data-test="run-waiting">{{ runModel ? 'This run is waiting for its reply: run it again, or paste a reply.' : 'A prompt you copied earlier is waiting for its reply.' }}</p>
+    <p v-if="waiting && !prompt && !calling && !reply" class="sub" data-test="run-waiting">{{ runModel ? 'This run is waiting for its reply: run it again, or paste a reply.' : 'A prompt you copied earlier is waiting for its reply.' }}</p>
     <p v-if="info" class="sub" data-test="run-info">{{ info }}</p>
     <button v-if="prompt" type="button" class="btn-ghost btn-sm mt-2" data-test="run-copy-again" @click="copyAgain">Copy again</button>
     <details v-if="prompt" class="mt-2">

@@ -79,7 +79,7 @@ function onBody(e: MouseEvent) {
       </div>
       <p v-else class="sub" data-test="journal-empty">No summary yet.</p>
       <div data-test="step-journal">
-        <RunStep title="Write today's summary" stage="widget" :waiting="journalWaiting" :waiting-run-id="journalRunId" :compose="composeJournalPrompt" :check="checkJournal" :store="storeJournal" />
+        <RunStep title="Write today's summary" stage="widget" :waiting="journalWaiting" :waiting-run-id="journalRunId" :compose="composeJournalPrompt" empty-text="Nothing to summarize: no open notes from today (or carried to today or earlier)." :check="checkJournal" :store="storeJournal" />
       </div>
     </div>
   </section>
