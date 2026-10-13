@@ -15,12 +15,15 @@ import { applyTheme } from './theme/theme'
 import { startSync } from './sync'
 import { routeAfterSessionChange } from './sync/tokenWatch'
 import { installErrorReporting } from './log/report'
+import { installLiveTextInput } from './composables/liveTextInput'
 import './style.css'
 
 // Local / preview builds get a coloured banner, tab title, favicon and status bar; prod is untouched.
 applyEnvCue()
 // Light / dark (Settings → Appearance), applied before mount so the first paint is already in the right theme.
 applyTheme()
+// Phone keyboards: every v-model updates per keystroke, also mid-word (an Answer button no longer stays disabled).
+installLiveTextInput()
 
 const app = createApp(App)
 

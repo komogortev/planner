@@ -6,9 +6,11 @@ import { copyPrompt } from './clipboard'
 
 // One run (D-35, D-63; H5): compose → get a reply → check → store. The reply comes either from a copy-prompt round trip
 // (copy, the owner pastes the AI's answer) or, when this device runs with a registered model (Settings → AI models), from
-// that model through the Worker (`/ai/calls`, a Workflow: D-91) — and then goes through the same check and the same Store
-// tap. The stage-specific work is passed in; this component only owns the steps. A run composed earlier (before the phone
-// killed the app) is still waiting: `waiting` says so, the paste box opens, and a model call it was waiting on is picked up.
+// that model through the Worker (`/ai/calls`, a Workflow: D-91) — and then goes through the same check. A model's reply
+// that passes the check is stored at once and shows no JSON (D-103): Check and Store are taps only for a pasted reply, and
+// Store returns for a model reply only when storing it failed. The stage-specific work is passed in; this component only
+// owns the steps. A run composed earlier (before the phone killed the app) is still waiting: `waiting` says so, and either
+// the model call it was waiting on is picked up, or the paste box opens.
 export type Check = { ok: true; lines: string[] } | { ok: false; error: string }
 export type Composed = { prompt: string; notes: number; note?: string; runId: string }
 const props = defineProps<{
@@ -38,6 +40,8 @@ const open = ref(props.waiting)
 const calling = ref<{ label: string; runId: string } | null>(null)
 /** Set when the reply in the box came from a model call: Store records it as a model run. Cleared by a hand edit. */
 const via = ref<ModelVia | null>(null)
+/** This run goes through the model (D-103): no paste box from the tap on, until the owner copies the prompt instead. */
+const modelRun = ref(false)
 let abort: AbortController | null = null
 
 /** Stop following a call (the call itself keeps running on the Worker). */
@@ -61,6 +65,7 @@ async function run<T>(fn: () => Promise<T>): Promise<T | undefined> {
 }
 
 async function start(): Promise<void> {
+  modelRun.value = false
   error.value = done.value = null
   preview.value = null
   reply.value = '' // a reply to the previous prompt must not be checked against the new run
@@ -98,6 +103,7 @@ async function copyAgain(): Promise<void> {
 async function runWithModel(): Promise<void> {
   const m = runModel.value
   if (!m) return
+  modelRun.value = true
   error.value = done.value = null
   preview.value = null
   reply.value = ''
@@ -159,6 +165,8 @@ async function follow(callId: string, modelId: string, label: string, runId: str
   reply.value = view.reply
   via.value = { modelId, callId }
   await checkReply()
+  // A model run stores its own result (D-103): only a reply that fails the check waits, with the reason, for the owner.
+  if (preview.value && via.value?.callId === callId) await storeReply()
 }
 
 /** The owner stops waiting: the call may still finish on the Worker, but this run no longer expects it. */
@@ -178,6 +186,7 @@ onMounted(() => {
     clearWaitingCall(props.stage) // the run it belonged to is gone (stored, or replaced by a new prompt)
     return
   }
+  modelRun.value = true
   void follow(w.callId, w.modelId, runModel.value?.id === w.modelId ? runModel.value.label : 'your model', w.runId)
 })
 onBeforeUnmount(() => abort?.abort())
@@ -252,19 +261,28 @@ async function storeReply(): Promise<void> {
     </header>
     <!-- Always in the page, so a screen reader announces the change rather than meeting a region that arrives full. -->
     <p class="sub" :class="{ 'sr-only': !calling }" role="status" data-test="run-calling">{{ calling ? `${calling.label} is working on it — this can take a minute. You can leave this page; the answer waits for you.` : '' }}</p>
-    <p v-if="waiting && !prompt && !calling && !reply" class="sub" data-test="run-waiting">{{ runModel ? 'This run is waiting for its reply: run it again, or paste a reply.' : 'A prompt you copied earlier is waiting for its reply.' }}</p>
+    <p v-if="waiting && !prompt && !calling && !reply && !modelRun" class="sub" data-test="run-waiting">{{ runModel ? 'This run is waiting for its reply: run it again, or paste a reply.' : 'A prompt you copied earlier is waiting for its reply.' }}</p>
     <p v-if="info" class="sub" data-test="run-info">{{ info }}</p>
     <button v-if="prompt" type="button" class="btn-ghost btn-sm mt-2" data-test="run-copy-again" @click="copyAgain">Copy again</button>
     <details v-if="prompt" class="mt-2">
       <summary class="sub cursor-pointer">Show the prompt</summary>
       <textarea class="input mt-1 text-xs" rows="6" readonly :value="prompt" />
     </details>
-    <template v-if="open || waiting">
-      <textarea v-model="reply" class="input mt-2 text-xs" rows="4" spellcheck="false" autocorrect="off" autocapitalize="off" placeholder="Paste the AI reply here" aria-label="AI reply" :readonly="calling !== null" data-test="run-reply" @input="onReplyInput" />
+    <!-- The paste box is for copy and paste only (D-103): a model run shows no JSON. Its reply appears, folded, only when
+         it failed the check, next to the reason; Store stays for a retry when storing itself failed. -->
+    <template v-if="(open || waiting) && !modelRun">
+      <textarea v-model="reply" class="input mt-2 text-xs" rows="4" spellcheck="false" autocorrect="off" autocapitalize="off" placeholder="Paste the AI reply here" aria-label="AI reply" data-test="run-reply" @input="onReplyInput" />
       <div class="flex gap-2 mt-2">
         <button type="button" class="btn-ghost btn-sm" :disabled="busy || !reply.trim()" data-test="run-check" @click="checkReply">Check</button>
         <button v-if="preview" type="button" class="btn-primary btn-sm" :disabled="busy" data-test="run-store" @click="storeReply">Store</button>
       </div>
+    </template>
+    <template v-else-if="modelRun && via && !calling">
+      <details v-if="!preview && reply" class="mt-2" data-test="run-model-reply">
+        <summary class="sub cursor-pointer">Show the model's reply</summary>
+        <textarea class="input mt-1 text-xs" rows="6" readonly :value="reply" />
+      </details>
+      <button v-if="preview" type="button" class="btn-primary btn-sm mt-2" :disabled="busy" data-test="run-store" @click="storeReply">Store</button>
     </template>
     <ul v-if="preview" class="preview" data-test="run-preview">
       <li v-for="(l, i) in preview" :key="i">{{ l }}</li>
