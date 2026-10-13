@@ -41,9 +41,11 @@ const usable = computed(() => models.value.filter((m) => m.hasKey))
 const host = (m: ModelView) => new URL(m.baseUrl).hostname
 
 // ── Add ────────────────────────────────────────────────────────────────────────────────────────────────────────────
-const form = reactive({ preset: 'gemini' as Preset['id'], label: '', model: '', baseUrl: '', key: '', maxTokens: 16000 })
+const DEFAULT_MAX_TOKENS = 16000
+const form = reactive({ preset: 'gemini' as Preset['id'], label: '', model: '', baseUrl: '', key: '', maxTokens: DEFAULT_MAX_TOKENS })
 const preset = computed(() => PRESETS.find((p) => p.id === form.preset)!)
 const saving = ref(false)
+const addBox = ref<HTMLDetailsElement | null>(null)
 const formError = ref<string | null>(null)
 function pickPreset(): void {
   form.label = preset.value.name
@@ -62,6 +64,11 @@ async function add(): Promise<void> {
     form.key = '' // never kept in the page longer than the save
     await refresh()
     tests[saved.id] = 'Saved. Test it to make sure it answers.'
+    // Close and reset the form, so the result shows in the list: an open, filled form read as "nothing happened" and a
+    // second Save added a duplicate (2026-10-12).
+    if (addBox.value) addBox.value.open = false
+    pickPreset()
+    form.maxTokens = DEFAULT_MAX_TOKENS
   } catch (err) {
     formError.value = err instanceof ModelsError ? err.message : String(err)
   } finally {
@@ -137,7 +144,7 @@ const choose = (m: ModelView | null) => setRunModel(m ? { id: m.id, label: m.lab
         <li v-if="loaded && models.length === 0" class="text-sm text-slate-400" data-test="models-empty">No models yet.</li>
       </ul>
 
-      <details class="mt-4 min-w-0" data-test="model-add">
+      <details ref="addBox" class="mt-4 min-w-0" data-test="model-add">
         <summary class="text-sm font-semibold cursor-pointer">Add a model</summary>
         <form class="grid gap-2 mt-3 min-w-0" autocomplete="off" @submit.prevent="add">
           <label class="label" for="m-preset">Provider</label>
@@ -155,7 +162,7 @@ const choose = (m: ModelView | null) => setRunModel(m ? { id: m.id, label: m.lab
           </template>
           <p v-else class="text-xs text-slate-500 break-all">Endpoint: {{ preset.baseUrl }}</p>
           <label class="label" for="m-max">Max tokens per reply</label>
-          <input id="m-max" v-model.number="form.maxTokens" class="input" type="number" min="256" max="64000" step="256" required data-test="model-max" />
+          <input id="m-max" v-model.number="form.maxTokens" class="input" type="number" min="256" max="64000" step="1" required data-test="model-max" />
           <label class="label" for="m-key">API key</label>
           <input id="m-key" v-model="form.key" class="input" type="password" required autocomplete="off" spellcheck="false" autocapitalize="off" data-test="model-key" />
           <p v-if="formError" class="text-sm text-rose-300" role="alert" data-test="model-form-error">{{ formError }}</p>
@@ -171,7 +178,7 @@ const choose = (m: ModelView | null) => setRunModel(m ? { id: m.id, label: m.lab
 .opt { flex: 1 1 auto; padding: 8px 10px; border-radius: 9px; font-size: 0.875rem; font-weight: 600; color: rgb(var(--s-400)); }
 .opt-on { background: rgb(var(--s-950)); color: rgb(var(--s-100)); box-shadow: 0 1px 3px rgb(0 0 0 / 0.25); }
 .list { margin-top: 1rem; display: grid; gap: 0.75rem; }
-.row { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; }
+.row { min-width: 0; display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; }
 form :is(input, select) { min-width: 0; width: 100%; }
 .btn-sm { padding: 0.3rem 0.75rem; font-size: 0.78rem; }
 </style>
