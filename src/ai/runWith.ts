@@ -1,7 +1,8 @@
 // Per-device state of model runs (H5-MODELS §5): which registered model this device runs with, and the call a run is
 // waiting on. localStorage, like the pending run header (src/harness/pending.ts): synchronous, per device, ids only — never
-// a prompt or a reply. Per device on purpose: a device runs with a model only after the owner chose it there, which is
-// also what keeps a model run from being written before every device runs a build that accepts one (H5-MODELS §10 O5).
+// a prompt or a reply. Per device: a device can run with a different model, or with copy and paste. A device that never
+// chose follows the account's only model (D-102), which lifted the per-device O5 gate (H5-MODELS §10): every device the
+// owner uses already ran the build that accepts a model run.
 import { ref } from 'vue'
 
 const MODEL_KEY = 'planner.run.model'
@@ -33,9 +34,11 @@ function write(key: string, value: string | null): void {
 }
 
 export interface RunModel { id: string; label: string }
+/** Stored when the owner picks "Copy and paste" on this device: an explicit choice, unlike no value at all (D-102). */
+const MANUAL = 'manual'
 function readRunModel(): RunModel | null {
   const raw = read(MODEL_KEY)
-  if (!raw) return null
+  if (!raw || raw === MANUAL) return null
   try {
     const m = JSON.parse(raw) as Record<string, unknown>
     return typeof m.id === 'string' && typeof m.label === 'string' ? { id: m.id, label: m.label } : null
@@ -47,9 +50,56 @@ function readRunModel(): RunModel | null {
 /** The model this device runs with (its label kept for the Run button), or null for copy and paste. Reactive: Settings and
  *  the run panel share it. */
 export const runModel = ref<RunModel | null>(readRunModel())
+/** The owner's choice on this device: a model, or null for "Copy and paste". Either one is remembered as chosen. */
 export function setRunModel(m: RunModel | null): void {
   runModel.value = m
-  write(MODEL_KEY, m ? JSON.stringify(m) : null)
+  write(MODEL_KEY, m ? JSON.stringify(m) : MANUAL)
+}
+/** No choice on this device: it follows the account (`reconcileRunModel`). Also the remove path for the chosen model. */
+export function unsetRunModel(): void {
+  runModel.value = null
+  write(MODEL_KEY, null)
+}
+
+/**
+ * Lines this device's choice up with the account's models (D-102). A chosen model that is gone, or lost its key, is
+ * unset. A device that never chose runs with the account's model when exactly one has a key: a model added on the
+ * desktop is offered on the phone too, and in the home-screen app, which keeps its own storage. Several models and no
+ * choice: copy and paste until the owner picks one in Settings. "Copy and paste" picked here is left alone.
+ */
+export function reconcileRunModel(models: readonly { id: string; label: string; hasKey: boolean }[]): void {
+  const usable = models.filter((m) => m.hasKey)
+  if (read(MODEL_KEY) === MANUAL) return
+  const cur = runModel.value
+  const still = cur && usable.find((m) => m.id === cur.id)
+  if (cur && !still) unsetRunModel()
+  else if (still) {
+    if (still.label !== cur!.label) setRunModel({ id: still.id, label: still.label })
+    return
+  }
+  if (usable.length === 1) setRunModel({ id: usable[0].id, label: usable[0].label })
+}
+
+let adopting: Promise<void> | null = null
+/** Asked once per page load: with no models, or several, nothing is stored, and each panel must not ask again. */
+let asked = false
+/** Bumped by sign-out: an answer that arrives after it belongs to the account that left. */
+let generation = 0
+/**
+ * The run panel's half of D-102: a device with no choice asks the account for its models once (one request even when two
+ * panels mount together). Resolves once `runModel` is settled. Failure (offline, signed out) leaves copy and paste.
+ */
+export function adoptAccountModel(list: () => Promise<readonly { id: string; label: string; hasKey: boolean }[]>): Promise<void> {
+  if (asked || read(MODEL_KEY) !== null) return Promise.resolve()
+  const gen = generation
+  adopting ??= list()
+    .then((models) => {
+      if (gen !== generation) return
+      asked = true
+      reconcileRunModel(models)
+    }, () => {}) // offline or signed out: ask again on the next panel
+    .finally(() => { adopting = null })
+  return adopting
 }
 
 export function saveWaitingCall(stage: RunStage, c: WaitingCall): void {
@@ -90,7 +140,9 @@ export function opensOnArrival(stage: RunStage, waitingRunId: string | null): bo
 
 /** Sign-out and account deletion wipe the account's data on this device (D-50): the model choice and waiting calls too. */
 export function clearRunWith(): void {
-  setRunModel(null)
+  generation++
+  asked = false
+  unsetRunModel()
   clearWaitingCall()
   clearEnded()
 }

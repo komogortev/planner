@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
-import { awaitCall, markStored, ModelsError, outcomeText, startCall, type CallView } from '@/ai/models'
-import { clearEnded, clearWaitingCall, loadWaitingCall, markEnded, runModel, saveWaitingCall, type ModelVia, type RunStage } from '@/ai/runWith'
+import { awaitCall, listModels, markStored, ModelsError, outcomeText, startCall, type CallView } from '@/ai/models'
+import { adoptAccountModel, clearEnded, clearWaitingCall, loadWaitingCall, markEnded, runModel, saveWaitingCall, type ModelVia, type RunStage } from '@/ai/runWith'
 import { copyPrompt } from './clipboard'
 
 // One run (D-35, D-63; H5): compose → get a reply → check → store. The reply comes either from a copy-prompt round trip
@@ -171,6 +171,7 @@ function stopWaiting(): void {
 }
 
 onMounted(() => {
+  void adoptAccountModel(listModels) // a device that never chose offers the account's model (D-102)
   const w = loadWaitingCall(props.stage)
   if (!w) return
   if (!props.waiting || w.runId !== props.waitingRunId) {
@@ -187,7 +188,9 @@ onBeforeUnmount(() => abort?.abort())
  * sending a second call (CodeReview B1).
  */
 defineExpose({
-  go: () => {
+  go: async () => {
+    if (calling.value || busy.value || reply.value.trim()) return
+    await adoptAccountModel(listModels) // a Refresh right after the page opened waits for the model, not copy and paste
     if (calling.value || busy.value || reply.value.trim()) return
     return runModel.value ? runWithModel() : start()
   },
