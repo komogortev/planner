@@ -181,6 +181,18 @@ onMounted(() => {
 })
 onBeforeUnmount(() => abort?.abort())
 
+/**
+ * Start a run the way the buttons do: with this device's model when one is chosen, else copy the prompt. A run already
+ * under way (a model working, a reply in the box) is left alone: a second Refresh shows it instead of replacing it and
+ * sending a second call (CodeReview B1).
+ */
+defineExpose({
+  go: () => {
+    if (calling.value || busy.value || reply.value.trim()) return
+    return runModel.value ? runWithModel() : start()
+  },
+})
+
 function onReplyInput(): void {
   preview.value = null
   via.value = null // edited by hand: stored as the owner's paste, not as the model's reply

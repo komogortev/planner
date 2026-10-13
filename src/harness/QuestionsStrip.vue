@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { isBodyTap } from '@/composables/bodyTap'
 import { syncSoon } from '@/sync'
 import { applyHarnessReply2, pendingHarness2, startHarness2 } from './loop2'
@@ -66,6 +66,14 @@ function onDocClick(e: MouseEvent) {
   if (mode.value !== 'line' && root.value && !root.value.contains(e.target as Node)) mode.value = 'line'
 }
 onMounted(() => document.addEventListener('click', onDocClick, true))
+
+// Daily's Refresh (the owner asks for an update where the Tasks are): open the run and start it. Check and Store stay his.
+const runStep = ref<InstanceType<typeof RunStep> | null>(null)
+watch(() => props.loop.refresh.value, async () => {
+  mode.value = 'work'
+  await nextTick()
+  void runStep.value?.go()
+})
 onBeforeUnmount(() => document.removeEventListener('click', onDocClick, true))
 
 async function compose() {
@@ -128,7 +136,7 @@ async function store(reply: string, via?: ModelVia) {
         <StripItemView v-for="it in items" :key="it.id" :item="it" />
       </div>
       <div class="mt-3" data-test="strip-run">
-        <RunStep title="Read my new notes and changed tasks" stage="harness" :waiting="waiting" :waiting-run-id="waitingRunId" :compose="compose" :check="check" :store="store" />
+        <RunStep ref="runStep" title="Read my new notes and changed tasks" stage="harness" :waiting="waiting" :waiting-run-id="waitingRunId" :compose="compose" :check="check" :store="store" />
       </div>
     </div>
   </section>
