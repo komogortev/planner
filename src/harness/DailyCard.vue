@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { addDays } from '@/domain/harness'
 import { summaryText, type SummaryPlan } from '@/domain/summary'
 import type { Task, TaskState } from '@/domain/tasks'
@@ -16,6 +16,23 @@ const props = defineProps<{ loop: Loop2 }>()
 const tasks = computed(() => props.loop.day.value.tasks)
 const day = computed(() => props.loop.day.value.day)
 const upcoming = computed(() => props.loop.day.value.upcoming)
+const menuOpen = ref(false)
+const menuRoot = ref<HTMLElement | null>(null)
+const menuButton = ref<HTMLButtonElement | null>(null)
+function closeMenu() {
+  menuOpen.value = false
+  menuButton.value?.focus()
+}
+const onDocClick = (e: MouseEvent) => {
+  if (menuOpen.value && menuRoot.value && !menuRoot.value.contains(e.target as Node)) menuOpen.value = false
+}
+onMounted(() => document.addEventListener('click', onDocClick))
+onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
+// New notes, answers or edits not yet read by a run: Refresh re-runs the analysis with them (D-72's trigger, on Daily).
+const waitingWork = computed(() => {
+  const { notes, tasks: changed } = props.loop.work.value
+  return [notes ? `${notes} new note${notes === 1 ? '' : 's'}` : '', changed ? `${changed} changed task${changed === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ')
+})
 
 const error = ref<string | null>(null)
 const busy = ref(false)
@@ -118,7 +135,23 @@ async function saveIt() {
   <section class="card daily" data-test="daily-card" aria-label="Daily">
     <header class="flex items-center justify-between gap-2">
       <h3 class="font-semibold">Daily <span class="sub">{{ day }}</span></h3>
-      <button v-if="!summaryOpen" type="button" class="btn-ghost btn-xs" :disabled="!tasks.length" data-test="daily-edit-summary" @click="openSummary">Edit summary</button>
+      <div v-if="!summaryOpen" class="flex gap-1.5 items-center">
+        <button
+          type="button" class="btn-ghost btn-xs" :disabled="!waitingWork" :title="waitingWork || 'Nothing new to read'"
+          :aria-label="waitingWork ? `Refresh: ${waitingWork}` : 'Refresh: nothing new to read'" data-test="daily-refresh"
+          @click="props.loop.refresh.value++"
+        >Refresh</button>
+        <!-- Widget options (edit summary now; edit or remove the widget later) live behind ⋯, so the header holds one action. -->
+        <div ref="menuRoot" class="menu" @keydown.esc="closeMenu">
+          <button
+            ref="menuButton" type="button" class="btn-ghost btn-xs" aria-label="Daily options" aria-controls="daily-menu-list" :aria-expanded="menuOpen"
+            data-test="daily-menu" @click="menuOpen = !menuOpen"
+          >⋯</button>
+          <div v-if="menuOpen" id="daily-menu-list" class="menu-list" data-test="daily-menu-list">
+            <button type="button" :disabled="!tasks.length" data-test="daily-edit-summary" @click="menuOpen = false; openSummary()">Edit summary</button>
+          </div>
+        </div>
+      </div>
     </header>
 
     <template v-if="!summaryOpen">
@@ -187,4 +220,9 @@ async function saveIt() {
 .btn-xs { padding: 0.3rem 0.65rem; font-size: 0.78rem; border-radius: 0.6rem; }
 .link { text-decoration: underline; color: var(--glass-text); background: none; padding: 0; }
 .err { font-size: 0.75rem; color: #fda4af; margin-top: 0.35rem; }
+.menu { position: relative; }
+.menu-list { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; min-width: 10rem; padding: 4px; border-radius: 0.75rem; background: rgb(var(--s-900)); box-shadow: 0 6px 20px rgb(0 0 0 / 0.3); }
+.menu-list button { display: block; width: 100%; text-align: left; padding: 0.45rem 0.65rem; border-radius: 0.5rem; font-size: 0.85rem; color: rgb(var(--s-100)); }
+.menu-list button:hover:not(:disabled) { background: rgb(var(--s-800)); }
+.menu-list button:disabled { opacity: 0.5; }
 </style>

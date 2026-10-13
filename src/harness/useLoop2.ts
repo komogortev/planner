@@ -13,6 +13,8 @@ export interface Loop2 {
   day: ComputedRef<{ day: string; tasks: Task[]; upcoming: Task[] }>
   items: ComputedRef<StripItem[]>
   work: ComputedRef<{ notes: number; tasks: number }>
+  /** Bumped by Daily's Refresh: the questions strip opens and starts the run that reads the new feedback. */
+  refresh: Ref<number>
 }
 
 /** The account's notes, Tasks, questions and proposals, live (one subscription for the whole Dashboard). Views that depend
@@ -36,5 +38,6 @@ export function useLoop2(): Loop2 {
     day: computed(() => today(data.value, now.value)),
     items: computed(() => stripItems(data.value)),
     work: computed(() => harnessWork(data.value, now.value)),
+    refresh: ref(0),
   }
 }
