@@ -9,7 +9,8 @@ import { addTask2, editTask2, previewSummary, saveSummary, setTaskState2 } from 
 import type { Loop2 } from './useLoop2'
 
 // Daily (HW-HARNESS §11, D-69/D-71): the open Tasks whose day has come, computed on the device — no paste. Each Task:
-// done · tomorrow · drop, tap the text to edit it (owner text from then on; it enters the next run). "+ task" adds one by
+// done · tomorrow · drop, shown on the row tapped (D-104: buttons on every row read as "waiting for you"), and a second
+// tap on the open row's text edits it (owner text from then on; it enters the next run). "+ task" adds one by
 // hand. "Edit summary" opens the list as text: a changed line edits its Task, a new line adds one, and a removed line
 // carries its Task to tomorrow with a question (D-73) — shown before saving.
 const props = defineProps<{ loop: Loop2 }>()
@@ -33,8 +34,12 @@ function closeMenu() {
   menuOpen.value = false
   menuButton.value?.focus()
 }
+const cardRoot = ref<HTMLElement | null>(null)
+// D-104: one row at a time shows its actions. A tap outside the card puts them away.
+const activeId = ref<string | null>(null)
 const onDocClick = (e: MouseEvent) => {
   if (menuOpen.value && menuRoot.value && !menuRoot.value.contains(e.target as Node)) menuOpen.value = false
+  if (activeId.value && cardRoot.value && !cardRoot.value.contains(e.target as Node)) activeId.value = null
 }
 onMounted(() => document.addEventListener('click', onDocClick))
 onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
@@ -102,6 +107,11 @@ function startEdit(t: Task) {
   editingId.value = t.id
   draft.value = t.text
 }
+/** First tap shows the row's actions; a tap on the open row's text edits it. */
+function tapRow(t: Task) {
+  if (activeId.value === t.id) startEdit(t)
+  else activeId.value = t.id
+}
 async function saveEdit(t: Task) {
   if (editingId.value !== t.id) return // Enter already saved; the blur that follows the input's removal is not a second edit
   const text = draft.value // read now: tapping another Task's text replaces the draft before this save resolves
@@ -145,7 +155,7 @@ async function saveIt() {
 </script>
 
 <template>
-  <section class="card daily" data-test="daily-card" aria-label="Daily">
+  <section ref="cardRoot" class="card daily" data-test="daily-card" aria-label="Daily">
     <header class="flex items-center justify-between gap-2">
       <h3 class="font-semibold">Daily <span class="sub">{{ day }}</span></h3>
       <div v-if="!summaryOpen" class="flex gap-1.5 items-center">
@@ -171,10 +181,13 @@ async function saveIt() {
       <ul class="tasks" data-test="daily-tasks">
         <li v-for="t in shownTasks" :key="t.id" class="task" data-test="daily-task">
           <input v-if="editingId === t.id" v-model="draft" class="input in" aria-label="Task text" data-test="daily-task-input" @keydown.enter="saveEdit(t)" @keydown.esc="editingId = null" @blur="saveEdit(t)" />
-          <button v-else type="button" class="text" :title="'Edit'" data-test="daily-task-text" @click="startEdit(t)">
+          <button
+            v-else type="button" class="text" :title="activeId === t.id ? 'Edit' : 'Show actions'" :aria-expanded="activeId === t.id"
+            data-test="daily-task-text" @click="tapRow(t)"
+          >
             {{ t.text }}<span v-if="t.due" class="due"> · due {{ t.due }}</span>
           </button>
-          <div class="acts">
+          <div v-if="activeId === t.id || editingId === t.id" class="acts" data-test="daily-task-acts">
             <button type="button" class="btn-ghost btn-xs" aria-label="Done" title="Done" data-test="daily-done" @click="done(t)">✓</button>
             <button type="button" class="btn-ghost btn-xs" aria-label="Tomorrow" title="Tomorrow" data-test="daily-tomorrow" @click="tomorrow(t)">→</button>
             <button type="button" class="btn-ghost btn-xs" aria-label="Drop" title="Drop" data-test="daily-drop" @click="drop(t)">✕</button>
@@ -193,8 +206,10 @@ async function saveIt() {
         <p class="sub">Coming up</p>
         <ul>
           <li v-for="t in shownUpcoming" :key="t.id" class="task soon" data-test="daily-upcoming-task">
-            <span class="text">{{ t.text }}<span v-if="t.followUpOn || t.due" class="due"> · {{ t.followUpOn ?? `due ${t.due}` }}</span></span>
-            <button type="button" class="btn-ghost btn-xs" aria-label="Today" title="Today" data-test="daily-pull-today" @click="pullToday(t)">Today</button>
+            <button type="button" class="text" title="Show actions" :aria-expanded="activeId === t.id" data-test="daily-upcoming-text" @click="activeId = activeId === t.id ? null : t.id">
+              {{ t.text }}<span v-if="t.followUpOn || t.due" class="due"> · {{ t.followUpOn ?? `due ${t.due}` }}</span>
+            </button>
+            <button v-if="activeId === t.id" type="button" class="btn-ghost btn-xs" aria-label="Today" title="Today" data-test="daily-pull-today" @click="pullToday(t)">Today</button>
           </li>
         </ul>
       </div>
