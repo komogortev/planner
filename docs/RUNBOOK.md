@@ -91,9 +91,13 @@ Without it, saving a model key and every model call answer 503 `not configured`;
 value is never printed (run from `apps/personal-planner`):
 
 ```bash
-node -e "process.stdout.write('MODEL_KEY_SECRET='+require('crypto').randomBytes(32).toString('base64'))" > api/.env.production
+node -e "require('fs').writeFileSync('api/.env.production','MODEL_KEY_SECRET='+require('crypto').randomBytes(32).toString('base64'))"
 pnpm --dir api exec wrangler secret bulk .env.production
 ```
+
+Node writes the file itself: a shell redirect (`> file`) in Windows PowerShell 5.1 writes UTF-16, which wrangler refuses
+("Configuration file contains UTF-16 LE byte order marker"; seen 2026-10-12). The same holds for any secrets file made by
+redirect: write it with Node, or save it as UTF-8 in an editor.
 
 Then delete `api/.env.production`. Check by name only: `pnpm --dir api exec wrangler secret list`. **Never rotate it by
 overwriting**: every stored key was sealed with it and would stop opening (each would read as `no_key` until re-entered).
