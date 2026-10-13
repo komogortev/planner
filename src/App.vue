@@ -19,7 +19,9 @@ const route = useRoute()
     <UpdateBanner />
     <SyncBanner v-if="!route.meta.public" />
     <Pager v-if="pageIndex(route.path) >= 0" class="flex-1 min-h-0" />
-    <main v-else class="flex-1 min-h-0 overflow-y-auto pb-8">
+    <!-- pb-8 gives scrolling pages room at the end; the sign-in gate fills the screen, so it gets none (a 32 px strip of
+         the app background showed under its photo, owner 2026-10-13). -->
+    <main v-else class="flex-1 min-h-0 overflow-y-auto" :class="{ 'pb-8': !route.meta.public }">
       <RouterView />
     </main>
     <BottomNav v-if="!route.meta.public" />
