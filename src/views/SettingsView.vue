@@ -23,6 +23,7 @@ import ConfirmRestoreModal from '@/components/ConfirmRestoreModal.vue'
 import ConflictModal from '@/components/ConflictModal.vue'
 import { APP_ENV } from '@/env/applyEnvCue'
 import { BUILD, versionLabel } from '@/env/version'
+import { checkForUpdate } from '@/env/checkUpdate'
 
 const online = useOnline()
 const settingsStore = useSettingsStore()
@@ -46,6 +47,24 @@ const router = useRouter()
 const me = ref<AccountLine | null>(null)
 
 // D-28: signing out clears this device's notes (D-50), so it is refused while some have not reached the server.
+// App info → Check for updates: compares this build with the deployed one and, when newer, has the worker fetch it;
+// autoUpdate reloads by itself once it is installed. "Reload now" is there in case it takes a while.
+const updateBusy = ref(false)
+const updateLine = ref<string | null>(null)
+const updateFound = ref(false)
+async function checkUpdates(): Promise<void> {
+  updateBusy.value = true
+  updateFound.value = false
+  try {
+    const r = await checkForUpdate()
+    updateLine.value = r.kind === 'latest' ? `You have the latest version (${r.commit}).` : r.kind === 'updating' ? `Version ${r.commit} found. Updating: the app reloads by itself in a few seconds.` : r.reason
+    updateFound.value = r.kind === 'updating'
+  } finally {
+    updateBusy.value = false
+  }
+}
+const reloadNow = () => window.location.reload()
+
 const signOutBlocked = ref<number | null>(null)
 const signOutDraft = ref(false) // an unsent draft in the capture box stands in the way too (D-56)
 const signOutError = ref<string | null>(null)
@@ -519,6 +538,11 @@ async function doDisconnect(): Promise<void> {
         <div>
           <dt class="text-xs text-slate-500 uppercase tracking-wider">Version</dt>
           <dd class="mt-1">{{ versionLabel(BUILD, APP_ENV) }}</dd>
+          <button type="button" class="btn-ghost text-xs mt-2" :disabled="updateBusy" data-test="check-updates" @click="checkUpdates">
+            {{ updateBusy ? 'Checking…' : 'Check for updates' }}
+          </button>
+          <p v-if="updateLine" class="text-xs mt-1" role="status" data-test="check-updates-result">{{ updateLine }}</p>
+          <button v-if="updateFound" type="button" class="link text-xs mt-1 underline" data-test="check-updates-reload" @click="reloadNow">Reload now</button>
         </div>
         <div>
           <dt class="text-xs text-slate-500 uppercase tracking-wider">Storage</dt>
