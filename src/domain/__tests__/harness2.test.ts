@@ -117,6 +117,14 @@ describe('parse', () => {
     expect(parseHarnessOutput2('{"tasks":[{"op":"split","taskId":"t1","into":[{"text":"a"}]}]}').ok).toBe(false)
     expect(parseHarnessOutput2('{"tasks":[],"questions":[{"text":1}]}').ok).toBe(false)
   })
+  // 06 A7 (L11): a reply cut off mid-string — a paste that lost its tail, or a model that hit its token cap — is refused.
+  it('refuses a reply cut off mid-string, bare or fenced', () => {
+    const whole = '{"tasks":[{"op":"create","text":"Call the bank","sourceEntryIds":["n1"]}],"questions":[]}'
+    expect(parseHarnessOutput2(whole).ok).toBe(true) // known positive: the uncut reply parses
+    for (const cut of [whole.slice(0, 40), whole.slice(0, whole.indexOf('bank') + 2), '```json\n' + whole.slice(0, 60)]) {
+      expect(parseHarnessOutput2(cut).ok, cut).toBe(false)
+    }
+  })
 })
 
 describe('apply: create and dedupe', () => {

@@ -1,9 +1,11 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { meApi, signedOutBody } from './account'
+import { aiCallsApi } from './aiCalls'
 import { auth, sessionUser } from './auth'
 import { appOrigins, appUrls } from './config'
 import { logApi } from './log'
+import { modelsApi } from './models'
 import { byIp } from './ratelimit'
 import { entriesApi, sync } from './sync'
 import { envIcon } from '../../src/env/appEnv'
@@ -20,6 +22,12 @@ export interface Env {
   RL_AUTH_IP: RateLimit
   RL_PUSH_IP: RateLimit
   RL_PUSH_USER: RateLimit
+  RL_AI_USER: RateLimit
+  // H5 (docs/H5-MODELS.md): the secret that encrypts users' model keys — optional in the type so a Worker without it
+  // answers 503 'not configured' instead of failing at start; the Workflow every model call runs in; the daily call cap.
+  MODEL_KEY_SECRET?: string
+  MODEL_CALL: Workflow<import('./aiCalls').CallParams>
+  AI_DAILY_CAP: string
 }
 
 const app = new Hono<{ Bindings: Env }>()
@@ -52,7 +60,9 @@ app.use('/auth/*', byIp('RL_AUTH_IP'))
 app.route('/auth', auth)
 app.route('/sync', sync)
 app.route('/entries', entriesApi)
+app.route('/me/models', modelsApi)
 app.route('/me', meApi)
+app.route('/ai/calls', aiCallsApi)
 app.route('/log', logApi)
 
 app.get('/me', async (c) => {
@@ -61,3 +71,4 @@ app.get('/me', async (c) => {
 })
 
 export default app
+export { ModelCallWorkflow } from './aiCalls'

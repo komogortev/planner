@@ -239,6 +239,19 @@ describe('the S3 v2 S1 → S2 contract: every record the v2 domain produces pass
   })
 })
 
+describe('H5: a run made by a registered model (H5-MODELS §5)', () => {
+  const base = { id: 'r', stage: 'harness', version: 2, widgetId: null, entryIds: ['n1'], ranAt: NOW, taskIds: [], deletedAt: null }
+  it('names its model and call; a copy-prompt run names neither; an older build has neither key', () => {
+    expect(must('run', { ...base, executor: 'model', modelId: 'm1', callId: 'c-1' }).absent).toEqual([]) // known positive
+    expect(must('run', { ...base, executor: 'copy-prompt', modelId: null, callId: null }).absent).toEqual([])
+    expect(must('run', { ...base, executor: 'copy-prompt' }).absent).toEqual(['modelId', 'callId'])
+    expect(errorsOf('run', { ...base, executor: 'model', modelId: 'm1', callId: null })).toEqual(['a model run names its model and call'])
+    expect(errorsOf('run', { ...base, executor: 'model' })).toEqual(['a model run names its model and call'])
+    expect(errorsOf('run', { ...base, executor: 'copy-prompt', modelId: 'm1', callId: 'c-1' })).toEqual(['a copy-prompt run names no model or call'])
+    expect(errorsOf('run', { ...base, executor: 'api' })).toHaveLength(1)
+  })
+})
+
 describe('rows from before tasks (ADDED_FIELDS)', () => {
   const v1 = { id: 'q-1', entryId: 'n1', text: 'Which shop?', state: 'open', answer: null, createdAt: NOW, answeredAt: null, runId: 'run-1', deletedAt: null }
   const v2 = { ...v1, taskId: null, kind: 'harness' }
@@ -248,7 +261,7 @@ describe('rows from before tasks (ADDED_FIELDS)', () => {
     expect(q.absent).toEqual(['taskId', 'kind'])
     expect(flatten(q)).toEqual(v1) // no `taskId: null` added: the stored text stays what that build would replay
     expect(must('assessment', { id: 'a', entryId: 'n1', harnessVersion: 1, runId: 'r', at: NOW, deletedAt: null }).absent).toEqual(['taskId'])
-    expect(must('run', { id: 'r', stage: 'harness', version: 1, widgetId: null, entryIds: [], ranAt: NOW, executor: 'copy-prompt', deletedAt: null }).absent).toEqual(['taskIds'])
+    expect(must('run', { id: 'r', stage: 'harness', version: 1, widgetId: null, entryIds: [], ranAt: NOW, executor: 'copy-prompt', deletedAt: null }).absent).toEqual(['taskIds', 'modelId', 'callId'])
     expect(must('question', v2).absent).toEqual([])
   })
 

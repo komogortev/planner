@@ -18,6 +18,8 @@ export default defineConfig(async () => {
             GITHUB_CLIENT_SECRET: 'gh-test-secret',
             GOOGLE_CLIENT_ID: 'google-test-id',
             GOOGLE_CLIENT_SECRET: 'google-test-secret',
+            // 32 bytes of zeros, base64: a fixed test secret for the model-key box (src/keyBox.ts).
+            MODEL_KEY_SECRET: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
           },
         },
       }),

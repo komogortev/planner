@@ -38,7 +38,7 @@ export const RECORD_TABLE = {
 export const ADDED_FIELDS: Partial<Record<RecordKind, readonly string[]>> = {
   assessment: ['taskId'],
   question: ['taskId', 'kind'],
-  run: ['taskIds'],
+  run: ['taskIds', 'modelId', 'callId'], // modelId, callId: H5 (H5-MODELS §5)
 }
 
 /** Ids are lowercase uuids, uuid v5 derivations or short built-in names such as `builtin-daily-task-journal`. */
@@ -72,9 +72,15 @@ export interface RunRecord {
   widgetId: string | null
   entryIds: string[]
   ranAt: string
-  executor: 'copy-prompt'
+  executor: Executor
   taskIds?: string[] // S3 v2: every task the harness prompt carried; absent on a run stored before
+  // H5: the registered model and its call (`/ai/calls`) when `executor` is 'model'; null for a copy-prompt run, absent on
+  // a run stored before H5.
+  modelId?: string | null
+  callId?: string | null
 }
+/** What performed a run (VOCABULARY "Executor"): the owner's paste, or the user's registered model through the Worker (H5). */
+export type Executor = 'copy-prompt' | 'model'
 
 /** Each kind's own fields (the domain types), before the sync fields are added. */
 export interface RecordTypes {
@@ -202,12 +208,12 @@ const SPECS: Record<RecordKind, Record<string, Check>> = {
   },
   report: {
     widgetId: id, lensVersion: int(1, 1000), runId: id, entryIds: idList(200), body: text(1, 10_000),
-    citations: listOf(shape({ entryId: id, quote: line(1, 200) }), 200), executor: oneOf('copy-prompt'), ranAt: dateTime,
+    citations: listOf(shape({ entryId: id, quote: line(1, 200) }), 200), executor: oneOf('copy-prompt', 'model'), ranAt: dateTime,
     origin: oneOf('ai-observation'), droppedCitations: int(0, 1000),
   },
   run: {
-    stage: oneOf('harness', 'widget'), version: int(1, 1000), widgetId: nullable(id), entryIds: idList(200), ranAt: dateTime, executor: oneOf('copy-prompt'),
-    taskIds: idList(TASK_SOURCES_MAX),
+    stage: oneOf('harness', 'widget'), version: int(1, 1000), widgetId: nullable(id), entryIds: idList(200), ranAt: dateTime, executor: oneOf('copy-prompt', 'model'),
+    taskIds: idList(TASK_SOURCES_MAX), modelId: nullable(id), callId: nullable(id),
   },
   task: {
     text: line(1, 200), sourceEntryIds: idList(TASK_SOURCES_MAX), due: nullable(date), state: oneOf('open', 'done', 'dropped'), followUpOn: nullable(date),
@@ -264,7 +270,12 @@ const RULES: Record<RecordKind, (f: Record<string, unknown>) => string | null> =
   entryState: (f) => (f.followUpOn !== null && f.state !== 'open' ? 'only an open note carries a follow-up date' : null),
   widget: (f) => ((f.kind === 'prompt') !== (f.lens !== null) ? 'a prompt widget has a lens, a system widget does not' : null),
   report: () => null,
-  run: (f) => ((f.stage === 'widget') !== (f.widgetId !== null) ? 'a widget run names its widget, a harness run does not' : null),
+  run: (f) =>
+    (f.stage === 'widget') !== (f.widgetId !== null) ? 'a widget run names its widget, a harness run does not'
+      // A model run names its model and call; a copy-prompt run names neither. Absent (an older build) passes: it has neither.
+      : f.executor === 'model' && (typeof f.modelId !== 'string' || typeof f.callId !== 'string') ? 'a model run names its model and call'
+      : f.executor === 'copy-prompt' && (f.modelId != null || f.callId != null) ? 'a copy-prompt run names no model or call'
+      : null,
   task: (f) =>
     f.followUpOn !== null && f.state !== 'open' ? 'only an open task carries a follow-up date'
       : f.by === 'owner' && f.editedAt === null ? 'owner text has an edit time' : null,

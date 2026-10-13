@@ -44,6 +44,8 @@ const COUNT_BY_ACCOUNT: Record<string, string> = {
   entries: 'SELECT COUNT(*) AS n FROM entries WHERE user_id = ?',
   record_revisions: 'SELECT COUNT(*) AS n FROM record_revisions WHERE user_id = ?',
   records: 'SELECT COUNT(*) AS n FROM records WHERE user_id = ?',
+  ai_calls: 'SELECT COUNT(*) AS n FROM ai_calls WHERE user_id = ?',
+  models: 'SELECT COUNT(*) AS n FROM models WHERE user_id = ?',
   sessions: 'SELECT COUNT(*) AS n FROM sessions WHERE user_id = ?',
   identities: 'SELECT COUNT(*) AS n FROM identities WHERE user_id = ?',
   invites: 'SELECT COUNT(*) AS n FROM invites WHERE used_by = ?',
@@ -63,7 +65,18 @@ async function populated(email: string) {
   const [first] = await pushRecords(env.DB, a.id, [recUpsert(asked)]) // versions are the account's one counter, shared with entries
   await pushRecords(env.DB, a.id, [recUpsert({ ...asked, state: 'answered', answer: `Answer by ${email}`, answeredAt: iso(6) }, first!.serverVersion!)])
   await pushRecords(env.DB, a.id, [recUpsert({ ...asked, state: 'dismissed' }, first!.serverVersion!)]) // stale base: the answer goes to record_revisions
-  return { a, keep, gone, edited, asked }
+  // H5: a registered model with a key (through the route, so the key is really sealed) and one finished call with its reply.
+  const modelKey = `sk-test-${email}-secret`
+  const put = await call(a.token, '/me/models/m1', {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ label: 'Mine', format: 'openai-chat', baseUrl: 'https://llm.example.com/v1', model: 'm-1', maxTokens: 4000, key: modelKey }),
+  })
+  expect(put.status).toBe(200)
+  await env.DB.prepare(
+    `INSERT INTO ai_calls (user_id, id, model_id, stage, run_id, entry_count, prompt_bytes, prompt, status, reply, started_at, finished_at)
+     VALUES (?, ?, 'm1', 'harness', 'run-1', 3, 120, NULL, 'ok', ?, ?, ?)`,
+  ).bind(a.id, crypto.randomUUID(), `reply for ${email}`, Date.now() - 5000, Date.now()).run()
+  return { a, keep, gone, edited, asked, modelKey }
 }
 
 describe('A13 — every table is covered', () => {
@@ -114,6 +127,21 @@ describe('GET /me/export', () => {
     expect(text).not.toContain(hash)
     expect(text).not.toContain(a.token)
     expect(text).not.toContain('token_hash')
+  })
+
+  it('carries models without their key and calls without their prompt', async () => {
+    const { a, modelKey } = await populated('a@example.com')
+    const stored = (await env.DB.prepare('SELECT key_ct FROM models WHERE user_id = ?').bind(a.id).first<{ key_ct: string | null }>())!.key_ct
+    expect(stored).toBeTruthy() // exercised: a sealed key exists to be leaked
+    const res = await call(a.token, '/me/export')
+    const text = await res.clone().text()
+    const out = (await res.json()) as { models: { id: string; hasKey: boolean; keyHint: string }[]; aiCalls: { reply: string; status: string }[] }
+    expect(out.models).toMatchObject([{ id: 'm1', hasKey: true, keyHint: modelKey.slice(-4) }])
+    expect(out.aiCalls).toMatchObject([{ status: 'ok', reply: 'reply for a@example.com' }])
+    expect(text).not.toContain(modelKey)
+    expect(text).not.toContain(stored!)
+    expect(text).not.toContain('key_ct')
+    expect(text).not.toContain('"prompt"')
   })
 
   it('contains nothing of another account (isolation)', async () => {
