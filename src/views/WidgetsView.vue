@@ -54,6 +54,8 @@ async function toggle(id: SystemWidgetId, active: boolean) {
 .switch { flex: none; width: 2.75rem; height: 1.6rem; border-radius: 999px; background: var(--glass-sub); opacity: 0.55; position: relative; transition: background 0.15s, opacity 0.15s; }
 .switch-on { background: #4f46e5; opacity: 1; /* indigo-600, as .btn-primary */ }
 .switch:disabled { cursor: wait; }
+/* The touch target is 48x48 around the 44x26 switch (missed taps reported on the phone, owner 2026-10-14). */
+.switch::before { content: ''; position: absolute; inset: -11px -2px; }
 .knob { position: absolute; top: 0.2rem; left: 0.2rem; width: 1.2rem; height: 1.2rem; border-radius: 999px; background: #fff; transition: transform 0.15s; }
 .switch-on .knob { transform: translateX(1.15rem); }
 @media (prefers-reduced-motion: reduce) { .switch, .knob { transition: none; } }

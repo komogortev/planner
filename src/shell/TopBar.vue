@@ -56,7 +56,9 @@ const menuBtn = ref<HTMLButtonElement | null>(null)
   .title { display: none; }
   .tabs { display: flex; }
 }
-.menu-btn { flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 10px; color: var(--glass-text); }
+.menu-btn { position: relative; flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 10px; color: var(--glass-text); }
 .menu-btn:hover, .menu-btn[aria-expanded='true'] { background: var(--glass-btn-bg); }
 .menu-btn svg { width: 22px; height: 22px; }
+/* The touch target is 48px (missed taps reported on the phone, owner 2026-10-14); the drawn button stays 40. */
+.menu-btn::before { content: ''; position: absolute; inset: -4px; }
 </style>

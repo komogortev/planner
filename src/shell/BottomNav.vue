@@ -130,6 +130,9 @@ const moreBtn = ref<HTMLButtonElement | null>(null)
   background: var(--glass-btn-bg);
   border: 1px solid var(--glass-btn-edge);
 }
+/* The touch target grows 4px sideways and down (missed taps reported, owner 2026-10-14), not up: the band is the button's
+   height, so an upward strip would sit over the page content above it (CodeReview). */
+.more::before { content: ''; position: absolute; inset: 0 -4px -4px; }
 .more:focus-visible { outline: none; }
 .more:focus-visible svg { box-shadow: 0 0 0 2px rgb(var(--s-100) / 0.7); }
 </style>
