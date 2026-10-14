@@ -29,14 +29,6 @@ export function formatDate(iso: string | null | undefined): string {
   })
 }
 
-/** Short "Mar 15" format — omits year for compact UI. */
-export function formatDateShort(iso: string | null | undefined): string {
-  if (!iso) return ''
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-}
-
 /**
  * Advance a YYYY-MM-DD date by n months, preserving day-of-month where possible
  * (clamps to last day if target month is shorter).

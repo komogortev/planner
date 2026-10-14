@@ -16,11 +16,9 @@ export const syncEngine = new SyncEngine({
 const POLL_MS = 60_000
 const AFTER_CAPTURE_MS = 2_000
 let started = false
-let pollTimer: ReturnType<typeof setInterval> | undefined
 let captureTimer: ReturnType<typeof setTimeout> | undefined
 let retryTimer: ReturnType<typeof setTimeout> | undefined
 let persistAsked = false
-let teardown: (() => void) | null = null
 
 const visible = () => typeof document === 'undefined' || document.visibilityState === 'visible'
 
@@ -56,7 +54,7 @@ export function startSync(opts: { onSessionChange?: (signedIn: boolean) => void 
   if (started) return
   started = true
   let reportedStuck = false
-  const unsubscribe = syncEngine.subscribe((s) => {
+  syncEngine.subscribe((s) => {
     scheduleRetry(s); askPersist(s)
     // A sync that keeps failing is reported once per episode, by kind only (no message: it could quote a note).
     if (s.failures >= 3 && !reportedStuck) { reportedStuck = true; void reportError('sync-stuck') }
@@ -73,24 +71,8 @@ export function startSync(opts: { onSessionChange?: (signedIn: boolean) => void 
   const onStorage = (e: StorageEvent) =>
     handleTokenStorage(e, { reset: () => syncEngine.reset(), syncNow, signedIn: () => storedToken() !== null, onSessionChange: opts.onSessionChange })
   window.addEventListener('storage', onStorage)
-  pollTimer = setInterval(() => { if (visible()) syncNow() }, POLL_MS)
-  teardown = () => {
-    unsubscribe()
-    document.removeEventListener('visibilitychange', onVisible)
-    window.removeEventListener('online', onOnline)
-    window.removeEventListener('offline', onOffline)
-    window.removeEventListener('storage', onStorage)
-  }
+  setInterval(() => { if (visible()) syncNow() }, POLL_MS)
   syncNow()
-}
-
-export function stopSyncForTests(): void {
-  teardown?.()
-  teardown = null
-  started = false
-  clearInterval(pollTimer)
-  clearTimeout(captureTimer)
-  clearTimeout(retryTimer)
 }
 
 export type StorageUsage = { usedBytes: number | null; quotaBytes: number | null; persisted: boolean | null }
