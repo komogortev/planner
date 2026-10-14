@@ -172,7 +172,10 @@ async function saveIt() {
           :aria-label="waitingWork ? `Refresh: ${waitingWork}` : 'Refresh: nothing new to read'" data-test="daily-refresh"
           @click="props.loop.refresh.value++"
         >Refresh</button>
-        <button type="button" class="btn-ghost btn-xs" aria-label="Add a task" title="Add a task" data-test="daily-add-open" @click="startAdd">+</button>
+        <!-- A drawn plus, large and thin: the text "+" read as a speck at this size (owner, 2026-10-14). -->
+        <button type="button" class="btn-ghost btn-xs btn-icon" aria-label="Add a task" title="Add a task" data-test="daily-add-open" @click="startAdd">
+          <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 4v16M4 12h16" /></svg>
+        </button>
         <!-- Widget options (edit summary now; edit or remove the widget later) live behind ⋯, so the header holds one action. -->
         <div ref="menuRoot" class="menu" @keydown.esc="closeMenu">
           <button
@@ -247,6 +250,8 @@ async function saveIt() {
 .in { padding: 0.3rem 0.6rem; font-size: 0.85rem; flex: 1; }
 .plan { font-size: 0.8rem; margin-top: 0.5rem; padding-left: 1rem; list-style: disc; display: flex; flex-direction: column; gap: 0.15rem; }
 .btn-xs { padding: 0.3rem 0.65rem; font-size: 0.78rem; border-radius: 0.6rem; }
+.btn-icon { padding: 0.3rem 0.45rem; } /* with the 20px glyph: the same height as Refresh and ⋯ beside it */
+.btn-icon svg { width: 20px; height: 20px; }
 .link { text-decoration: underline; color: var(--glass-text); background: none; padding: 0; }
 .err { font-size: 0.75rem; color: var(--glass-err); margin-top: 0.35rem; }
 .menu { position: relative; }
