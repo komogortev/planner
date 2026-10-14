@@ -8,7 +8,7 @@ const MIN_GAP_MS = 60_000
 const lastSent = new Map<string, number>()
 
 /** Kinds are lowercase words with `.`, `_`, `-`, `:` (the Worker refuses anything else). */
-export type ErrorKind = 'js-error' | 'promise-rejected' | `sync-${string}`
+export type ErrorKind = 'js-error' | 'promise-rejected' | 'stale-build' | `sync-${string}`
 
 export interface ReportDeps {
   fetch: typeof fetch
