@@ -1,7 +1,7 @@
 // D-22 client: the Worker calls and the wording. A fake fetch stands in for /me/sessions (the Worker side is tested in
 // api/test/sessions.test.ts).
 import { describe, expect, it } from 'vitest'
-import { deviceName, listSessions, seenLabel, SessionsError, signOutOthers, signOutSession } from '../sessions'
+import { deviceName, listSessions, seenLabel, SessionsError, signOutOthers, signOutSession, splitRecent } from '../sessions'
 
 type Seen = { url: string; method: string; auth: string | null }
 function fake(status: number, body: unknown, seen: Seen[] = []) {
@@ -48,5 +48,19 @@ describe('wording', () => {
   it('a session from before device labels is named plainly', () => {
     expect(deviceName({ device: null })).toBe('Unknown device')
     expect(deviceName({ device: 'Edge on Windows' })).toBe('Edge on Windows')
+  })
+})
+
+describe('what the card lists up front', () => {
+  const NOW = Date.UTC(2026, 10 - 1, 14, 12)
+  const row = (id: string, ageH: number, current = false) => ({ id, current, lastSeenAt: NOW - ageH * 3_600_000 })
+  it('this device and the ones seen today; older ones fold away, in order', () => {
+    const { recent, older } = splitRecent([row('me', 50, true), row('a', 2), row('b', 30), row('c', 23), row('d', 72)], NOW)
+    expect(recent.map((s) => s.id)).toEqual(['me', 'a', 'c'])
+    expect(older.map((s) => s.id)).toEqual(['b', 'd'])
+  })
+  it('a row folded away is never one labelled "last seen today"', () => {
+    const { older } = splitRecent([row('x', 23.9), row('y', 24)], NOW)
+    expect(older.map((s) => seenLabel(s.lastSeenAt, NOW))).toEqual(['yesterday'])
   })
 })

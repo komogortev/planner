@@ -2,7 +2,7 @@
 import { ref } from 'vue'
 import { useInstallPrompt } from '@/composables/useInstallPrompt'
 
-const { visible, canInstall, showIOSHint, prompt, dismiss } = useInstallPrompt()
+const { visible, canInstall, showIOSHint, prompt } = useInstallPrompt()
 
 const showIOSPanel = ref(false)
 const busy = ref(false)
@@ -47,15 +47,6 @@ async function onClick() {
           <path d="M4 17h12" />
         </svg>
         <span>Install app</span>
-      </button>
-      <button
-        type="button"
-        class="px-1.5 py-1 rounded-md text-xs text-slate-500 hover:text-slate-300 hover:bg-slate-800/80 transition-colors"
-        title="Hide install button"
-        aria-label="Hide install button"
-        @click="dismiss"
-      >
-        ×
       </button>
     </div>
 

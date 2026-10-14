@@ -14,11 +14,11 @@ import { onBeforeUnmount, onMounted, ref, computed } from 'vue'
  * (Chromium + iOS PWA on home screen) and `navigator.standalone` (iOS Safari
  * legacy). When standalone, the button hides itself.
  *
- * Dismissal is per-browser, persisted to localStorage. The user can re-show
- * the button by clearing site data.
+ * No dismissal (owner, 2026-10-14): installing stays available until the app is installed. A device that hid the
+ * button with the old "×" kept a localStorage flag; it is cleared on mount so the button comes back there too.
  */
 
-const DISMISS_KEY = 'pp.installPrompt.dismissed'
+const LEGACY_DISMISS_KEY = 'pp.installPrompt.dismissed'
 
 interface BeforeInstallPromptEvent extends Event {
   readonly platforms: ReadonlyArray<string>
@@ -30,17 +30,16 @@ export function useInstallPrompt() {
   const deferredPrompt = ref<BeforeInstallPromptEvent | null>(null)
   const isStandalone = ref(false)
   const isIOS = ref(false)
-  const dismissed = ref(false)
   const lastOutcome = ref<'accepted' | 'dismissed' | null>(null)
 
-  /** Chromium can install: we have the captured event and the user hasn't dismissed. */
-  const canInstall = computed(() => deferredPrompt.value !== null && !dismissed.value)
+  /** Chromium can install: we have the captured event. */
+  const canInstall = computed(() => deferredPrompt.value !== null)
 
-  /** iOS path: show manual instructions. Only when not already installed + not dismissed. */
-  const showIOSHint = computed(() => isIOS.value && !isStandalone.value && !dismissed.value)
+  /** iOS path: show manual instructions. Only when not already installed. */
+  const showIOSHint = computed(() => isIOS.value && !isStandalone.value)
 
   /** Anything to show at all. */
-  const visible = computed(() => !isStandalone.value && !dismissed.value && (canInstall.value || isIOS.value))
+  const visible = computed(() => !isStandalone.value && (canInstall.value || isIOS.value))
 
   function detectPlatform() {
     if (typeof window === 'undefined') return
@@ -52,7 +51,7 @@ export function useInstallPrompt() {
     const ua = window.navigator.userAgent
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     isIOS.value = /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream
-    dismissed.value = window.localStorage.getItem(DISMISS_KEY) === '1'
+    try { window.localStorage.removeItem(LEGACY_DISMISS_KEY) } catch { /* storage blocked: nothing to clear */ }
   }
 
   function onBeforeInstallPrompt(e: Event) {
@@ -76,20 +75,6 @@ export function useInstallPrompt() {
     return choice.outcome
   }
 
-  function dismiss(): void {
-    dismissed.value = true
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(DISMISS_KEY, '1')
-    }
-  }
-
-  function reset(): void {
-    dismissed.value = false
-    if (typeof window !== 'undefined') {
-      window.localStorage.removeItem(DISMISS_KEY)
-    }
-  }
-
   onMounted(() => {
     detectPlatform()
     window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt)
@@ -107,10 +92,7 @@ export function useInstallPrompt() {
     visible,
     isStandalone,
     isIOS,
-    dismissed,
     lastOutcome,
     prompt,
-    dismiss,
-    reset,
   }
 }

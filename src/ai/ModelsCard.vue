@@ -115,7 +115,7 @@ async function remove(m: ModelView): Promise<void> {
   }
 }
 const choose = (m: ModelView | null) => setRunModel(m ? { id: m.id, label: m.label } : null)
-// The switch names the path, not a model (owner, 2026-10-13): which model is the list's Active row. "AI model" takes the
+// The switch names the path, not a model (owner, 2026-10-13): which model is the list's highlighted row. "AI model" takes the
 // first that has a key when none is active; a row's Use makes it the active one.
 const chooseAi = () => {
   const first = usable.value[0]
@@ -149,10 +149,10 @@ const chooseAi = () => {
       </p>
 
       <ul class="list" data-test="models-list">
-        <li v-for="m in models" :key="m.id" class="row" :class="{ 'row-active': runModel?.id === m.id }" :data-test="`model-${m.id}`">
+        <li v-for="m in models" :key="m.id" class="row" :class="{ 'row-active': runModel?.id === m.id }" :aria-current="runModel?.id === m.id ? 'true' : undefined" :data-test="`model-${m.id}`">
           <div class="min-w-0">
             <p class="text-sm font-semibold flex items-center min-w-0">
-              <span class="truncate">{{ m.label }}</span><span v-if="runModel?.id === m.id" class="badge" data-test="model-active">Active</span>
+              <span class="truncate">{{ m.label }}</span>
             </p>
             <p class="text-xs text-slate-400 truncate">{{ m.model }} · {{ host(m) }} · {{ m.hasKey ? `key …${m.keyHint}` : 'no key' }}</p>
             <p v-if="tests[m.id]" class="text-xs mt-1" :class="tests[m.id]!.startsWith('Works') ? 'text-emerald-300' : 'text-slate-300'" role="status" data-test="model-test-result">{{ tests[m.id] }}</p>
@@ -201,9 +201,8 @@ const chooseAi = () => {
 .opt-on { background: rgb(var(--s-950)); color: rgb(var(--s-100)); box-shadow: 0 1px 3px rgb(0 0 0 / 0.25); }
 .list { margin-top: 1rem; display: grid; gap: 0.75rem; }
 .row { min-width: 0; display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; }
-/* The model this device runs with, against the rest of the list. */
-.row-active { margin: -0.5rem; padding: 0.5rem; border-radius: 10px; background: rgb(var(--s-800)); box-shadow: inset 0 0 0 1px rgb(79 70 229 / 0.7); }
-.badge { flex: none; margin-left: 0.4rem; padding: 0.05rem 0.4rem; border-radius: 999px; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; background: #4f46e5; color: #fff; vertical-align: middle; }
+/* The model this device runs with: a background, nothing more; the rest is a plain list (owner, 2026-10-14). */
+.row-active { margin: -0.5rem; padding: 0.5rem; border-radius: 10px; background: rgb(var(--s-800)); }
 form :is(input, select) { min-width: 0; width: 100%; }
 .btn-sm { padding: 0.3rem 0.75rem; font-size: 0.78rem; }
 </style>
