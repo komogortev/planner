@@ -44,7 +44,7 @@ export default defineConfig({
     },
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'apple-touch-icon-180x180.png'],
+      includeAssets: ['favicon.ico', 'apple-touch-icon-180x180.png', 'icon.svg'], // icon.svg: the top bar's brand, offline too
       manifest: {
         name: 'Personal Planner',
         short_name: 'Planner',
