@@ -295,7 +295,7 @@ async function storeReply(): Promise<void> {
 <style scoped>
 .step { padding: 0.6rem 0; border-top: 1px solid var(--glass-edge); }
 .sub { font-size: 0.78rem; color: var(--glass-sub); margin-top: 0.35rem; }
-.err { font-size: 0.8rem; color: #fda4af; margin-top: 0.35rem; }
+.err { font-size: 0.8rem; color: var(--glass-err); margin-top: 0.35rem; }
 .preview { font-size: 0.8rem; margin-top: 0.5rem; padding-left: 1rem; list-style: disc; color: var(--glass-text); }
 .btn-sm { padding: 0.3rem 0.75rem; font-size: 0.78rem; }
 </style>

@@ -245,7 +245,7 @@ async function saveIt() {
 .plan { font-size: 0.8rem; margin-top: 0.5rem; padding-left: 1rem; list-style: disc; display: flex; flex-direction: column; gap: 0.15rem; }
 .btn-xs { padding: 0.3rem 0.65rem; font-size: 0.78rem; border-radius: 0.6rem; }
 .link { text-decoration: underline; color: var(--glass-text); background: none; padding: 0; }
-.err { font-size: 0.75rem; color: #fda4af; margin-top: 0.35rem; }
+.err { font-size: 0.75rem; color: var(--glass-err); margin-top: 0.35rem; }
 .menu { position: relative; }
 .menu-list { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; min-width: 10rem; padding: 4px; border-radius: 0.75rem; background: rgb(var(--s-900)); box-shadow: 0 6px 20px rgb(0 0 0 / 0.3); }
 .menu-list button { display: block; width: 100%; text-align: left; padding: 0.45rem 0.65rem; border-radius: 0.5rem; font-size: 0.85rem; color: rgb(var(--s-100)); }

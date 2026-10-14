@@ -94,5 +94,5 @@ const onCorrect = () => {
 .in { padding: 0.3rem 0.6rem; font-size: 0.85rem; }
 .btn-xs { padding: 0.3rem 0.65rem; font-size: 0.78rem; border-radius: 0.6rem; }
 .sub-hint { font-size: 0.72rem; color: var(--glass-sub); margin-top: 0.25rem; }
-.err { font-size: 0.75rem; color: #fda4af; margin-top: 0.25rem; }
+.err { font-size: 0.75rem; color: var(--glass-err); margin-top: 0.25rem; }
 </style>

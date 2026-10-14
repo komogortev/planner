@@ -76,7 +76,7 @@ function onKey(e: KeyboardEvent): void {
       </div>
     </div>
 
-    <p v-if="error" class="text-sm text-rose-300 px-5 mt-2" data-test="capture-error">{{ error }}</p>
+    <p v-if="error" class="text-sm text-err px-5 mt-2" data-test="capture-error">{{ error }}</p>
     <p class="text-xs text-slate-500 mt-2 h-4" data-test="capture-status">
       <template v-if="saved">Saved ✓</template>
       <template v-else-if="unsynced > 0">

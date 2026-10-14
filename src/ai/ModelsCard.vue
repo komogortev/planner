@@ -127,7 +127,7 @@ const choose = (m: ModelView | null) => setRunModel(m ? { id: m.id, label: m.lab
 
     <p v-if="!signedIn || !online" class="text-sm text-slate-400" data-test="models-offline">Sign in and go online to manage models.</p>
     <template v-else>
-      <p v-if="listError" class="text-sm text-rose-300" role="alert" data-test="models-error">{{ listError }}</p>
+      <p v-if="listError" class="text-sm text-err" role="alert" data-test="models-error">{{ listError }}</p>
 
       <h4 class="font-semibold text-sm mb-2">This device runs with</h4>
       <div class="choice" role="radiogroup" aria-label="This device runs with" data-test="run-with">
@@ -178,7 +178,7 @@ const choose = (m: ModelView | null) => setRunModel(m ? { id: m.id, label: m.lab
           <input id="m-max" v-model.number="form.maxTokens" class="input" type="number" min="256" max="64000" step="1" required data-test="model-max" />
           <label class="label" for="m-key">API key</label>
           <input id="m-key" v-model="form.key" class="input" type="password" required autocomplete="off" spellcheck="false" autocapitalize="off" data-test="model-key" />
-          <p v-if="formError" class="text-sm text-rose-300" role="alert" data-test="model-form-error">{{ formError }}</p>
+          <p v-if="formError" class="text-sm text-err" role="alert" data-test="model-form-error">{{ formError }}</p>
           <button class="btn-primary justify-self-start" type="submit" :disabled="saving" data-test="model-save">{{ saving ? 'Saving…' : 'Save' }}</button>
         </form>
       </details>
