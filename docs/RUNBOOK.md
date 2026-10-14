@@ -83,8 +83,12 @@ change is backwards compatible with the app before it — keep it so (add, don't
 field). Roll back the Worker: `pnpm --dir api exec wrangler rollback`. D1 migrations have no down step; the undo is
 D1 Time Travel (point-in-time restore of the whole database), so migrations only add.
 
-The app has the same one-way door on each device: once a device opens a build with a newer Dexie version, an older build
-cannot open its database (Dexie refuses a lower version). Never roll Pages back past a Dexie version bump; fix forward.
+The app has a one-way door on each device too. Dexie 4 does **not** refuse an older build: it reopens the newer database,
+adds what the older schema expects and runs on, writing and syncing newer data, and the newer build's upgrade steps do
+not run again when it returns (measured 2026-10-14, D-118). Since A6 a build older than the device's data opens nothing
+and shows "Please update the app" (`src/db/staleBuild.ts`, checked before Dexie opens). **Rollback floor: never roll Pages
+back to a build without `src/db/staleBuild.ts`** (it has no guard). Past a Dexie bump, a rollback still blocks every
+device that already has the newer data until the fix is out, so fix forward.
 Last bump: v7 (financial tables dropped, D-112).
 
 Secrets: production via `pnpm --dir api exec wrangler secret bulk <file>` (then delete the file); local in `api/.env`,
@@ -114,7 +118,7 @@ The clients notice (D-58): a pull whose `head` is below the device's cursor — 
 
 ## Error log (S4, D-24)
 
-The app reports `js-error`, `promise-rejected` and `sync-stuck` (a sync failing three times in a row) to `POST /log`:
+The app reports `js-error`, `promise-rejected`, `sync-stuck` (a sync failing three times in a row) and `stale-build` (a build older than the device's data, A6; once per device per stored version) to `POST /log`:
 error kind, app route, build id, time — no message, no text, no account. Production builds only, one report per kind per
 minute, its own per-address limit (10/min), at most 200 reports a day from everyone together (A5), newest 500 kept. Read it:
 
