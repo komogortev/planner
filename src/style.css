@@ -7,8 +7,8 @@
      hovering page sheets (src/shell/Pager.vue). Dark is the default; the light theme (Settings → Appearance) sets
      html[data-theme='light'] (src/theme/theme.ts). */
   :root {
-    /* The bottom zone (calibration 2026-10-12): the nav bar and the strip that reveals it. Page content never scrolls
-       into it, so a tap there is always the nav and a tap on content never is. */
+    /* The bottom band (calibration 2026-10-12; D-117): the page dots and More. Page content never scrolls into it, so a
+       tap there is always the band and a tap on content never is. */
     --nav-zone: calc(40px + env(safe-area-inset-bottom));
     --shadow-room: 64px; /* below a scroll box's content: the cards' --float-1 reaches 28px + 34px blur */
     /* Settings = the cloth's underside (Pager.vue): a darker tone over the backdrop, plus the folds mirrored. */
@@ -160,14 +160,6 @@
 
   .label {
     @apply block text-xs font-semibold uppercase tracking-widest text-slate-500 mb-2;
-  }
-
-  .nav-link {
-    @apply px-3 py-1.5 rounded-lg text-sm font-medium text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors;
-  }
-
-  .nav-link-active {
-    @apply bg-slate-800 text-slate-100;
   }
 }
 

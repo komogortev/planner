@@ -12,7 +12,7 @@ const route = useRoute()
 
 <template>
   <!-- One full screen (h-dvh), never scrolls itself. Nothing may be wider than the screen: an overflowing child makes
-       mobile browsers zoom the page out. No header: the bottom bar is hidden until touched. The three main pages live
+       mobile browsers zoom the page out. No header: the bottom band holds the page dots and More (D-117). The three main pages live
        in the pager (drag between them); every other route renders on its own. -->
   <div class="h-dvh flex flex-col overflow-hidden">
     <EnvBanner />
