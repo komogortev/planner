@@ -10,8 +10,8 @@ import type { Loop2 } from './useLoop2'
 
 // Daily (HW-HARNESS §11, D-69/D-71): the open Tasks whose day has come, computed on the device — no paste. Each Task:
 // done · tomorrow · drop, shown on the row tapped (D-104: buttons on every row read as "waiting for you"), and a second
-// tap on the open row's text edits it (owner text from then on; it enters the next run). "+ task" adds one by
-// hand. "Edit summary" opens the list as text: a changed line edits its Task, a new line adds one, and a removed line
+// tap on the open row's text edits it (owner text from then on; it enters the next run). The header's + opens the card
+// on its add box. "Edit summary" opens the list as text: a changed line edits its Task, a new line adds one, and a removed line
 // carries its Task to tomorrow with a question (D-73) — shown before saving.
 const props = defineProps<{ loop: Loop2 }>()
 const tasks = computed(() => props.loop.day.value.tasks)
@@ -118,14 +118,15 @@ async function saveEdit(t: Task) {
 
 const newText = ref('')
 const addInput = ref<HTMLInputElement | null>(null)
-/** Open: every task and the add box (focused when it is what the link offered). Close: back to three lines. */
-async function toggle() {
-  const offeredAdd = !expanded.value && hiddenCount.value === 0
+/** Open: every task and the add box. Close: back to three lines. */
+function toggle() {
   expanded.value = !expanded.value
-  if (offeredAdd) {
-    await nextTick()
-    addInput.value?.focus()
-  }
+}
+/** The header's + (owner, 2026-10-13: the bottom "+ task" row cost a line): opens the card and focuses the add box. */
+async function startAdd() {
+  expanded.value = true
+  await nextTick()
+  addInput.value?.focus()
 }
 async function add() {
   if (newText.value.trim() && (await act(() => addTask2(newText.value)))) {
@@ -171,6 +172,7 @@ async function saveIt() {
           :aria-label="waitingWork ? `Refresh: ${waitingWork}` : 'Refresh: nothing new to read'" data-test="daily-refresh"
           @click="props.loop.refresh.value++"
         >Refresh</button>
+        <button type="button" class="btn-ghost btn-xs" aria-label="Add a task" title="Add a task" data-test="daily-add-open" @click="startAdd">+</button>
         <!-- Widget options (edit summary now; edit or remove the widget later) live behind ⋯, so the header holds one action. -->
         <div ref="menuRoot" class="menu" @keydown.esc="closeMenu">
           <button
@@ -204,14 +206,15 @@ async function saveIt() {
       <p v-if="undo" class="sub mt-1" data-test="daily-undo-line">
         {{ undo.label }}: “{{ undo.task.text }}” · <button type="button" class="link" data-test="daily-undo" @click="undoLast">Undo</button>
       </p>
-      <p v-if="!tasks.length" class="sub mt-1" data-test="daily-empty">Nothing for today. Tasks come from your notes after Get feedback, or add one with + task.</p>
+      <p v-if="!tasks.length" class="sub mt-1" data-test="daily-empty">Nothing for today. Tasks come from your notes after Get feedback, or add one with +.</p>
       <!-- D-106: the add box belongs to the open (expanded) card; the short view is today's list only. -->
       <div v-if="expanded" class="flex gap-1.5 mt-2">
         <input ref="addInput" v-model="newText" class="input in" placeholder="+ task" aria-label="New task" data-test="daily-add-input" @keydown.enter="add" />
         <button type="button" class="btn-ghost btn-xs" :disabled="busy || !newText.trim()" data-test="daily-add" @click="add">Add</button>
       </div>
-      <button type="button" class="link more" :aria-expanded="expanded" :data-test="expanded ? 'daily-less' : 'daily-more'" @click="toggle">
-        {{ expanded ? 'Show less' : hiddenCount ? `+${hiddenCount} more` : '+ task' }}
+      <!-- No row when nothing is hidden: adding starts from the header's + (it opens the card). -->
+      <button v-if="expanded || hiddenCount" type="button" class="link more" :aria-expanded="expanded" :data-test="expanded ? 'daily-less' : 'daily-more'" @click="toggle">
+        {{ expanded ? 'Show less' : `+${hiddenCount} more` }}
       </button>
     </template>
 
