@@ -1,59 +1,73 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref, watch } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { useSignOut } from '@/auth/useSignOut'
 import { PAGES, pageIndex } from './pages'
 
-// Hidden by default (note 11): touching the strip just above the system gesture inset slides the bar in.
-// It hides again on navigation, on a tap outside, or after a few idle seconds.
-const open = ref(false)
+// The bottom band (D-117): always shown, no separator line. The page dots stay (the first is the capture page's
+// microphone) and are links, so a mouse can change page too: the pager swipes by touch only, and this keeps one layout
+// for phone and desktop. "More" (right, in a bubble so it is not lost on a busy page) opens a sheet from the bottom with
+// actions a full page can bury. It opens by tap only; items are added as their features exist.
 const route = useRoute()
-let timer: number | undefined
-// The tap that reveals the bar must not also choose a page: the bar slides in under the same finger, and the click that
-// ends that tap would land on a link (calibration 2026-10-12: it read as an unwanted swipe to the next page). A reveal by
-// touch swallows the next click on the bar, however long the finger stayed; a new touch on the bar is a real tap.
-let swallow = false
+const router = useRouter()
 
-function show(e?: Event): void {
-  if (!open.value && e?.type === 'touchstart') swallow = true
+const open = ref(false)
+const moreBtn = ref<HTMLButtonElement | null>(null)
+const firstItem = ref<HTMLButtonElement | null>(null)
+const sheet = ref<HTMLDivElement | null>(null)
+const { signOut, blocked, draft, error } = useSignOut()
+
+async function show(): Promise<void> {
+  blocked.value = null
+  draft.value = false
+  error.value = null
   open.value = true
-  window.clearTimeout(timer)
-  timer = window.setTimeout(hide, 4000)
+  await nextTick()
+  firstItem.value?.focus()
 }
+// Every close goes through here, so focus returns to More (CodeReview).
 function hide(): void {
-  swallow = false
+  if (!open.value) return
   open.value = false
-  window.clearTimeout(timer)
+  moreBtn.value?.focus()
 }
-// A new touch on the bar is a real tap: it ends the swallow.
-function onNavPointerDown(): void {
-  swallow = false
+function onKey(e: KeyboardEvent): void {
+  if (e.key === 'Escape') hide()
 }
-// The overlay behind the open bar: the revealing tap's click can land on it while the bar slides in — not a tap outside.
-function onOverlayClick(): void {
-  if (swallow) swallow = false
-  else hide()
-}
-function guardClick(e: MouseEvent): void {
-  if (!swallow) return
-  swallow = false
-  e.preventDefault() // the browser's own link navigation
-  e.stopPropagation() // capture phase on <nav>: RouterLink's handler never runs
-}
+watch(open, (now) => (now ? window.addEventListener('keydown', onKey) : window.removeEventListener('keydown', onKey)))
 watch(() => route.path, hide)
-onBeforeUnmount(() => window.clearTimeout(timer))
+onBeforeUnmount(() => window.removeEventListener('keydown', onKey))
+
+// The sheet is modal (the scrim covers the page): Tab wraps inside it instead of walking into the page behind.
+function trapTab(e: KeyboardEvent): void {
+  const items = [...(sheet.value?.querySelectorAll<HTMLButtonElement>('button') ?? [])]
+  const first = items[0]
+  const last = items[items.length - 1]
+  if (!first || !last) return
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
+}
+
+// Close first: on Settings already, the push changes nothing and the route watcher would not fire (CodeReview).
+function goSettings(): void {
+  hide()
+  void router.push('/settings')
+}
+const doSignOut = () => void signOut() // on success the route changes and the sheet closes; otherwise it says why
 </script>
 
 <template>
-  <!-- Reveal zone: the bottom zone (--nav-zone), which page content never scrolls into; touch or tap reveals. -->
-  <div
-    v-if="!open"
-    class="reveal-zone"
-    data-test="nav-reveal"
-    @touchstart.passive="show"
-    @click="show"
-  >
-    <span class="dots" role="img" :aria-label="`Page ${pageIndex(route.path) + 1} of ${PAGES.length}`">
-      <template v-for="(p, i) in PAGES" :key="p.to">
+  <div class="band" data-test="nav-band">
+    <nav class="dots" aria-label="Pages">
+      <RouterLink
+        v-for="(p, i) in PAGES"
+        :key="p.to"
+        :to="p.to"
+        class="dot-link"
+        :aria-label="p.label"
+        :title="p.label"
+        :data-test="`nav-dot-${i}`"
+      >
         <!-- The first page is capture (Home, the dictophone), so its dot is a microphone of the same visual weight: an
              outline like the other dots' rings, filled with the theme's ink while it is the current page. -->
         <svg
@@ -67,46 +81,60 @@ onBeforeUnmount(() => window.clearTimeout(timer))
           stroke-width="2.2"
           stroke-linecap="round"
           stroke-linejoin="round"
+          aria-hidden="true"
         >
           <rect x="9" y="2" width="6" height="12" rx="3" />
           <path d="M5 11a7 7 0 0 0 14 0M12 18v4" />
         </svg>
         <span v-else class="dot" :class="{ 'dot-active': i === pageIndex(route.path) }" />
-      </template>
-    </span>
-  </div>
-  <div v-else class="fixed inset-0 z-30" @touchstart.passive="hide" @click="onOverlayClick" />
-  <nav class="bottom-nav" :class="{ 'bottom-nav-open': open }" aria-label="Pages" @pointerdown="onNavPointerDown" @click.capture="guardClick">
-    <RouterLink
-      v-for="p in PAGES"
-      :key="p.to"
-      :to="p.to"
-      class="nav-link flex-1 flex items-center justify-center"
-      :class="{ 'nav-link-active': route.path === p.to }"
+      </RouterLink>
+    </nav>
+    <button
+      ref="moreBtn" type="button" class="more" aria-label="More" aria-haspopup="dialog" :aria-expanded="open"
+      data-test="nav-more" @click="open ? hide() : show()"
     >
-      {{ p.label }}
-    </RouterLink>
-  </nav>
+      <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="19" cy="12" r="2" /></svg>
+    </button>
+  </div>
+
+  <div v-if="open" class="scrim" data-test="more-scrim" @click="hide" />
+  <div v-if="open" ref="sheet" class="sheet" role="dialog" aria-modal="true" aria-label="More" data-test="more-sheet" @keydown.tab="trapTab">
+    <button type="button" class="handle" aria-label="Close" data-test="more-close" @click="hide"><span /></button>
+    <button ref="firstItem" type="button" class="item" data-test="more-settings" @click="goSettings">Settings</button>
+    <button type="button" class="item" data-test="more-sign-out" @click="doSignOut">Sign out</button>
+    <p v-if="error" class="note err" role="alert" data-test="more-sign-out-error">{{ error }}</p>
+    <p v-if="blocked !== null" class="note warn" role="alert" data-test="more-sign-out-blocked">
+      <template v-if="blocked > 0">{{ blocked }} {{ blocked === 1 ? 'note has' : 'notes have' }} not reached the server. Signing out clears this device, so they would be lost. Let them sync first.</template>
+      <template v-if="draft"> There is an unsent draft in the capture box. Capture it, or empty the box, first.</template>
+    </p>
+  </div>
 </template>
 
 <style scoped>
-.reveal-zone {
+.band {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
-  height: var(--nav-zone); /* calibration 2026-10-12: was 12dvh over the content; now its own band */
+  height: var(--nav-zone); /* page content never scrolls into it (Pager.vue) */
   z-index: 40;
   display: flex;
   justify-content: center;
   align-items: center;
-  padding-bottom: env(safe-area-inset-bottom); /* dots centred in the band, above the system gesture bar */
+  padding-bottom: env(safe-area-inset-bottom); /* centred in the band, above the system gesture bar */
 }
 .dots {
   display: flex;
   align-items: center; /* the mic is taller than the rings: centre them on one line */
-  gap: 10px;
 }
+.dot-link {
+  display: grid;
+  place-items: center;
+  width: 32px; /* the dots keep their spacing; the target is the band's full height around each (CodeReview) */
+  height: 40px;
+  border-radius: 10px;
+}
+.dot-link:focus-visible { outline: 2px solid rgb(var(--s-100) / 0.7); outline-offset: -4px; }
 .dot {
   width: 9px;
   height: 9px;
@@ -124,7 +152,6 @@ onBeforeUnmount(() => window.clearTimeout(timer))
      visual weight. Colours follow the dots: the ring colour at rest, the theme ink and glow when current. */
   width: 14px;
   height: 14px;
-  align-self: center;
   color: rgb(var(--s-200) / 0.65);
   transition: color 120ms, filter 120ms;
 }
@@ -135,23 +162,54 @@ onBeforeUnmount(() => window.clearTimeout(timer))
 .mic-active rect {
   fill: currentColor; /* the capsule fills like the active dot; the cradle and stem stay lines */
 }
-.bottom-nav {
+.more {
+  position: absolute;
+  right: 8px;
+  bottom: env(safe-area-inset-bottom);
+  width: 40px; /* the target; the bubble inside it is 32px */
+  height: 40px;
+  display: grid;
+  place-items: center;
+  color: var(--glass-text);
+}
+.more svg {
+  box-sizing: content-box;
+  width: 18px;
+  height: 18px;
+  padding: 6px;
+  border-radius: 999px;
+  /* The bubble: the theme's outlined glass, so the button reads as one on any page (owner, 2026-10-14). */
+  background: var(--glass-btn-bg);
+  border: 1px solid var(--glass-btn-edge);
+}
+.more:focus-visible { outline: none; }
+.more:focus-visible svg { box-shadow: 0 0 0 2px rgb(var(--s-100) / 0.7); }
+.scrim { position: fixed; inset: 0; z-index: 50; background: rgb(0 0 0 / 0.35); }
+.sheet {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 40;
+  z-index: 51;
+  max-width: 32rem;
+  margin: 0 auto;
   display: flex;
-  align-items: stretch;
-  gap: 4px;
-  height: var(--nav-zone); /* the same band as the reveal zone */
-  padding: 4px 12px calc(4px + env(safe-area-inset-bottom));
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 12px calc(16px + env(safe-area-inset-bottom));
+  border-radius: 16px 16px 0 0;
   background: rgb(var(--s-900));
-  border-top: 1px solid rgb(var(--s-700));
-  transform: translateY(100%);
-  transition: transform 160ms ease-out;
+  color: rgb(var(--s-100));
 }
-.bottom-nav-open {
-  transform: translateY(0);
+.handle { align-self: center; padding: 8px 24px 12px; }
+.handle span { display: block; width: 36px; height: 4px; border-radius: 2px; background: rgb(var(--s-500)); }
+.item { text-align: left; padding: 12px; border-radius: 10px; font-size: 0.95rem; font-weight: 500; }
+.item:hover, .item:focus-visible { background: rgb(var(--s-800)); outline: none; }
+.note { font-size: 0.78rem; padding: 4px 12px 0; }
+.warn { color: var(--glass-warn); }
+.err { color: var(--glass-err); }
+@media (prefers-reduced-motion: no-preference) {
+  .sheet { animation: rise 160ms ease-out; }
+  @keyframes rise { from { transform: translateY(100%); } }
 }
 </style>

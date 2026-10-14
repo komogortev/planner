@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { AccountError, deleteMyAccount, exportAccount, signOutSafely, unsyncedCount } from '@/auth/account'
+import { AccountError, deleteMyAccount, exportAccount, unsyncedCount } from '@/auth/account'
+import { useSignOut } from '@/auth/useSignOut'
 import { checkAccount, type AccountLine } from '@/auth/launchCheck'
 import { storedToken } from '@/auth/signIn'
 import { downloadJson } from '@/utils/download'
@@ -24,7 +25,6 @@ const online = useOnline()
 const router = useRouter()
 const me = ref<AccountLine | null>(null)
 
-// D-28: signing out clears this device's notes (D-50), so it is refused while some have not reached the server.
 // App info → Check for updates: compares this build with the deployed one and, when newer, has the worker fetch it;
 // autoUpdate reloads by itself once it is installed. "Reload now" is there in case it takes a while.
 const updateBusy = ref(false)
@@ -43,24 +43,7 @@ async function checkUpdates(): Promise<void> {
 }
 const reloadNow = () => window.location.reload()
 
-const signOutBlocked = ref<number | null>(null)
-const signOutDraft = ref(false) // an unsent draft in the capture box stands in the way too (D-56)
-const signOutError = ref<string | null>(null)
-async function signOut(): Promise<void> {
-  signOutError.value = null
-  try {
-    const r = await signOutSafely()
-    if (!r.ok) {
-      signOutBlocked.value = r.unsynced
-      signOutDraft.value = r.draft === true
-      return
-    }
-    void router.push({ name: 'signin' })
-  } catch (err) {
-    // The clear failed and was rolled back (device and token as they were): say so instead of an unhandled rejection.
-    signOutError.value = `Could not sign out: ${err instanceof Error ? err.message : String(err)}`
-  }
-}
+const { signOut, blocked: signOutBlocked, draft: signOutDraft, error: signOutError } = useSignOut()
 
 // Sync status (S3): what the loop is doing, what stands in its way, and what the owner can do about a rejected note (D-27).
 const sync = useSyncState()
