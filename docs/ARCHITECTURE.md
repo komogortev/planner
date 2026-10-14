@@ -44,7 +44,7 @@ Target:
 | Module | Contents | May import | Must not import |
 |---|---|---|---|
 | `src/domain/` (H1) | Record types, cleaning/validation rules (H1); `resolveSlice()`, `composeRun()`, report/citation validation (H2) | nothing but TS | Dexie, Vue, Pinia, DOM, `fetch` |
-| `src/db/` | Dexie tables, migrations; snapshot build/parse + GitHub client (frozen financial domain only after H1) | `domain` | Vue |
+| `src/db/` | Dexie tables and their version history (v7 dropped the financial domain, D-112) | `domain` | Vue |
 | `src/auth/` (H1) | Session token, sign-in flow, token renewal | `db` | — |
 | `src/sync/` (H1) | Outbox flush, pull since cursor, backoff, storage usage, `persist()` | `db`, `domain`, `auth` | Vue |
 | `src/stores/` | Pinia stores, the only writers of Dexie from the UI | `db`, `domain`, `sync` | — |
@@ -66,8 +66,6 @@ Changed 2026-10-09 (owner): entries live on a hosted backend, not in `data.json`
 - **Backend:** Cloudflare Worker + D1 (SQLite). Every row keyed `(user_id, id)`. Per-record sync: the client pushes
   outbox mutations (idempotent by client-generated id) and pulls changes after a per-user `server_version` cursor. Soft
   deletes travel as rows. This replaces whole-snapshot sync for entries, and with it the 409 entry-loss hazard.
-- **Frozen financial domain:** stays on the shipped L1 path — single `data.json` in the owner's private data repo,
-  sha concurrency, conflict modal, 1 MB read ceiling (irrelevant at its frozen size).
 - **Owner-held copy:** a nightly Worker cron exports the owner's entries to the private data repo; D1 point-in-time
   restore covers the backend itself.
 - **Agent writes (H3):** through the backend's tool registry, not git commits — the app receives them as ordinary

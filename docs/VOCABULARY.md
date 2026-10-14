@@ -68,12 +68,12 @@ Status column: **shipped** (in schema today) · **H<n>** (tier that introduces i
 | Word | Use instead | Why |
 |---|---|---|
 | Feature | **Lens** | Collides with product features in every requirements sentence, and with the model gate's internal feature id (H5) |
-| Commitment (for open loops) | **Task** with `direction: 'promise'` | `Commitment` is the frozen financial record. A lens may still *title* its report "Today's commitments"; that is report text |
+| Commitment (for open loops) | **Task** with `direction: 'promise'` | `Commitment` named the deleted financial record (D-112). A lens may still *title* its report "Today's commitments"; that is report text |
 | Activity | **Task** with `completedAt`, `repeatEveryDays` | The 2026-06 Activity-log design folded into Task |
 | Label | Category or Tag | Ambiguous between the two |
 | Recipe | **Lens** | Alternative considered for "feature". Lens confirmed by the owner 2026-10-09. (*Routine* was rejected here too because it implies a schedule; since D-89 it names exactly that) |
 
-## Frozen domain (kept, no new work)
+## Deleted domain (2026-10-13, D-112: the names are free for reuse only with a new definition)
 
 | Term | Meaning |
 |---|---|
@@ -81,4 +81,4 @@ Status column: **shipped** (in schema today) · **H<n>** (tier that introduces i
 | Payment | Logged payment against a commitment |
 | Intention | Mid-horizon plan item with lifecycle status |
 | Market entry | Price / availability observation for an intention |
-| Snapshot-on-demand | Manual full-state push / pull between Dexie and the data repo. After H1 it carries only the frozen tables; entries sync through the Backend |
+| Snapshot-on-demand | Manual full-state push / pull between Dexie and the data repo, removed with the domain |

@@ -83,6 +83,10 @@ change is backwards compatible with the app before it — keep it so (add, don't
 field). Roll back the Worker: `pnpm --dir api exec wrangler rollback`. D1 migrations have no down step; the undo is
 D1 Time Travel (point-in-time restore of the whole database), so migrations only add.
 
+The app has the same one-way door on each device: once a device opens a build with a newer Dexie version, an older build
+cannot open its database (Dexie refuses a lower version). Never roll Pages back past a Dexie version bump; fix forward.
+Last bump: v7 (financial tables dropped, D-112).
+
 Secrets: production via `pnpm --dir api exec wrangler secret bulk <file>` (then delete the file); local in `api/.env`,
 which only the owner edits.
 

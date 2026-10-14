@@ -6,7 +6,7 @@ import { onScopeDispose, ref, type Ref } from 'vue'
  * auto-updates when any Dexie tables touched inside `query` mutate.
  *
  * Example:
- *   const commitments = useLiveQuery(() => db.commitments.toArray(), [])
+ *   const entries = useLiveQuery(() => db.entries.toArray(), [])
  */
 export function useLiveQuery<T>(query: () => T | Promise<T>, initial: T): Ref<T> {
   const state = ref(initial) as Ref<T>
