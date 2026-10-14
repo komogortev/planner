@@ -116,7 +116,7 @@ The clients notice (D-58): a pull whose `head` is below the device's cursor — 
 
 The app reports `js-error`, `promise-rejected` and `sync-stuck` (a sync failing three times in a row) to `POST /log`:
 error kind, app route, build id, time — no message, no text, no account. Production builds only, one report per kind per
-minute, per-address rate limit, newest 500 kept. Read it:
+minute, its own per-address limit (10/min), at most 200 reports a day from everyone together (A5), newest 500 kept. Read it:
 
 ```
 pnpm --dir api exec wrangler d1 execute planner --remote --command "SELECT datetime(at/1000,'unixepoch') AS utc, kind, route, build FROM error_log ORDER BY id DESC LIMIT 50"
