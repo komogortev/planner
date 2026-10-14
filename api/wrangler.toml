@@ -36,6 +36,13 @@ name = "RL_PUSH_USER"
 namespace_id = "1003"
 simple = { limit = 20, period = 60 }
 
+# POST /log per IP (SLICE-ACCEPTANCE A5): its own budget, not the push one. The app sends at most one report per kind a
+# minute (src/log/report.ts), so 10 leaves room for several devices behind one address. The global cap is in src/log.ts.
+[[ratelimits]]
+name = "RL_LOG_IP"
+namespace_id = "1005"
+simple = { limit = 10, period = 60 }
+
 # Model calls per user (src/aiCalls.ts): a looping client or a stolen session spends the user's own key; the daily cap bounds
 # the total, this bounds the burst.
 [[ratelimits]]

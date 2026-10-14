@@ -24,6 +24,7 @@ export interface Env {
   RL_PUSH_IP: RateLimit
   RL_PUSH_USER: RateLimit
   RL_AI_USER: RateLimit
+  RL_LOG_IP: RateLimit
   // H5 (docs/H5-MODELS.md): the secret that encrypts users' model keys — optional in the type so a Worker without it
   // answers 503 'not configured' instead of failing at start; the Workflow every model call runs in; the daily call cap.
   MODEL_KEY_SECRET?: string

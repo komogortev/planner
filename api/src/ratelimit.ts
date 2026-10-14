@@ -6,7 +6,7 @@
 import type { Context, MiddlewareHandler } from 'hono'
 import type { Env } from './index'
 
-type Binding = 'RL_AUTH_IP' | 'RL_PUSH_IP' | 'RL_PUSH_USER' | 'RL_AI_USER'
+type Binding = 'RL_AUTH_IP' | 'RL_PUSH_IP' | 'RL_PUSH_USER' | 'RL_AI_USER' | 'RL_LOG_IP'
 
 /** Over the limit? A limiter that is missing or throws lets the request through and says so — a personal app prefers
  *  availability to a lockout, and the log keeps the failure from being silent. */
@@ -58,7 +58,7 @@ function clientIp(c: Context<{ Bindings: Env }>): string | null {
 }
 
 /** Per-IP limit. Runs before authentication, so a flood costs no D1 read. */
-export const byIp = (binding: 'RL_AUTH_IP' | 'RL_PUSH_IP'): MiddlewareHandler<{ Bindings: Env }> => async (c, next) => {
+export const byIp = (binding: 'RL_AUTH_IP' | 'RL_PUSH_IP' | 'RL_LOG_IP'): MiddlewareHandler<{ Bindings: Env }> => async (c, next) => {
   const ip = clientIp(c)
   if (ip && (await overLimit(c.env, binding, ipKey(ip)))) return tooMany(c)
   await next()
