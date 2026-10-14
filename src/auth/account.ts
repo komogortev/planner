@@ -102,8 +102,8 @@ const draftNow = (): string => (isBlank(loadDraft()) ? '' : loadDraft())
 type Cleared = { kind: 'cleared' } | { kind: 'unsynced'; n: number; draft: boolean } | { kind: 'changed' }
 
 /**
- * The one place this device's account tables are emptied (D-50, D-55). It leaves the legacy financial tables, which belong
- * to the device. The checks and the clear are one transaction, so a capture that lands in between is counted, not cleared.
+ * The one place this device's account tables are emptied (D-50, D-55). The checks and the clear are one transaction, so a
+ * capture that lands in between is counted, not cleared.
  *  - `refuseIfUnsynced`: stop while the outbox holds rows, or the capture box holds an unsent draft — both exist only on
  *    this device (sign-out, D-28, D-56).
  *  - `expect`: stop when the device no longer holds what the owner was shown (notes, unsent changes, the draft).

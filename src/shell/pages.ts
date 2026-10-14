@@ -6,7 +6,7 @@ export const PAGES = [
   { to: '/settings', label: 'Settings' },
 ] as const
 
-/** Index of the page a path belongs to, or -1 (e.g. /legacy, /signin: outside the swipe order). */
+/** Index of the page a path belongs to, or -1 (e.g. /signin: outside the swipe order). */
 export function pageIndex(path: string): number {
   return PAGES.findIndex((p) => p.to === path)
 }

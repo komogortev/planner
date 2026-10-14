@@ -26,7 +26,7 @@ function page(over: Record<string, unknown>) {
 
 beforeEach(async () => {
   localStorage.clear()
-  await Promise.all([db.entries.clear(), db.outbox.clear(), db.syncMeta.clear(), db.commitments.clear(), ...recordTables(db).map((t) => t.clear())])
+  await Promise.all([db.entries.clear(), db.outbox.clear(), db.syncMeta.clear(), ...recordTables(db).map((t) => t.clear())])
 })
 
 describe('exportAccount', () => {
@@ -102,13 +102,9 @@ describe('wiping this device (D-50)', () => {
   async function seed() {
     expect((await captureEntry('hello')).ok).toBe(true)
     await db.syncMeta.put({ userId: 'u1', cursor: 3, lastPushAt: null, lastPullAt: null })
-    await db.commitments.put({
-      id: 'c1', type: 'other', label: 'legacy', startDate: '2026-01-01', principal: 1, annualRate: 0, termMonths: 1, paymentDay: 1,
-      notes: '', categoryId: null, tags: [], createdAt: '2026-01-01', updatedAt: '2026-01-01',
-    })
   }
 
-  it('empties entries, outbox and sync state, and leaves the legacy financial tables', async () => {
+  it('empties entries, outbox and sync state', async () => {
     await seed()
     expect(await db.entries.count()).toBe(1) // exercised: there is something to wipe
     expect(await unsyncedCount()).toBe(1)
@@ -116,7 +112,6 @@ describe('wiping this device (D-50)', () => {
     expect(await db.entries.count()).toBe(0)
     expect(await db.outbox.count()).toBe(0)
     expect(await db.syncMeta.count()).toBe(0)
-    expect(await db.commitments.count()).toBe(1)
   })
 
   it('deleteMyAccount: the server refusing leaves this device untouched', async () => {
@@ -129,7 +124,7 @@ describe('wiping this device (D-50)', () => {
     expect(localStorage.getItem('planner.signIn.token')).toBe('tok')
   })
 
-  it('deleteMyAccount: on success the account tables and the token go, the legacy tables stay', async () => {
+  it('deleteMyAccount: on success the account tables and the token go', async () => {
     await seed()
     localStorage.setItem('planner.signIn.token', 'tok')
     const ok: typeof fetch = async () => json({ deleted: true })
@@ -137,7 +132,6 @@ describe('wiping this device (D-50)', () => {
     expect(await db.entries.count()).toBe(0)
     expect(await db.outbox.count()).toBe(0)
     expect(localStorage.getItem('planner.signIn.token')).toBeNull()
-    expect(await db.commitments.count()).toBe(1)
   })
 
   // Review finding: the server committed, the answer was lost; the retry hears "account deleted" and must still wipe.
@@ -149,7 +143,6 @@ describe('wiping this device (D-50)', () => {
     expect(await db.entries.count()).toBe(0)
     expect(await db.outbox.count()).toBe(0)
     expect(localStorage.getItem('planner.signIn.token')).toBeNull()
-    expect(await db.commitments.count()).toBe(1)
   })
 
   it('deleteMyAccount: a plain 401 (not deleted) is still an error and wipes nothing', async () => {
@@ -182,18 +175,13 @@ describe('signOutSafely (D-28)', () => {
   })
 
   // Negative control for the test above: with the outbox empty the same call does sign out and clear the account tables.
-  it('with an empty outbox it clears the account tables and the token, and leaves the legacy tables', async () => {
+  it('with an empty outbox it clears the account tables and the token', async () => {
     expect((await captureEntry('already uploaded')).ok).toBe(true)
     await db.outbox.clear() // as after a successful push
-    await db.commitments.put({
-      id: 'c1', type: 'other', label: 'legacy', startDate: '2026-01-01', principal: 1, annualRate: 0, termMonths: 1, paymentDay: 1,
-      notes: '', categoryId: null, tags: [], createdAt: '2026-01-01', updatedAt: '2026-01-01',
-    })
     localStorage.setItem('planner.signIn.token', 'tok')
     expect(await signOutSafely(async () => new Response(null, { status: 204 }), API)).toEqual({ ok: true })
     expect(await db.entries.count()).toBe(0)
     expect(localStorage.getItem('planner.signIn.token')).toBeNull()
-    expect(await db.commitments.count()).toBe(1)
   })
 })
 

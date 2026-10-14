@@ -1,31 +1,11 @@
 import Dexie, { type Table } from 'dexie'
-import type {
-  AppSettings,
-  Category,
-  Commitment,
-  Intention,
-  MarketEntry,
-  Payment,
-  Theme,
-  ThemeMember,
-  OutboxRow,
-  SyncMeta,
-} from './schema'
+import type { OutboxRow, SyncMeta } from './schema'
 import type { Entry } from '@/domain/entry'
 import type { EntryState, Link } from '@/domain/harness'
 import type { StoredAssessment, StoredQuestion } from '@/domain/harness2'
 import type { Report } from '@/domain/journal'
 import type { RunRecord, SyncFields, WidgetRecord } from '@/domain/records'
 import type { Task, TaskProposal } from '@/domain/tasks'
-import { BUILT_IN_CATEGORIES, USER_CATEGORY_SORT_ORDER } from './categorySeed'
-import {
-  backfillCommitmentRow,
-  backfillMarketEntryRow,
-  migrateIntentionRow,
-  type IntentionV1,
-} from './migrations'
-import { uuid } from '@/utils/uuid'
-import { nowISO } from '@/utils/dates'
 
 /**
  * Personal-planner IndexedDB schema (Dexie).
@@ -39,18 +19,12 @@ import { nowISO } from '@/utils/dates'
  *
  * Version 4 — H1 entries: `entries`, `outbox`, `syncMeta` (2026-10-10). Additive; the financial tables are untouched.
  * Version 5 — harness + widget records (HW-HARNESS.md §5, 2026-10-11): seven tables, one per kind. Additive; nothing else changes.
+ * Version 6 — S3 v2 Tasks: `tasks`, `taskProposals`, and a `taskId` index on questions and assessments.
+ * Version 7 — financial domain deleted (2026-10-13): the tables versions 1–3 created are dropped (their declarations stay).
  *
  * Once shipped, a version is FROZEN. Schema changes go via a NEW version+upgrade.
  */
 export class PlannerDb extends Dexie {
-  commitments!: Table<Commitment, string>
-  payments!: Table<Payment, string>
-  intentions!: Table<Intention, string>
-  marketEntries!: Table<MarketEntry, string>
-  settings!: Table<AppSettings, string>
-  categories!: Table<Category, string>
-  themes!: Table<Theme, string>
-  themeMembers!: Table<ThemeMember, string>
   entries!: Table<Entry, string>
   outbox!: Table<OutboxRow, number>
   syncMeta!: Table<SyncMeta, string>
@@ -104,92 +78,7 @@ export class PlannerDb extends Dexie {
         themes: 'id, label, status, targetDate, updatedAt',
         themeMembers: 'id, themeId, entityId, [themeId+entityType+entityId]',
       })
-      .upgrade(async (trans) => {
-        const now = nowISO()
-        // Locally-scoped to the upgrade run so re-init in tests doesn't leak state.
-        const pendingNewCategories: Category[] = []
-
-        // 1. Seed built-in categories.
-        await trans.table<Category>('categories').bulkAdd(
-          BUILT_IN_CATEGORIES.map((seed) => ({
-            id: seed.id,
-            label: seed.label,
-            sortOrder: seed.sortOrder,
-            createdAt: now,
-            updatedAt: now,
-          })),
-        )
-
-        // 2. Migrate intentions: free-text `category` → `categoryId`. Newly created
-        //    user categories are staged into `pendingNewCategories` and bulkAdded
-        //    after iteration (we cannot write to another table from within a
-        //    `.modify()` callback in Dexie). `.modify` mutates rows in place
-        //    inside the upgrade transaction.
-        //
-        //    Dedupe by lowercased label so 5 intentions tagged "home" produce
-        //    ONE category, not 5. (Bug fix 2026-04-29 — earlier devices that
-        //    ran the v3 upgrade before this fix have stale dupes; cleaned up
-        //    on app boot via `dedupeCategoriesInDb`.)
-        const seenUserCategories = new Map<string, string>()
-        await trans
-          .table<IntentionV1>('intentions')
-          .toCollection()
-          .modify((row) => {
-            const migrated = migrateIntentionRow(row, {
-              builtIns: BUILT_IN_CATEGORIES,
-              createUserCategory: (label) => {
-                const key = label.toLowerCase()
-                const existing = seenUserCategories.get(key)
-                if (existing) return existing
-                const id = uuid()
-                seenUserCategories.set(key, id)
-                pendingNewCategories.push({
-                  id,
-                  label,
-                  sortOrder: USER_CATEGORY_SORT_ORDER,
-                  createdAt: now,
-                  updatedAt: now,
-                })
-                return id
-              },
-            })
-            // Per-row audit trail (Q4 resolution) — safe to console.info from upgrade.
-            // eslint-disable-next-line no-console
-            console.info(
-              `[planner v3 upgrade] intention "${row.label}" category="${row.category ?? ''}" → categoryId=${migrated.categoryId}`,
-            )
-            // Apply mutations onto the row Dexie is persisting.
-            ;(row as Partial<Intention>).categoryId = migrated.categoryId
-            ;(row as Partial<Intention>).tags = []
-            // Drop the v2 free-text field.
-            delete (row as { category?: unknown }).category
-          })
-        if (pendingNewCategories.length > 0) {
-          await trans.table<Category>('categories').bulkAdd(pendingNewCategories)
-        }
-
-        // 3. Backfill commitments.
-        await trans
-          .table<Commitment>('commitments')
-          .toCollection()
-          .modify((row) => {
-            const back = backfillCommitmentRow(row)
-            row.categoryId = back.categoryId
-            row.tags = back.tags
-          })
-
-        // 4. Backfill marketEntries.
-        await trans
-          .table<MarketEntry>('marketEntries')
-          .toCollection()
-          .modify((row) => {
-            const back = backfillMarketEntryRow(row)
-            row.categoryId = back.categoryId
-            row.tags = back.tags
-          })
-
-        // themes / themeMembers tables come online empty — populated when S3 ships.
-      })
+    // The v3 upgrade (seed categories, migrate intentions) was removed with the financial domain: v7 drops every table it wrote.
 
     // v4 — H1 entries. New tables only, so no upgrade callback; existing data is untouched.
     this.version(4).stores({
@@ -227,6 +116,19 @@ export class PlannerDb extends Dexie {
         taskProposals: 'id, state, runId, serverVersion',
       })
       .upgrade((tx) => tx.table('syncMeta').toCollection().modify((m: { cursor: number }) => { m.cursor = 0 }))
+
+    // v7 — the financial domain is deleted (owner, 2026-10-13: outdated, no export kept). Its seven tables and the L1 GitHub
+    // settings row (which held a personal access token) are dropped with their data on every device that opens this build.
+    this.version(7).stores({
+      commitments: null,
+      payments: null,
+      intentions: null,
+      marketEntries: null,
+      categories: null,
+      themes: null,
+      themeMembers: null,
+      settings: null,
+    })
 
     // ---------------------------------------------------------------------
     // Migration template — DO NOT REMOVE

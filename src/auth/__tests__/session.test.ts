@@ -28,7 +28,7 @@ const yes = { confirm: () => true, saveCopy: () => undefined }
 
 beforeEach(async () => {
   localStorage.clear()
-  await Promise.all([db.entries.clear(), db.outbox.clear(), db.syncMeta.clear(), db.commitments.clear()])
+  await Promise.all([db.entries.clear(), db.outbox.clear(), db.syncMeta.clear()])
 })
 afterEach(() => vi.restoreAllMocks())
 
@@ -139,13 +139,9 @@ describe('clearDeviceSafely', () => {
     expect(await db.entries.count()).toBe(2)
   })
 
-  it('saves a copy of every note BEFORE it clears, then clears the account tables and keeps the legacy ones', async () => {
+  it('saves a copy of every note BEFORE it clears, then clears the account tables', async () => {
     await seedSynced(2)
     await db.syncMeta.put({ userId: 'u1', cursor: 2, lastPushAt: null, lastPullAt: null })
-    await db.commitments.put({
-      id: 'c1', type: 'other', label: 'legacy', startDate: '2026-01-01', principal: 1, annualRate: 0, termMonths: 1, paymentDay: 1,
-      notes: '', categoryId: null, tags: [], createdAt: '2026-01-01', updatedAt: '2026-01-01',
-    })
     // The copy holds both notes only if it was taken before the clear (a copy taken after would hold none).
     let copied = -1
     const out = await clearDeviceSafely({ confirm: () => true, saveCopy: (c) => { copied = c.entries.length } })
@@ -153,7 +149,6 @@ describe('clearDeviceSafely', () => {
     expect(copied).toBe(2)
     expect(await db.entries.count()).toBe(0)
     expect(await db.syncMeta.count()).toBe(0)
-    expect(await db.commitments.count()).toBe(1)
   })
 
   // Negative control for the order: if the copy cannot be made, the notes stay.

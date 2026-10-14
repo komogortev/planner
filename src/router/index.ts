@@ -28,32 +28,6 @@ export const router = createRouter({
       name: 'widgets',
       component: PagerPage, // drawn by shell/Pager.vue; the router only owns the URL
     },
-    // Financial screens: out of the nav (quiet base), reachable by URL only until the financial domain is deleted.
-    {
-      path: '/legacy',
-      name: 'legacy-dashboard',
-      component: () => import('@/views/LegacyDashboardView.vue'),
-    },
-    {
-      path: '/commitments',
-      name: 'commitments',
-      component: () => import('@/views/CommitmentsView.vue'),
-    },
-    {
-      path: '/intentions',
-      name: 'intentions',
-      component: () => import('@/views/IntentionsView.vue'),
-    },
-    {
-      path: '/market',
-      name: 'market',
-      component: () => import('@/views/MarketView.vue'),
-    },
-    {
-      path: '/categories',
-      name: 'categories',
-      component: () => import('@/views/CategoriesView.vue'),
-    },
     {
       path: '/settings',
       name: 'settings',
