@@ -1,11 +1,11 @@
 # Personal Planner — STATE
 
 ## SNAPSHOT
-- **Phase/Last:** H1 built · HW S3 v2 live · H5 in real use. 2026-10-14 (road to alpha): gate A5 `/log` limits (#138), A6 stale-build guard (#140; Pages rollback floor `80540b1`), A7 restore path (#141); 48 px touch targets (#137); layout A's bar names the app (#139); Gemini key help (#142). Vibe-code mode.
-- **Working:** prod = Pages `734fb86`, Worker `32b9ea8`, D1 `0010`; smoke 16/16. `pnpm check` app 591 · Worker 226.
-- **Broken:** **Summary** reads only open notes (v1 lens). After a D1 restore, edits acknowledged after the restore point (Task done, answers) revert on every device (A7 finding, inferred from `engine.ts`). **Not verified on a phone:** DEVICE-CHECKS 37–41; D-105 on a real model.
+- **Phase/Last:** H1 built · HW S3 v2 live · H5 in real use. 2026-10-14 (road to alpha): gate A5–A7 (#138, #140, #141; Pages rollback floor `80540b1`). Alpha gap audit (#144–#146): no paste path without a model, strip/Today copy; Summary only for an account holding its record; layout A's bar wears the pocket cloth. Vibe-code mode.
+- **Working:** prod = Pages `0020b88`, Worker `32b9ea8`, D1 `0010`; smoke 16/16. `pnpm check` app 600 · Worker 226.
+- **Broken:** **Summary** reads only open notes (v1 lens; listed only for the owner's account since #146). After a D1 restore, edits acknowledged after the restore point (Task done, answers) revert on every device (A7 finding, inferred from `engine.ts`). **Not verified on a phone:** DEVICE-CHECKS 37–41; D-105 on a real model.
 - **Blocker:** none.
-- **Next:** hide Summary from accounts other than the owner's (decided, not built) → A2 tester notice (drafted privately; owner sends) → invites; tester invite expires 2026-10-24. Then: restore-edit reconcile (before the second invitee); Summary v3; copy-paste removal (D-113); H5 S3. Parked as before.
+- **Next:** A2 tester notice (drafted privately; owner sends) → invites; tester invite expires 2026-10-24. Then: restore-edit reconcile (before the second invitee); Summary v3; copy-paste removal (D-113); H5 S3. Parked as before.
 ---
 
 ## Context
@@ -57,6 +57,8 @@
 ## Decision log
 
 Full log: PROJECT.md → Decisions log. Latest:
+
+- 2026-10-14 (alpha gap audit) — The slice walked at 375 px against SLICE-ACCEPTANCE; gaps G1–G7 recorded privately. Built: an account with no model never meets the paste path (it is told to add one; a device that could not read its models says so, never "add a model"; paste stays where a device picked it or a pasted run waits), the strip's resting line names what waits, Today's empty state points at the strip or the recorder, widget/models copy matches the app (#144). Summary is listed only for an account holding a `system-summary` record (owner's choice over a Worker owner flag; re-entry: Summary v3) (#146). Owner request: layout A's top bar wears the sign-in pocket's cloth with a stitched seam (#145). Open: G7, whether the UI names the Journal (owner's call).
 
 - 2026-10-14 (road to alpha) — The owner names D1 loss and a bad rollback as what hits testers first, so the gate gains A6/A7 (D-118). Measured: Dexie 4 opens a newer database from an older build and patches it, so A6 became "an older build opens nothing" (guard before Dexie opens), not a load failure; RUNBOOK sets the rollback floor. A7: retention 7 days (Free plan); restores rewind every account, bring deleted accounts back and revert edits made after the restore point. Gemini free tier: Google may have people read input (outside EEA/CH/UK), now said in the app.
 
