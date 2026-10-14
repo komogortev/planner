@@ -3,6 +3,8 @@ import type { Entry } from '../entry'
 import { answerQuestion } from '../harness'
 import {
   composeHarness2,
+  correctProposal,
+  CORRECTION_PREFIX,
   HARNESS_V2,
   readAssessment,
   readQuestion,
@@ -14,7 +16,8 @@ import {
   type RunScope2,
 } from '../harness2'
 import { applyHarness2, parseHarnessOutput2, type Applied2, type HarnessOutput2, type TaskOp } from '../harness2Reply'
-import type { Task } from '../tasks'
+import type { Task, TaskProposal } from '../tasks'
+import { cleanRecord } from '../records'
 
 // Synthetic fixtures only: the repo is public and no real note ever enters a test (HW-HARNESS.md §8).
 const NOW = '2026-10-11T18:00:00.000Z'
@@ -311,5 +314,35 @@ describe('apply: questions and assessments', () => {
     const r = applyHarness2(out([create('Call the plumber', ['n1'])]), { ...run, reevaluateIds: ['t1'] }, d(), NOW, TZ)
     expect(r.assessments.map((a) => [a.entryId ?? a.taskId, a.at])).toEqual([['n1', NOW], ['t1', NOW], [r.tasks[0].id, NOW]])
     expect(r.assessments.every((a) => a.harnessVersion === HARNESS_V2)).toBe(true)
+  })
+})
+
+describe('correctProposal (strip "Correct…", CodeReview round 1)', () => {
+  const prop = (over: Partial<TaskProposal> = {}): TaskProposal => ({
+    id: 'p1', op: 'close', taskIds: ['t1'], basis: ['Buy bulbs'], text: null, due: null, parts: [], entryId: 'n1', evidence: 'got them',
+    state: 'proposed', runId: 'run-1', createdAt: NOW, ...over,
+  })
+  const valid = (q: Question) => cleanRecord('question', { ...q, deletedAt: null }).ok
+
+  it('an astral character at the 200-character cut is kept whole: the row still passes the validator', () => {
+    const shown = 'x'.repeat(200 - CORRECTION_PREFIX.length - 1) + '💡 tail'
+    const r = correctProposal(prop(), shown, 'not that', NOW)
+    expect(r.ok && valid(r.value.question)).toBe(true)
+    expect(r.ok && Array.from(r.value.question.text).length).toBe(200)
+  })
+  it('a merge correction names what was merged, not "these"', () => {
+    const r = correctProposal(prop({ op: 'merge', taskIds: ['t1', 't2'], basis: ['Buy bulbs', 'Fix porch light'], text: 'Lights', entryId: null, evidence: '' }), 'Merge these into “Lights”?', 'the porch one is separate', NOW)
+    expect(r.ok && r.value.question.text).toBe('Proposed: merge “Buy bulbs” + “Fix porch light” into “Lights”')
+  })
+  it('a follow-up that shares the correction’s words is kept; the same words after a model question are still a repeat (control)', () => {
+    const r = correctProposal(prop({ op: 'merge', taskIds: ['t1', 't2'], basis: ['Buy bulbs', 'Fix porch lights'], text: 'Porch and hall lights', entryId: null, evidence: '' }), '', 'separate jobs', NOW)
+    if (!r.ok) throw new Error(r.error)
+    const follow = { taskId: 't1', entryId: null, text: 'Are the porch lights a separate job from the hall?' }
+    const run = scope({ reevaluateIds: ['t1'], taskIds: ['t1'] })
+    const kept = applyHarness2(out([], [follow]), run, data({ tasks: [task()], questions: [r.value.question] }), NOW, TZ)
+    expect(kept.questions.map((q) => q.text)).toEqual([follow.text])
+    const asked = question({ id: 'q9', text: r.value.question.text.slice(CORRECTION_PREFIX.length) })
+    const dropped = applyHarness2(out([], [follow]), run, data({ tasks: [task()], questions: [asked] }), NOW, TZ)
+    expect(reasons(dropped)).toEqual(['repeated-question'])
   })
 })

@@ -7,8 +7,9 @@
 // This file is the prompt side; `harness2Reply.ts` parses and applies the reply. v1 (`harness.ts`) stays the shipped path
 // until Dashboard v2 replaces it (§11 slice S3).
 import type { Entry } from './entry'
-import { CONTEXT_DAYS, localDay, QUESTION_MAX_CHARS, QUESTIONS_MAX, stateOf, type EntryState, type QuestionState } from './harness'
-import type { Task, TaskProposal } from './tasks'
+import { answerQuestion, CONTEXT_DAYS, localDay, oneLine, sliceChars, QUESTION_MAX_CHARS, QUESTIONS_MAX, stateOf, type EntryState, type QuestionState, type Result } from './harness'
+import { rejectProposal, type Task, type TaskProposal } from './tasks'
+import { uuid5 } from './uuid5'
 
 export const HARNESS_V2 = 2
 export const NOTES_CAP = 60
@@ -227,4 +228,27 @@ export function composeHarness2(
     blocks.join('\n\n'),
   ].join('\n\n')
   return { prompt, header }
+}
+
+/** The longest question text a record holds (records.ts `question.text`). */
+const QUESTION_TEXT_MAX = 200
+/** Opens every app-written correction row: the reply check reads it as context, never as a question the model asked. */
+export const CORRECTION_PREFIX = 'Proposed: '
+
+/**
+ * The owner corrects a proposal (strip "Correct…"): the proposal is rejected and the correction is stored as an answered
+ * question on its first Task, quoting what was shown. That Task then waits for the next run (`tasksWaiting` reads
+ * `answeredAt`), whose prompt reads answers as corrections of scope. Written by the app, like a removal question.
+ */
+export function correctProposal(p: TaskProposal, shown: string, correction: string, now: string): Result<{ proposal: TaskProposal; question: Question }> {
+  const taskId = p.taskIds[0]
+  if (taskId === undefined) return { ok: false, error: 'This proposal names no task.' }
+  const rejected = rejectProposal(p)
+  if (!rejected.ok) return rejected
+  // A merge names what it merges: the row sits on the first Task only, and "these" says nothing to the next run.
+  const what = p.op === 'merge' ? `merge ${p.basis.map((b) => `“${b}”`).join(' + ')} into “${p.text ?? ''}”` : shown
+  const text = sliceChars(oneLine(`${CORRECTION_PREFIX}${what}`), QUESTION_TEXT_MAX)
+  const open: Question = { id: uuid5(`${taskId}|correction|${p.id}`), entryId: null, taskId, kind: 'harness', text, state: 'open', answer: null, createdAt: now, answeredAt: null, runId: p.runId }
+  const answered = answerQuestion(open, correction, now)
+  return answered.ok ? { ok: true, value: { proposal: rejected.value, question: answered.value } } : answered
 }

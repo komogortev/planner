@@ -7,7 +7,7 @@ import { db } from '@/db'
 import { executorFields, type ModelVia } from '@/ai/runWith'
 import { writeRecords, type RecordWrite, type WriteResult } from '@/db/records'
 import { answerQuestion, dismissQuestion, localDay } from '@/domain/harness'
-import { composeHarness2, readAssessment, readQuestion, selectCandidates2, type HarnessData2, type Question, type RunHeader2 } from '@/domain/harness2'
+import { composeHarness2, correctProposal, readAssessment, readQuestion, selectCandidates2, type HarnessData2, type Question, type RunHeader2 } from '@/domain/harness2'
 import { applyHarness2, parseHarnessOutput2, type Applied2 } from '@/domain/harness2Reply'
 import type { RunRecord } from '@/domain/records'
 import { answerRemoval, applySummary, planSummary, type RemovalChoice, type SummaryPlan } from '@/domain/summary'
@@ -226,4 +226,12 @@ export async function rejectProposal2(shown: Pick<TaskProposal, 'id'>, now = new
   if (!p) return GONE
   const r = rejectProposal(p)
   return r.ok ? write(asWrites('taskProposal', [r.value]), now) : r
+}
+
+/** "Correct…": the proposal is set aside and the owner's text goes to the next run as an answer on its Task. */
+export async function correctProposal2(shown: Pick<TaskProposal, 'id'>, label: string, text: string, now = new Date().toISOString()): Promise<Outcome<number>> {
+  const p = await freshProposal(shown.id)
+  if (!p) return GONE
+  const r = correctProposal(p, label, text, now)
+  return r.ok ? write([...asWrites('taskProposal', [r.value.proposal]), ...asWrites('question', [r.value.question])], now) : r
 }
