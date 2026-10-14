@@ -4,6 +4,8 @@ import EnvBanner from '@/components/EnvBanner.vue'
 import UpdateBanner from '@/components/UpdateBanner.vue'
 import SyncBanner from '@/components/SyncBanner.vue'
 import BottomNav from '@/shell/BottomNav.vue'
+import TopBar from '@/shell/TopBar.vue'
+import { navVariant } from '@/shell/navVariant'
 import Pager from '@/shell/Pager.vue'
 import { pageIndex } from '@/shell/pages'
 
@@ -16,6 +18,8 @@ const route = useRoute()
        in the pager (drag between them); every other route renders on its own. -->
   <div class="h-dvh flex flex-col overflow-hidden">
     <EnvBanner />
+    <!-- Layout A of the D-117 test; B (the default) is the bottom band alone. -->
+    <TopBar v-if="!route.meta.public && navVariant === 'a'" />
     <UpdateBanner />
     <SyncBanner v-if="!route.meta.public" />
     <Pager v-if="pageIndex(route.path) >= 0" class="flex-1 min-h-0" />
