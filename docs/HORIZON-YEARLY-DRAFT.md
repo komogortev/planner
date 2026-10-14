@@ -1,6 +1,6 @@
 # Horizon loops — the yearly loop (DRAFT)
 
-**Status: PARKED draft, 2026-10-11. Nothing here is decided and no code follows from it.** Owner, 2026-10-11: the vertical slice keeps the daily loop only; weekly, monthly, yearly and life-goal horizons wait for slice validation. **Re-entry: HW-HARNESS S4 acceptance (§1 a–e true on three consecutive days).** Until then no record kind, table, vocabulary row or UI for goals or horizons is added. Terms per [VOCABULARY.md](VOCABULARY.md); *Horizon* and *Goal* are proposed terms with no row yet (VOCABULARY rule: the row comes before the code). Premise: [HW-HARNESS.md](HW-HARNESS.md) §10 C5 — a horizon above weekly reads the **reports** of the horizon below, not raw notes.
+**Status: PARKED draft, 2026-10-11. Nothing here is decided and no code follows from it.** Owner, 2026-10-11: the vertical slice keeps the daily loop only; weekly, monthly, yearly and life-goal horizons wait for slice validation. **Re-entry: [SLICE-ACCEPTANCE.md](SLICE-ACCEPTANCE.md) §3 true on three consecutive days** (was HW-HARNESS S4; D-115). Until then no record kind, table, vocabulary row or UI for goals or horizons is added. Terms per [VOCABULARY.md](VOCABULARY.md); *Horizon* and *Goal* are proposed terms with no row yet (VOCABULARY rule: the row comes before the code). Premise: [HW-HARNESS.md](HW-HARNESS.md) §10 C5 — a horizon above weekly reads the **reports** of the horizon below, not raw notes.
 
 ## 1. Where the pattern comes from
 
