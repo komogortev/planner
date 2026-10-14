@@ -38,10 +38,10 @@ describe('the account’s model on a device that never chose (D-102)', () => {
     expect(JSON.parse(store.get('planner.run.model')!)).toEqual({ id: 'm1', label: 'Gemini' })
   })
 
-  it('several models and no choice: copy and paste until the owner picks one', () => {
-    reconcileRunModel([gemini, claude])
-    expect(runModel.value).toBeNull()
-    expect(store.has('planner.run.model')).toBe(false)
+  it('several models and no choice: the first with a key (the oldest) is on by default (owner, 2026-10-13; D-113)', () => {
+    reconcileRunModel([{ id: 'm0', label: 'No key', hasKey: false }, gemini, claude])
+    expect(runModel.value).toEqual({ id: 'm1', label: 'Gemini' })
+    expect(JSON.parse(store.get('planner.run.model')!)).toEqual({ id: 'm1', label: 'Gemini' })
   })
 
   it('"Copy and paste" picked on this device is never overridden', () => {
@@ -79,13 +79,18 @@ describe('the account’s model on a device that never chose (D-102)', () => {
     expect(runModel.value).toBeNull()
   })
 
-  it('several models: asked once per page load, not on every panel', async () => {
+  it('no models: asked once per page load, not on every panel (nothing is stored to stop the next ask)', async () => {
     let calls = 0
-    const list = async () => { calls++; return [gemini, claude] }
+    const list = async () => { calls++; return [] }
     await adoptAccountModel(list)
     await adoptAccountModel(list)
     expect(calls).toBe(1)
     expect(runModel.value).toBeNull()
+  })
+
+  it('several models: the panel adopts the first with a key', async () => {
+    await adoptAccountModel(async () => [gemini, claude])
+    expect(runModel.value).toEqual({ id: 'm1', label: 'Gemini' })
   })
 
   it('an answer that arrives after sign-out is dropped', async () => {

@@ -165,7 +165,7 @@ onMounted(async () => {
         <InstallButton />
       </div>
       <p v-if="signOutError" class="text-sm text-err mt-3" role="alert" data-test="sign-out-error">{{ signOutError }}</p>
-      <p v-if="signOutBlocked !== null" class="text-sm text-amber-300 mt-3" role="alert" data-test="sign-out-blocked">
+      <p v-if="signOutBlocked !== null" class="text-sm text-warn mt-3" role="alert" data-test="sign-out-blocked">
         <template v-if="signOutBlocked > 0">
           {{ signOutBlocked }} {{ signOutBlocked === 1 ? 'note has' : 'notes have' }} not reached the server. Signing out clears this
           device, so they would be lost. Let them sync first{{ rejected.length ? ', or retry or discard the refused ones below' : '' }}.
@@ -192,7 +192,7 @@ onMounted(async () => {
           <li v-for="r in rejected" :key="r.seq" class="flex items-start gap-2" data-test="rejected-row">
             <div class="flex-1 min-w-0">
               <div class="truncate">{{ rejectedLabel(r) }}</div>
-              <div class="text-xs text-amber-300">{{ r.lastError }}</div>
+              <div class="text-xs text-warn">{{ r.lastError }}</div>
             </div>
             <button class="btn-ghost" data-test="rejected-discard" @click="syncEngine.discardRejected([r.seq!])">Discard</button>
           </li>
