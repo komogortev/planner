@@ -11,6 +11,7 @@ import {
   answerRemoval2,
   applyHarnessReply2,
   confirmProposal2,
+  correctProposal2,
   harnessWork,
   rejectProposal2,
   setTaskState2,
@@ -168,6 +169,47 @@ describe('proposals', () => {
     const live = (await db.taskProposals.get(p.id))!
     expect(await confirmProposal2(live, LATEST)).toMatchObject({ ok: false, error: expect.stringContaining('already answered') })
     expect(await confirmProposal2(p, LATEST)).toMatchObject({ ok: false }) // the screen's stale copy still says "proposed"
+  })
+})
+
+describe('correcting a proposal (strip "Correct…", owner 2026-10-13)', () => {
+  async function closeProposed() {
+    await startHarness2(NOW)
+    await applyHarnessReply2(firstReply, { store: true, now: LATER })
+    const [task] = await db.tasks.toArray()
+    await db.entries.put(note('a0000000-0000-4000-8000-000000000003', LATER, 'bulb replaced'))
+    await startHarness2(LATEST)
+    await applyHarnessReply2(
+      reply({ tasks: [{ op: 'close', taskId: task.id, entryId: 'a0000000-0000-4000-8000-000000000003', evidence: 'bulb replaced' }], questions: [] }),
+      { store: true, now: LATEST },
+    )
+    const [p] = await db.taskProposals.toArray()
+    return { task, p }
+  }
+  const AFTER = '2026-10-11T13:00:00.000Z'
+
+  it('sets the proposal aside, keeps the Task open, and the next prompt carries the correction under that Task', async () => {
+    const { task, p } = await closeProposed()
+    expect(await startHarness2(AFTER)).toBeNull() // known positive: nothing waits before the correction
+    expect(await correctProposal2(p, 'Done? A note says: “bulb replaced”', 'that was the porch bulb, not the hall one', AFTER)).toEqual({ ok: true, value: 2 })
+    expect((await db.taskProposals.get(p.id))?.state).toBe('rejected')
+    expect((await db.tasks.get(task.id))?.state).toBe('open')
+    const q = (await db.questions.toArray()).find((x) => x.text.startsWith('Proposed:'))!
+    expect(q).toMatchObject({ taskId: task.id, entryId: null, state: 'answered', answer: 'that was the porch bulb, not the hall one', runId: p.runId })
+    const out = await startHarness2('2026-10-11T13:10:00.000Z')
+    expect(out?.header.reevaluateIds).toEqual([task.id])
+    expect(out?.prompt).toContain('that was the porch bulb, not the hall one')
+  })
+
+  it('negative controls: an empty correction stores nothing; an answered proposal cannot be corrected', async () => {
+    const { p } = await closeProposed()
+    const before = await counts()
+    expect(await correctProposal2(p, 'label', '   ', AFTER)).toMatchObject({ ok: false, error: expect.stringContaining('empty') })
+    expect(await counts()).toEqual(before)
+    expect((await db.taskProposals.get(p.id))?.state).toBe('proposed')
+    await rejectProposal2(p, AFTER)
+    expect(await correctProposal2(p, 'label', 'too late', AFTER)).toMatchObject({ ok: false, error: expect.stringContaining('already answered') })
+    expect(await counts()).toEqual(before)
   })
 })
 

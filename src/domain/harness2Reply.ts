@@ -3,7 +3,7 @@
 // and `merge` come back as proposals; nothing writes Task text over the owner's.
 import { isIsoDate, isWellFormed } from './clean'
 import { addDays, EVIDENCE_MAX_CHARS, FOLLOW_UP_MAX_DAYS, localDay, normalizeQuestion, oneLine, QUESTION_MAX_CHARS, QUESTIONS_MAX, sliceChars, stateOf } from './harness'
-import { HARNESS_V2, type Assessment, type HarnessData2, type Question, type RunScope2 } from './harness2'
+import { CORRECTION_PREFIX, HARNESS_V2, type Assessment, type HarnessData2, type Question, type RunScope2 } from './harness2'
 import { checkTaskText, MERGE_TASKS_MAX, normalizeTaskText, SPLIT_PARTS_MAX, TASK_SOURCES_MAX, type Task, type TaskPart, type TaskProposal } from './tasks'
 import { uuid5 } from './uuid5'
 
@@ -348,7 +348,10 @@ export function applyHarness2(output: HarnessOutput2, run: RunScope2, data: Harn
       // A thread's follow-ups name their Task ("the bulbs"): the Task's own words say nothing about a repeat.
       const topic = contentWords(working.get(subject)?.text ?? '')
       const texts = data.questions.filter((q) => (q.taskId ?? q.entryId) === subject).map((q) => q.text)
-      seen.set(subject, { exact: new Set(texts.map(normalizeQuestion)), words: texts.map((t) => without(contentWords(t), topic)), topic })
+      // A correction row (strip "Correct…") quotes a proposal: a follow-up on it shares its words by design, so it counts
+      // only as an exact repeat, never a near one.
+      const asked = texts.filter((t) => !t.startsWith(CORRECTION_PREFIX))
+      seen.set(subject, { exact: new Set(texts.map(normalizeQuestion)), words: asked.map((t) => without(contentWords(t), topic)), topic })
     }
     return seen.get(subject)!
   }

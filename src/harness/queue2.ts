@@ -49,6 +49,20 @@ export function stripItems(data: Pick<HarnessData2, 'entries' | 'questions' | 't
   })
 }
 
+/** What each answer to a proposal does, named on its button (owner, 2026-10-13: Yes · No named no outcome). */
+export function proposalActions(p: Pick<TaskProposal, 'op'>): { yes: string; no: string } {
+  switch (p.op) {
+    case 'close':
+      return { yes: 'Mark done', no: 'Keep open' }
+    case 'revise':
+      return { yes: 'Apply change', no: 'Keep as is' }
+    case 'split':
+      return { yes: 'Split', no: 'Keep as one' }
+    case 'merge':
+      return { yes: 'Merge', no: 'Keep separate' }
+  }
+}
+
 /** What a proposal asks the owner, in plain words. Model text is returned as text, never markup. */
 export function proposalLabel(p: TaskProposal, tasks: Task[]): string {
   switch (p.op) {
