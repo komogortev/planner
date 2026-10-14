@@ -63,9 +63,10 @@ export function unsetRunModel(): void {
 
 /**
  * Lines this device's choice up with the account's models (D-102). A chosen model that is gone, or lost its key, is
- * unset. A device that never chose runs with the account's model when exactly one has a key: a model added on the
- * desktop is offered on the phone too, and in the home-screen app, which keeps its own storage. Several models and no
- * choice: copy and paste until the owner picks one in Settings. "Copy and paste" picked here is left alone.
+ * unset. A device that never chose runs with the account's first model that has a key (the oldest): a model added on
+ * the desktop is offered on the phone too, and in the home-screen app, which keeps its own storage. Since D-113 (copy and
+ * paste retired as a path) this holds for several models too (owner, 2026-10-13: the model is on by default; before, several
+ * models meant copy and paste until a pick). "Copy and paste" picked here is left alone.
  */
 export function reconcileRunModel(models: readonly { id: string; label: string; hasKey: boolean }[]): void {
   const usable = models.filter((m) => m.hasKey)
@@ -77,11 +78,11 @@ export function reconcileRunModel(models: readonly { id: string; label: string; 
     if (still.label !== cur!.label) setRunModel({ id: still.id, label: still.label })
     return
   }
-  if (usable.length === 1) setRunModel({ id: usable[0].id, label: usable[0].label })
+  if (usable.length > 0) setRunModel({ id: usable[0].id, label: usable[0].label })
 }
 
 let adopting: Promise<void> | null = null
-/** Asked once per page load: with no models, or several, nothing is stored, and each panel must not ask again. */
+/** Asked once per page load: with no model that has a key nothing is stored, and each panel must not ask again. */
 let asked = false
 /** Bumped by sign-out: an answer that arrives after it belongs to the account that left. */
 let generation = 0

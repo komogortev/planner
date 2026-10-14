@@ -115,6 +115,12 @@ async function remove(m: ModelView): Promise<void> {
   }
 }
 const choose = (m: ModelView | null) => setRunModel(m ? { id: m.id, label: m.label } : null)
+// The switch names the path, not a model (owner, 2026-10-13): which model is the list's Active row. "AI model" takes the
+// first that has a key when none is active; a row's Use makes it the active one.
+const chooseAi = () => {
+  const first = usable.value[0]
+  if (!runModel.value && first) choose(first)
+}
 </script>
 
 <template>
@@ -133,23 +139,26 @@ const choose = (m: ModelView | null) => setRunModel(m ? { id: m.id, label: m.lab
       <div class="choice" role="radiogroup" aria-label="This device runs with" data-test="run-with">
         <button role="radio" class="opt" :class="{ 'opt-on': !runModel }" :aria-checked="!runModel" data-test="run-with-manual" @click="choose(null)">Copy and paste</button>
         <button
-          v-for="m in usable" :key="m.id" role="radio" class="opt" :class="{ 'opt-on': runModel?.id === m.id }" :aria-checked="runModel?.id === m.id"
-          :data-test="`run-with-${m.id}`" @click="choose(m)"
-        >{{ m.label }}</button>
+          role="radio" class="opt" :class="{ 'opt-on': !!runModel }" :aria-checked="!!runModel" :disabled="!usable.length"
+          :title="usable.length ? undefined : 'Add a model with a key first'" data-test="run-with-model" @click="chooseAi"
+        >AI model</button>
       </div>
-      <p class="text-xs text-amber-300 mt-2" data-test="run-with-warning">
-        A device that has not chosen runs with your only model. Add or choose a model only after every device you use has
+      <p class="text-xs text-warn mt-2" data-test="run-with-warning">
+        A device that has not chosen runs with your first model. Add or choose a model only after every device you use has
         opened this version of the app once: an older version drops runs made by a model when it syncs.
       </p>
 
       <ul class="list" data-test="models-list">
-        <li v-for="m in models" :key="m.id" class="row" :data-test="`model-${m.id}`">
+        <li v-for="m in models" :key="m.id" class="row" :class="{ 'row-active': runModel?.id === m.id }" :data-test="`model-${m.id}`">
           <div class="min-w-0">
-            <p class="text-sm font-semibold truncate">{{ m.label }}</p>
+            <p class="text-sm font-semibold flex items-center min-w-0">
+              <span class="truncate">{{ m.label }}</span><span v-if="runModel?.id === m.id" class="badge" data-test="model-active">Active</span>
+            </p>
             <p class="text-xs text-slate-400 truncate">{{ m.model }} · {{ host(m) }} · {{ m.hasKey ? `key …${m.keyHint}` : 'no key' }}</p>
             <p v-if="tests[m.id]" class="text-xs mt-1" :class="tests[m.id]!.startsWith('Works') ? 'text-emerald-300' : 'text-slate-300'" role="status" data-test="model-test-result">{{ tests[m.id] }}</p>
           </div>
           <div class="flex gap-2 shrink-0">
+            <button v-if="runModel && runModel.id !== m.id && m.hasKey" class="btn-ghost btn-sm" :aria-label="`Use ${m.label} on this device`" data-test="model-use" @click="choose(m)">Use</button>
             <button class="btn-ghost btn-sm" :disabled="!m.hasKey || tests[m.id] === 'Testing…'" data-test="model-test" @click="test(m)">Test</button>
             <button class="btn-ghost btn-sm" data-test="model-remove" @click="remove(m)">{{ removing === m.id ? 'Remove?' : 'Remove' }}</button>
           </div>
@@ -164,7 +173,7 @@ const choose = (m: ModelView | null) => setRunModel(m ? { id: m.id, label: m.lab
           <select id="m-preset" v-model="form.preset" class="input" data-test="model-preset" @change="pickPreset">
             <option v-for="p in PRESETS" :key="p.id" :value="p.id">{{ p.name }}</option>
           </select>
-          <p v-if="preset.note" class="text-xs text-amber-300" data-test="model-preset-note">{{ preset.note }}</p>
+          <p v-if="preset.note" class="text-xs text-warn" data-test="model-preset-note">{{ preset.note }}</p>
           <label class="label" for="m-label">Name</label>
           <input id="m-label" v-model="form.label" class="input" maxlength="60" required data-test="model-label" />
           <label class="label" for="m-model">Model id</label>
@@ -192,6 +201,9 @@ const choose = (m: ModelView | null) => setRunModel(m ? { id: m.id, label: m.lab
 .opt-on { background: rgb(var(--s-950)); color: rgb(var(--s-100)); box-shadow: 0 1px 3px rgb(0 0 0 / 0.25); }
 .list { margin-top: 1rem; display: grid; gap: 0.75rem; }
 .row { min-width: 0; display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; }
+/* The model this device runs with, against the rest of the list. */
+.row-active { margin: -0.5rem; padding: 0.5rem; border-radius: 10px; background: rgb(var(--s-800)); box-shadow: inset 0 0 0 1px rgb(79 70 229 / 0.7); }
+.badge { flex: none; margin-left: 0.4rem; padding: 0.05rem 0.4rem; border-radius: 999px; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; background: #4f46e5; color: #fff; vertical-align: middle; }
 form :is(input, select) { min-width: 0; width: 100%; }
 .btn-sm { padding: 0.3rem 0.75rem; font-size: 0.78rem; }
 </style>
