@@ -1,11 +1,11 @@
 # Personal Planner — STATE
 
 ## SNAPSHOT
-- **Phase/Last:** H1 built · HW-HARNESS S3 v2 live · **H5 in real use**. 2026-10-13 calibration 2 (owner's phone test, #111–#119): Run with model on every device (D-102), a model run stores itself (D-103), Daily = today only, actions on tap, + task in the open view (D-104, D-106), names confirmed by question (D-105). 2026-10-13: feature layers and widget model settled (D-107–D-111: Journal = core, Today / Summary / Notes widgets, custom widgets as Journal lenses); financial domain deleted (D-112, Dexie v7). Vibe-code mode.
-- **Working:** prod = Pages `278b7c5` (#121 dead code, #122 financial domain deleted), Worker `4d0781b`, D1 `0009`. `pnpm check` app 557 · Worker 205. Settings → App info → Check for updates; the PWA updates after a leave-and-return.
-- **Broken:** nothing known. **Not verified:** the Dexie v7 drop on a real device (first open of `278b7c5` on the phone; never roll Pages back past it); D-105 on a real model (the next misspelled name); an overdue due date on the phone; no component tests (no DOM test setup) for RunStep, DailyCard, the live-input fix.
+- **Phase/Last:** H1 built · HW S3 v2 live · H5 in real use. 2026-10-13: one slice gate ([SLICE-ACCEPTANCE.md](SLICE-ACCEPTANCE.md), D-113–D-116: copy-paste retired, alpha by invite); system widgets with per-account activation (Today on; Summary, Notes off); proposal outcome buttons + Correct…; D-22 signed-in devices; AI model on by default. Vibe-code mode.
+- **Working:** prod = Pages `2792e5b`, Worker `69cb5aa`, D1 `0010`; smoke 16/16. `pnpm check` app 577 · Worker 221.
+- **Broken:** nothing known. **Summary** reads only open notes, never Tasks (v1 lens): it cannot show done vs carried over. **Not verified on a phone:** DEVICE-CHECKS 37 (Correct…), 38 (sign out a device); the Dexie v7 drop; D-105 on a real model.
 - **Blocker:** none.
-- **Next:** Owner: DEVICE-CHECKS 37 (proposal buttons + Correct…) on the phone; switch Notes/Summary on if wanted (off by default since the widgets slice). Owner: a full real v2 day on the phone (capture → Refresh → answers → Summarize). Then the rest of the alpha gate ([SLICE-ACCEPTANCE.md](SLICE-ACCEPTANCE.md) §1: D-22, `/log` limit, notice) → invites; the owner's §2–§3 run alongside (D-114). Copy-paste removal PR (D-113). H5 S3 routines after. Parked: `feat/s3b-dashboard-loop`; §9 point 9; server-side duplicate-model check; sign-out diagnostics (re-entry: Sign out does nothing on a build ≥ `041e303`); a cross-run names glossary (re-entry: a second name the model cannot place).
+- **Next:** alpha gate A2 (tester notice, owner sends) + A5 (`/log` own limit) → invites; tester invite expires 2026-10-24. Then Summary v3 (done vs carried, own design pass); copy-paste removal PR (D-113); H5 S3 routines. Nav layout research: own session (chip). Parked: `feat/s3b-dashboard-loop`; §9 point 9; server-side duplicate-model check; sign-out diagnostics (re-entry: Sign out does nothing on a build ≥ `041e303`); names glossary (re-entry: a second unplaceable name).
 ---
 
 ## Context
@@ -57,6 +57,8 @@
 ## Decision log
 
 Full log: PROJECT.md → Decisions log. Latest:
+
+- 2026-10-13 (layout + models) — Owner notes from the phone: Today's + moved to the header (no bottom row), App info update result beside its button (#129); AI model on by default for several models too, the switch says AI model, the active model is highlighted with Use on the rest (#130). Amber warnings and error lines moved to theme tokens (`--glass-warn`, `--glass-err`; #127, #130): both pale classes were illegible on the light glass. D-22 deployed: `0010` + Worker `69cb5aa`, columns confirmed on the remote D1, smoke 16/16.
 
 - 2026-10-13 (D-22) — Signed-in devices (SLICE-ACCEPTANCE A1): D1 `0010` adds `device` (coarse browser + system from the sign-in request, never the full User-Agent) and `last_seen_at` (sign-in and the at-most-daily renewal: no extra writes) to `sessions`; `/me/sessions` lists, ends one other device (the caller's own is refused: Sign out clears the device), ends all others; a session is named by 16 characters of its token hash. Settings card. 16 Worker + 7 app tests; isolation both ways; 2 guards mutated red. CodeReview: server clean; 1 client fix (an action's error was wiped by the list reload). Verified on a local Worker + app pair with planted synthetic sessions.
 
