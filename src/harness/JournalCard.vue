@@ -45,7 +45,7 @@ async function storeJournal(reply: string, via?: ModelVia) {
   if (!r.ok) return r
   journalWaiting.value = false
   syncSoon()
-  return { ok: true as const, message: 'Journal stored.' }
+  return { ok: true as const, message: 'Summary stored.' }
 }
 
 // A body tap (calibration 2026-10-12) does what Open / Hide does: closed, a tap anywhere on the card opens it; open, only
@@ -58,9 +58,9 @@ function onBody(e: MouseEvent) {
 </script>
 
 <template>
-  <section class="card loop" :class="{ 'tap-to-open': !open }" data-test="journal-card" aria-label="Summarize" @click="onBody">
+  <section class="card loop" :class="{ 'tap-to-open': !open }" data-test="journal-card" aria-label="Summary" @click="onBody">
     <header class="flex items-baseline justify-between" data-test="journal-head">
-      <h3 class="font-semibold">Summarize <span class="sub">optional</span></h3>
+      <h3 class="font-semibold">Summary</h3>
       <button type="button" class="btn-ghost btn-xs" :aria-expanded="open" data-test="journal-toggle" @click.stop="open = !open">{{ open ? 'Hide' : writtenToday ? 'Show' : 'Open' }}</button>
     </header>
     <div v-show="open">
