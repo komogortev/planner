@@ -162,9 +162,9 @@ async function saveIt() {
 </script>
 
 <template>
-  <section ref="cardRoot" class="card daily" data-test="daily-card" aria-label="Daily">
+  <section ref="cardRoot" class="card daily" data-test="daily-card" aria-label="Today">
     <header class="flex items-center justify-between gap-2">
-      <h3 class="font-semibold">Daily <span class="sub">{{ day }}</span></h3>
+      <h3 class="font-semibold">Today <span class="sub">{{ day }}</span></h3>
       <div v-if="!summaryOpen" class="flex gap-1.5 items-center">
         <button
           type="button" class="btn-ghost btn-xs" :disabled="!waitingWork" :title="waitingWork || 'Nothing new to read'"
@@ -174,7 +174,7 @@ async function saveIt() {
         <!-- Widget options (edit summary now; edit or remove the widget later) live behind ⋯, so the header holds one action. -->
         <div ref="menuRoot" class="menu" @keydown.esc="closeMenu">
           <button
-            ref="menuButton" type="button" class="btn-ghost btn-xs" aria-label="Daily options" aria-controls="daily-menu-list" :aria-expanded="menuOpen"
+            ref="menuButton" type="button" class="btn-ghost btn-xs" aria-label="Today options" aria-controls="daily-menu-list" :aria-expanded="menuOpen"
             data-test="daily-menu" @click="menuOpen = !menuOpen"
           >⋯</button>
           <div v-if="menuOpen" id="daily-menu-list" class="menu-list" data-test="daily-menu-list">
