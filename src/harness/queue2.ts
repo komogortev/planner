@@ -97,3 +97,15 @@ export function runSummary2(a: Applied2, run: Pick<RunHeader2, 'runId' | 'toAsse
   if (a.assessments.length === 0) lines.push('Nothing new would be stored (a replay, or every row was dropped).')
   return lines
 }
+
+/**
+ * What waits for a run, in a few words, for the strip's resting line (alpha gap G5): "1 new note", "2 changed tasks",
+ * or "3 changes" when both kinds wait. Empty when nothing waits. The line said only "Questions 0" with notes waiting,
+ * which read as nothing to do — and that line is the only way into the loop.
+ */
+export function waitingShort(notes: number, tasks: number): string {
+  if (notes && tasks) return `${notes + tasks} changes`
+  if (notes) return `${notes} new note${notes === 1 ? '' : 's'}`
+  if (tasks) return `${tasks} changed task${tasks === 1 ? '' : 's'}`
+  return ''
+}

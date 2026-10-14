@@ -16,7 +16,7 @@ export interface SystemWidget {
 
 /** Dashboard order. Ids are fixed forever: they are the record ids every device shares. */
 export const SYSTEM_WIDGETS: readonly SystemWidget[] = [
-  { id: 'system-today', name: 'Today', description: "Today's Tasks, done ones at the bottom, and what is coming up.", defaultActive: true },
+  { id: 'system-today', name: 'Today', description: "Today's open Tasks, overdue ones with their date. Done, moved and dropped ones leave the list.", defaultActive: true },
   { id: 'system-summary', name: 'Summary', description: "A written summary of today's notes, on demand.", defaultActive: false },
   { id: 'system-notes', name: 'Notes', description: 'Everything you captured, newest first. The source archive behind your Tasks.', defaultActive: false },
 ]

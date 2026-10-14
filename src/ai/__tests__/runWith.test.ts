@@ -10,7 +10,7 @@ Object.defineProperty(globalThis, 'localStorage', {
   },
   configurable: true,
 })
-const { adoptAccountModel, reconcileRunModel, clearRunWith, clearWaitingCall, executorFields, loadWaitingCall, markEnded, opensOnArrival, runModel, saveWaitingCall, setRunModel } = await import('../runWith')
+const { adoptAccountModel, reconcileRunModel, clearRunWith, clearWaitingCall, executorFields, loadWaitingCall, markEnded, modelsKnown, opensOnArrival, pasteChosen, runModel, runPath, saveWaitingCall, setRunModel } = await import('../runWith')
 
 beforeEach(() => {
   clearRunWith() // also resets the once-per-page-load ask
@@ -147,5 +147,49 @@ describe('executorFields', () => {
   it('a paste leaves the H5 keys out; a model run names both', () => {
     expect(executorFields()).toEqual({ executor: 'copy-prompt' })
     expect(executorFields({ modelId: 'm1', callId: 'c1' })).toEqual({ executor: 'model', modelId: 'm1', callId: 'c1' })
+  })
+})
+
+describe('runPath: no paste path without a model (D-113, alpha gap G1)', () => {
+  const m = { id: 'm1', label: 'Gemini' }
+
+  it('an account known to have no model, nothing picked and nothing waiting, is told to add a model', () => {
+    expect(runPath(null, false, false, true)).toBe('needs-model')
+  })
+
+  it('models not read yet (offline, a failed request) is unknown, never "add a model" (CodeReview 1)', () => {
+    expect(runPath(null, false, false, false)).toBe('unknown')
+  })
+
+  it('a model runs with the model, whatever else holds', () => {
+    expect(runPath(m, false, false, false)).toBe('model')
+    expect(runPath(m, true, true, true)).toBe('model')
+  })
+
+  it('paste only where it was picked on this device, or where a pasted run already waits for its reply', () => {
+    expect(runPath(null, true, false, true)).toBe('paste')
+    expect(runPath(null, false, true, false)).toBe('paste')
+  })
+
+  it('picking "Copy and paste" sets the flag; a model, unsetting, or sign-out clears it', () => {
+    expect(pasteChosen.value).toBe(false)
+    setRunModel(null)
+    expect(pasteChosen.value).toBe(true)
+    setRunModel(m)
+    expect(pasteChosen.value).toBe(false)
+    setRunModel(null)
+    clearRunWith()
+    expect(pasteChosen.value).toBe(false)
+  })
+
+  it('the models are known once a list arrives, stay unknown when the ask fails, and reset on sign-out', async () => {
+    expect(modelsKnown.value).toBe(false)
+    await adoptAccountModel(() => Promise.reject(new Error('offline')))
+    expect(modelsKnown.value).toBe(false)
+    await adoptAccountModel(async () => [])
+    expect(modelsKnown.value).toBe(true)
+    expect(runModel.value).toBeNull()
+    clearRunWith()
+    expect(modelsKnown.value).toBe(false)
   })
 })

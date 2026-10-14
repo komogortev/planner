@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useOnline } from '@/composables/useOnline'
 import { storedToken } from '@/auth/signIn'
 import { awaitCall, deleteModel, listModels, ModelsError, outcomeText, presetOf, PRESETS, saveModel, testModel, type ModelView, type Preset } from './models'
-import { reconcileRunModel, runModel, setRunModel, unsetRunModel } from './runWith'
+import { pasteChosen, reconcileRunModel, runModel, setRunModel, unsetRunModel } from './runWith'
 import GeminiKeyHelp from './GeminiKeyHelp.vue'
 
 // Settings → AI models (H5-MODELS §6, S2). Register a model with its API key, test it, remove it, and choose which one this
@@ -128,14 +128,17 @@ const chooseAi = () => {
   <section class="card" data-test="models-card">
     <h3 class="font-semibold mb-1">AI models</h3>
     <p class="text-xs text-slate-500 mb-3">
-      Runs can use your own model instead of copy and paste. You pay your provider; your notes go to it on each run. The key
-      is stored encrypted and never shown again.
+      Feedback runs with your own AI model. You pay your provider; your notes go to it on each run. The key is stored
+      encrypted and never shown again.
     </p>
 
     <p v-if="!signedIn || !online" class="text-sm text-slate-400" data-test="models-offline">Sign in and go online to manage models.</p>
     <template v-else>
       <p v-if="listError" class="text-sm text-err" role="alert" data-test="models-error">{{ listError }}</p>
 
+      <!-- The choice exists once the account has a model (D-113, alpha gap G1): before that "Copy and paste" would be the one
+           live option, the paste path an account without a key must not meet. A device that already picked it keeps it. -->
+      <template v-if="usable.length || pasteChosen">
       <h4 class="font-semibold text-sm mb-2">This device runs with</h4>
       <div class="choice" role="radiogroup" aria-label="This device runs with" data-test="run-with">
         <button role="radio" class="opt" :class="{ 'opt-on': !runModel }" :aria-checked="!runModel" data-test="run-with-manual" @click="choose(null)">Copy and paste</button>
@@ -144,6 +147,7 @@ const chooseAi = () => {
           :title="usable.length ? undefined : 'Add a model with a key first'" data-test="run-with-model" @click="chooseAi"
         >AI model</button>
       </div>
+      </template>
       <p class="text-xs text-warn mt-2" data-test="run-with-warning">
         A device that has not chosen runs with your first model. Add or choose a model only after every device you use has
         opened this version of the app once: an older version drops runs made by a model when it syncs.
