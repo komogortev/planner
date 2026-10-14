@@ -192,9 +192,3 @@ export async function fetchMe(): Promise<Me | 'signed-out' | 'account-deleted' |
     return { error: err instanceof Error ? err.message : String(err) }
   }
 }
-
-/** Installed home-screen app vs a browser tab — the question step 7 asks on the iPhone. */
-export function displayMode(): 'standalone' | 'browser' {
-  const iosStandalone = (navigator as Navigator & { standalone?: boolean }).standalone === true
-  return iosStandalone || matchMedia('(display-mode: standalone)').matches ? 'standalone' : 'browser'
-}
