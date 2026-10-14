@@ -112,9 +112,42 @@ overwriting**: every stored key was sealed with it and would stop opening (each 
 A rotation adds a second secret and `key_version` 2 (`api/src/keyBox.ts`). Local dev: add the same line, with its own
 value, to `api/.env`.
 
-## After a D1 restore (Time Travel) or a hand edit of the version counter
+## Before and after a D1 restore (Time Travel, A7)
 
-The clients notice (D-58): a pull whose `head` is below the device's cursor — or a push given a version at or below it — starts a sweep from 0, and the notes the server lost are uploaded again from the devices that still hold them. A restore needs nothing else from you. Two things do not heal on their own: if you edit `users.version_seq` by hand, set it to **at least `max(server_version)` of that account** (below it, every device sweeps again on every poll); and edits or deletes that were acknowledged inside the lost window are not reconciled (notes are create-only today; re-entry: before an edit or delete UI ships).
+**What a restore is.** `wrangler d1 time-travel restore planner --timestamp=<ISO>` (or `--bookmark=`) rewinds the **whole
+database, every account at once**. Queries in flight fail. It can itself be undone: its output prints the bookmark to go
+back to. **Retention: 7 days on the Workers Free plan (this account), 30 on Paid** (Cloudflare docs, read 2026-10-14). The
+database was created 2026-10-10, so only the positive side is measured: a bookmark resolves back to the creation day. A
+timestamp before creation fails with an opaque `internal error 7500`, and a timestamp past retention may fail the same way.
+Still to measure, on or after 2026-10-18: `time-travel info planner --timestamp=<now − 8 days>` should fail and
+`<now − 6 days>` should answer.
+
+**Before restoring: what would this undo?** Read-only. `T` = the restore time in epoch ms:
+
+```
+pnpm --dir api exec wrangler d1 execute planner --remote --command "SELECT (SELECT COUNT(*) FROM users WHERE created_at > T) AS accounts_created, (SELECT COUNT(*) FROM deleted_tokens WHERE deleted_at > T) AS deleted_account_tokens, (SELECT COUNT(*) FROM invites WHERE created_at > T OR used_at > T) AS invites_changed, (SELECT COUNT(*) FROM models WHERE updated_at > T) AS models_changed, (SELECT COUNT(*) FROM sessions WHERE created_at > T) AS sessions_created"
+```
+
+| Count above 0 | After the restore | Who acts |
+|---|---|---|
+| `deleted_account_tokens` | **An account deleted after T comes back with its notes.** The record of the deletion is rewound too, so nothing marks it afterwards | Pick a later T. Otherwise list the affected accounts **before** restoring and ask each person to delete again |
+| `accounts_created` | An account created after T is gone; its devices are signed out but keep their notes (a 401 never wipes, D-04/D-55) | Re-issue the invite if it was created after T; signing in again with a new account is unverified for those devices |
+| `invites_changed` | Invites created after T are gone; ones used after T are open again | Owner re-issues or revokes (`invite.mjs`) |
+| `models_changed` | A model added after T is gone; one edited after T is back to its old key (a revoked key returns) | Each tester re-adds or re-checks their model in Settings |
+| `sessions_created` | Sign-ins after T are gone: those devices show signed out, notes kept. A device signed out from Settings after T is signed in again | Testers sign in again, and repeat any "sign out a device" since T |
+
+**What heals by itself (D-58).** A pull whose `head` is below the device's cursor, or a push given a version at or below
+it, starts a sweep from 0. Notes and records the server lost are uploaded again from the devices that still hold them.
+
+**What does not heal:**
+- **Edits acknowledged after T** to a note or record that existed before T. A Task marked done, an answered question or a
+  widget switched on reverts on every device: the sweep returns the old version and nothing is queued locally. Testers
+  would see done Tasks open again and questions asked again. This is inferred from `engine.ts` (sweep and
+  `requeueLost`), not run. **Re-entry:** this was parked "until an edit or delete UI ships", and records are edited today,
+  so it is due. Proposed: before the first invitee beyond the tester.
+- `users.version_seq` edited by hand: set it to **at least `max(server_version)` of that account**. Below it, every device
+  sweeps again on every poll.
+- Server-only logs: `ai_calls` (the daily model cap counts from it) and `error_log` lose the window. Harmless.
 
 ## Error log (S4, D-24)
 
