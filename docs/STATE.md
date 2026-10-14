@@ -1,11 +1,11 @@
 # Personal Planner — STATE
 
 ## SNAPSHOT
-- **Phase/Last:** H1 built · HW S3 v2 live · H5 in real use. 2026-10-14: owner phone calibration of Settings (#132–#133); nav layout settled as D-117: an always-shown bottom band (page dots as links + More bottom sheet, #134) with a per-device A/B switch to a top bar (#135). Vibe-code mode.
-- **Working:** prod = Pages `f8e36b3`, Worker `69cb5aa`, D1 `0010`. `pnpm check` app 583 · Worker 221.
-- **Broken:** nothing known. **Summary** reads only open notes, never Tasks (v1 lens). **Not verified on a phone:** DEVICE-CHECKS 37–40 (Correct…, sign out a device, band + More, the A/B switch); the Dexie v7 drop; D-105 on a real model.
+- **Phase/Last:** H1 built · HW S3 v2 live · H5 in real use. 2026-10-14 (road to alpha): gate A5 `/log` limits (#138), A6 stale-build guard (#140; Pages rollback floor `80540b1`), A7 restore path (#141); 48 px touch targets (#137); layout A's bar names the app (#139); Gemini key help (#142). Vibe-code mode.
+- **Working:** prod = Pages `734fb86`, Worker `32b9ea8`, D1 `0010`; smoke 16/16. `pnpm check` app 591 · Worker 226.
+- **Broken:** **Summary** reads only open notes (v1 lens). After a D1 restore, edits acknowledged after the restore point (Task done, answers) revert on every device (A7 finding, inferred from `engine.ts`). **Not verified on a phone:** DEVICE-CHECKS 37–41; D-105 on a real model.
 - **Blocker:** none.
-- **Next:** owner runs B vs A on the phone (DEVICE-CHECKS 39–40; D-117 open subjects: separator, More's look, A as fallback). Alpha gate A2 (tester notice, owner sends) + A5 (`/log` own limit) → invites; tester invite expires 2026-10-24. Then Summary v3; questions strip as a bottom sheet; Ask me now (harness slice); copy-paste removal (D-113); H5 S3. Parked as before.
+- **Next:** hide Summary from accounts other than the owner's (decided, not built) → A2 tester notice (drafted privately; owner sends) → invites; tester invite expires 2026-10-24. Then: restore-edit reconcile (before the second invitee); Summary v3; copy-paste removal (D-113); H5 S3. Parked as before.
 ---
 
 ## Context
@@ -57,6 +57,8 @@
 ## Decision log
 
 Full log: PROJECT.md → Decisions log. Latest:
+
+- 2026-10-14 (road to alpha) — The owner names D1 loss and a bad rollback as what hits testers first, so the gate gains A6/A7 (D-118). Measured: Dexie 4 opens a newer database from an older build and patches it, so A6 became "an older build opens nothing" (guard before Dexie opens), not a load failure; RUNBOOK sets the rollback floor. A7: retention 7 days (Free plan); restores rewind every account, bring deleted accounts back and revert edits made after the restore point. Gemini free tier: Google may have people read input (outside EEA/CH/UK), now said in the app.
 
 - 2026-10-14 (calibration + nav) — Owner phone notes: the active model marked by background only, row actions outlined, App info update row restored, signed-in devices folded to today, Install's × removed (#132, #133). Nav research → D-117: B, the always-shown band (dots kept as links, one layout for phone and desktop) with a More bottom sheet, sign-out shared via `useSignOut` (#134); then the owner's A/B switch in the menu, A = top bar (#135). Why B: keeps the dots, menu in thumb reach, no extra space; A is the recorded fallback. Session inactivity sign-out already exists (30 days sliding); a shorter one was not taken (the clutter was < 3 days old).
 
