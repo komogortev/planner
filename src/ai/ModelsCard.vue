@@ -205,4 +205,8 @@ const chooseAi = () => {
 .row-active { margin: -0.5rem; padding: 0.5rem; border-radius: 10px; background: rgb(var(--s-800)); }
 form :is(input, select) { min-width: 0; width: 100%; }
 .btn-sm { padding: 0.3rem 0.75rem; font-size: 0.78rem; }
+/* Row actions are outline only (owner, 2026-10-14): a filled button matched the active row's background and went flat.
+   Ink and edge come from the theme's --glass-* variables, like the Install button. */
+.row .btn-sm { background: transparent; border: 1px solid var(--glass-btn-edge); color: var(--glass-text); }
+.row .btn-sm:hover:not(:disabled), .row .btn-sm:active:not(:disabled) { background: color-mix(in srgb, var(--glass-text) 14%, transparent); }
 </style>
