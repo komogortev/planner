@@ -175,14 +175,28 @@ async function admit(db: D1Database, p: Provider, who: Identity): Promise<Admiss
   return REFUSED_NOT_INVITED
 }
 
+/**
+ * A coarse device label for the session list (D-22): browser and system, never the full User-Agent. Order matters: Edge
+ * and Samsung Internet also say "Chrome", Chrome also says "Safari". Null when neither part is known.
+ */
+export function deviceLabel(ua: string | undefined | null): string | null {
+  if (!ua) return null
+  const browser = /Edg\//.test(ua) ? 'Edge' : /SamsungBrowser\//.test(ua) ? 'Samsung Internet' : /Firefox\/|FxiOS\//.test(ua) ? 'Firefox'
+    : /Chrome\/|CriOS\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : null
+  const system = /Android/.test(ua) ? 'Android' : /iPhone|iPad|iPod/.test(ua) ? 'iOS' : /CrOS/.test(ua) ? 'ChromeOS' : /Windows/.test(ua) ? 'Windows'
+    : /Mac OS X|Macintosh/.test(ua) ? 'macOS' : /Linux/.test(ua) ? 'Linux' : null
+  if (browser && system) return `${browser} on ${system}`
+  return browser ?? system
+}
+
 /** A new session for the account; its expired sessions are purged on the way (no cron needed for one user's rows). */
-export async function createSession(db: D1Database, userId: string): Promise<string> {
+export async function createSession(db: D1Database, userId: string, device: string | null = null): Promise<string> {
   const token = randomToken()
   const now = Date.now()
   await db.batch([
     db.prepare('DELETE FROM sessions WHERE user_id = ? AND expires_at <= ?').bind(userId, now),
-    db.prepare('INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)')
-      .bind(await sha256(token), userId, now, now + SESSION_DAYS * 86_400_000),
+    db.prepare('INSERT INTO sessions (token_hash, user_id, created_at, expires_at, device, last_seen_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .bind(await sha256(token), userId, now, now + SESSION_DAYS * 86_400_000, device, now),
   ])
   return token
 }
@@ -220,7 +234,7 @@ const RENEW_AFTER_MS = 86_400_000
 export async function renewSession(db: D1Database, s: AuthedSession): Promise<void> {
   const now = Date.now()
   if (s.expiresAt - now > SESSION_DAYS * 86_400_000 - RENEW_AFTER_MS) return
-  await db.prepare('UPDATE sessions SET expires_at = ? WHERE token_hash = ?').bind(now + SESSION_DAYS * 86_400_000, s.tokenHash).run()
+  await db.prepare('UPDATE sessions SET expires_at = ?, last_seen_at = ? WHERE token_hash = ?').bind(now + SESSION_DAYS * 86_400_000, now, s.tokenHash).run()
 }
 
 // ── routes ──────────────────────────────────────────────────────────────────
@@ -354,7 +368,7 @@ auth.get('/callback/:provider', async (c) => {
       return refuse(c, flow, 'not-invited', { p, ...(who.unvouched.length ? { unvouched: refusalList(who.unvouched) } : { emails: refusalList(who.emails) }) })
     }
 
-    const token = await createSession(c.env.DB, admitted.userId)
+    const token = await createSession(c.env.DB, admitted.userId, deviceLabel(c.req.header('User-Agent')))
     // Fragment, not query: never sent to a server or written to access logs. Set via URL so a `#` already in
     // return_to is replaced, not appended to.
     const back = appReturn(c, flow)

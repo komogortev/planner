@@ -16,7 +16,7 @@ test lowers the raise-only test-count floor explicitly in the same PR.
 | # | Item | State |
 |---|---|---|
 | A0 | The declared slice is built: the widgets slice (D-107…D-111: Journal naming, Today, Widgets page with Notes/Vault and Summary suggested) | ✅ system widgets with per-account activation (`src/widgets/__tests__/system.test.ts`, two-device sync); the UI does not name the Journal yet |
-| A1 | D-22: a user lists their own sessions and signs out everywhere (D-90: a stored key raises what a stolen session is worth) | **not built** |
+| A1 | D-22: a user lists their own sessions and signs out everywhere (D-90: a stored key raises what a stolen session is worth) | ✅ Settings → Signed-in devices; `api/test/sessions.test.ts` (another account cannot list or end yours, the owner can; a revoked token is refused), D1 `0010` |
 | A2 | The tester notice (D-52 pattern) is updated and sent by the owner: a model run sends the day's notes to the invitee's own provider, the invitee brings their own key (no paste path, D-113), export and delete exist | **not sent**; the 2026-10-10 draft says no AI service sees notes, no longer true |
 | A3 | Export and delete-account (D-48, D-49) | ✅ `api/test/account.test.ts` (isolation; every row of the account removed, none of another's) |
 | A4 | A second account sees nothing of the first: entries, records, models | ✅ `api/test/account.test.ts`, `api/test/models.test.ts` ("another account cannot read, edit, delete or test a model"), `api/test/aiCalls.test.ts` |
