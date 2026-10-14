@@ -13,6 +13,7 @@ import { storageUsage, syncEngine, syncNow, type StorageUsage } from '@/sync'
 import { useOnline } from '@/composables/useOnline'
 import PreferencesCard from '@/components/PreferencesCard.vue'
 import ModelsCard from '@/ai/ModelsCard.vue'
+import SessionsCard from '@/auth/SessionsCard.vue'
 import InstallButton from '@/components/InstallButton.vue'
 import { APP_ENV } from '@/env/applyEnvCue'
 import { BUILD, versionLabel } from '@/env/version'
@@ -175,6 +176,8 @@ onMounted(async () => {
         </template>
       </p>
     </section>
+
+    <SessionsCard />
 
     <section class="card" data-test="sync-card">
       <h3 class="font-semibold mb-3">Sync</h3>
