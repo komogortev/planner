@@ -35,7 +35,7 @@ async function checkUpdates(): Promise<void> {
   updateFound.value = false
   try {
     const r = await checkForUpdate()
-    updateLine.value = r.kind === 'latest' ? `You have the latest version (${r.commit}).` : r.kind === 'updating' ? `Version ${r.commit} found. Updating: the app reloads by itself in a few seconds.` : r.reason
+    updateLine.value = r.kind === 'latest' ? '✓ Up to date' /* the version is shown right above */ : r.kind === 'updating' ? `Version ${r.commit} found. Updating: the app reloads by itself in a few seconds.` : r.reason
     updateFound.value = r.kind === 'updating'
   } finally {
     updateBusy.value = false
@@ -262,13 +262,17 @@ onMounted(async () => {
     <section class="card">
       <h3 class="font-semibold mb-4">App info</h3>
       <dl class="grid grid-cols-2 gap-4 text-sm">
-        <div>
+        <!-- Full width: in half a card at 375 px the button wrapped and nothing fit beside it. -->
+        <div class="col-span-2">
           <dt class="text-xs text-slate-500 uppercase tracking-wider">Version</dt>
           <dd class="mt-1">{{ versionLabel(BUILD, APP_ENV) }}</dd>
-          <button type="button" class="btn-ghost text-xs mt-2" :disabled="updateBusy" data-test="check-updates" @click="checkUpdates">
-            {{ updateBusy ? 'Checking…' : 'Check for updates' }}
-          </button>
-          <p v-if="updateLine" class="text-xs mt-1" role="status" data-test="check-updates-result">{{ updateLine }}</p>
+          <!-- The result sits beside the button, not under it (owner, 2026-10-13: saves a row); a long one wraps below. -->
+          <div class="flex flex-wrap items-center gap-x-2 gap-y-1 mt-2">
+            <button type="button" class="btn-ghost text-xs whitespace-nowrap" :disabled="updateBusy" data-test="check-updates" @click="checkUpdates">
+              {{ updateBusy ? 'Checking…' : 'Check for updates' }}
+            </button>
+            <p v-if="updateLine" class="text-xs" role="status" data-test="check-updates-result">{{ updateLine }}</p>
+          </div>
           <button v-if="updateFound" type="button" class="link text-xs mt-1 underline" data-test="check-updates-reload" @click="reloadNow">Reload now</button>
         </div>
         <div>
