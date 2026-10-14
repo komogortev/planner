@@ -2,8 +2,8 @@
 
 ## SNAPSHOT
 - **Phase/Last:** H1 built · HW-HARNESS S3 v2 live · **H5 in real use**. 2026-10-13 calibration 2 (owner's phone test, #111–#119): Run with model on every device (D-102), a model run stores itself (D-103), Daily = today only, actions on tap, + task in the open view (D-104, D-106), names confirmed by question (D-105). 2026-10-13: feature layers and widget model settled (D-107–D-111: Journal = core, Today / Summary / Notes widgets, custom widgets as Journal lenses); financial domain deleted (D-112, Dexie v7). Vibe-code mode.
-- **Working:** prod = Pages `041e303`, Worker `4d0781b`, D1 `0009`. `pnpm check` app 557 · Worker 205. Settings → App info → Check for updates; the PWA updates after a leave-and-return.
-- **Broken:** nothing known. **Not verified:** D-105 on a real model (the next misspelled name); an overdue due date on the phone; no component tests (no DOM test setup) for RunStep, DailyCard, the live-input fix.
+- **Working:** prod = Pages `278b7c5` (#121 dead code, #122 financial domain deleted), Worker `4d0781b`, D1 `0009`. `pnpm check` app 557 · Worker 205. Settings → App info → Check for updates; the PWA updates after a leave-and-return.
+- **Broken:** nothing known. **Not verified:** the Dexie v7 drop on a real device (first open of `278b7c5` on the phone; never roll Pages back past it); D-105 on a real model (the next misspelled name); an overdue due date on the phone; no component tests (no DOM test setup) for RunStep, DailyCard, the live-input fix.
 - **Blocker:** none.
 - **Next:** widgets slice (D-107–D-111): Widgets page lists Today (on), Notes/Vault and Summary (suggested); Journal naming. Owner: a full real v2 day on the phone (capture → Refresh → answers → Summarize). Then H5 S3 routines (own S0 addendum), S4 acceptance → exit week. Parked: `feat/s3b-dashboard-loop`; §9 point 9; server-side duplicate-model check; sign-out diagnostics (re-entry: Sign out does nothing on a build ≥ `041e303`); a cross-run names glossary (re-entry: a second name the model cannot place).
 ---
