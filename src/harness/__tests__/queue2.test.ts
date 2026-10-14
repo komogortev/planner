@@ -3,7 +3,7 @@ import type { Entry } from '@/domain/entry'
 import type { Question } from '@/domain/harness2'
 import type { Applied2 } from '@/domain/harness2Reply'
 import type { Task, TaskProposal } from '@/domain/tasks'
-import { proposalLabel, runSummary2, stripItems } from '../queue2'
+import { proposalLabel, runSummary2, stripItems, waitingShort } from '../queue2'
 
 // Synthetic fixtures only (public repo).
 const T = (h: number) => `2026-10-11T${String(h).padStart(2, '0')}:00:00.000Z`
@@ -79,5 +79,16 @@ describe('runSummary2', () => {
       '1 new question · 1 proposal',
       'Dropped: unknown-task ×2',
     ])
+  })
+})
+
+describe('waitingShort: the strip at rest says what waits (alpha gap G5)', () => {
+  it('names one kind, totals both, and is empty when nothing waits', () => {
+    expect(waitingShort(1, 0)).toBe('1 new note')
+    expect(waitingShort(3, 0)).toBe('3 new notes')
+    expect(waitingShort(0, 1)).toBe('1 changed task')
+    expect(waitingShort(0, 2)).toBe('2 changed tasks')
+    expect(waitingShort(2, 1)).toBe('3 changes')
+    expect(waitingShort(0, 0)).toBe('')
   })
 })

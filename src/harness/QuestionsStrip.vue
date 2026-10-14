@@ -3,7 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { isBodyTap } from '@/composables/bodyTap'
 import { syncSoon } from '@/sync'
 import { applyHarnessReply2, pendingHarness2, startHarness2 } from './loop2'
-import { proposalLabel, runSummary2 } from './queue2'
+import { proposalLabel, runSummary2, waitingShort } from './queue2'
 import { opensOnArrival, type ModelVia } from '@/ai/runWith'
 import RunStep, { type Check } from './RunStep.vue'
 import StripItemView from './StripItemView.vue'
@@ -41,6 +41,8 @@ const changesLine = computed(() => {
   if (parts.length < 2) return `${parts[0] ?? ''} waiting for feedback`
   return `${changes.value} changes waiting for feedback: ${parts.join(' · ')}`
 })
+/** At rest, what waits (G5): with no question yet, "Questions 0" alone read as nothing to do. */
+const restHint = computed(() => waitingShort(props.loop.work.value.notes, props.loop.work.value.tasks))
 const preview = computed(() => {
   const it = first.value
   if (!it) return null
@@ -112,7 +114,7 @@ async function store(reply: string, via?: ModelVia) {
   <section v-if="visible" ref="root" class="card strip" :class="`strip-${mode}`" data-test="questions-strip" :data-mode="mode" aria-label="Questions" @click="onBody">
     <header class="line" data-test="strip-line">
       <button type="button" class="title" :aria-expanded="mode !== 'line'" data-test="strip-toggle">
-        Questions <span class="count" data-test="strip-count">{{ items.length }}</span>
+        Questions <span class="count" data-test="strip-count">{{ items.length }}</span><span v-if="mode === 'line' && restHint" class="hint" data-test="strip-rest-hint"> · {{ restHint }} waiting</span>
       </button>
       <button type="button" class="btn-ghost btn-xs" :aria-pressed="mode === 'work'" data-test="strip-feedback" @click="onFeedback">Get feedback</button>
     </header>
@@ -161,6 +163,7 @@ async function store(reply: string, via?: ModelVia) {
 .strip-work .line { position: sticky; top: 0; z-index: 1; background: inherit; padding: 0.9rem 0 0.4rem; cursor: pointer; } /* stays in reach */
 .title { flex: 1; text-align: left; background: none; color: inherit; font-weight: 600; font-size: 0.875rem; padding: 0.15rem 0; }
 .count { font-size: 0.75rem; color: var(--glass-sub); margin-left: 0.25rem; }
+.hint { font-size: 0.75rem; color: var(--glass-warn); font-weight: 400; } /* the same tone as the waiting line in the detail view */
 .waiting { font-size: 0.78rem; color: var(--glass-warn); margin-top: 0.3rem; }
 .detail .about { font-size: 0.75rem; color: var(--glass-sub); margin-top: 0.5rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tag { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.06em; color: #a7f3d0; }

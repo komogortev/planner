@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { awaitCall, listModels, markStored, ModelsError, outcomeText, startCall, type CallView } from '@/ai/models'
-import { adoptAccountModel, clearEnded, clearWaitingCall, loadWaitingCall, markEnded, runModel, saveWaitingCall, type ModelVia, type RunStage } from '@/ai/runWith'
+import { adoptAccountModel, clearEnded, clearWaitingCall, loadWaitingCall, markEnded, modelsKnown, pasteChosen, runModel, runPath, saveWaitingCall, type ModelVia, type RunStage } from '@/ai/runWith'
 import { copyPrompt } from './clipboard'
 
 // One run (D-35, D-63; H5): compose → get a reply → check → store. The reply comes either from a copy-prompt round trip
@@ -43,6 +44,21 @@ const via = ref<ModelVia | null>(null)
 /** This run goes through the model (D-103): no paste box from the tap on, until the owner copies the prompt instead. */
 const modelRun = ref(false)
 let abort: AbortController | null = null
+/** Model, paste, or neither (D-113, alpha gap G1): with no model and no paste picked on this device, a run is not offered
+ *  at all — the step says to add a model, so an account without a key never meets the paste path. A prompt already
+ *  copied or waiting keeps its paste box, so a run started before is never stranded. */
+const path = computed(() => runPath(runModel.value, pasteChosen.value, props.waiting || prompt.value !== null, modelsKnown.value))
+/** Checking the account's models (`unknown`): Try again asks once more and, with a model found, runs. */
+const checking = ref(false)
+async function retryModels(): Promise<void> {
+  checking.value = true
+  try {
+    await adoptAccountModel(listModels)
+  } finally {
+    checking.value = false
+  }
+}
+const router = useRouter()
 
 /** Stop following a call (the call itself keeps running on the Worker). */
 function stopFollow(): void {
@@ -201,6 +217,7 @@ defineExpose({
     if (calling.value || busy.value || reply.value.trim()) return
     await adoptAccountModel(listModels) // a Refresh right after the page opened waits for the model, not copy and paste
     if (calling.value || busy.value || reply.value.trim()) return
+    if (path.value === 'needs-model' || path.value === 'unknown') return // the step says why; nothing is composed
     return runModel.value ? runWithModel() : start()
   },
 })
@@ -254,13 +271,25 @@ async function storeReply(): Promise<void> {
         <button v-else-if="runModel" type="button" class="btn-primary btn-sm whitespace-nowrap" :disabled="busy" data-test="run-model" @click="runWithModel">
           Run with {{ runModel.label }}
         </button>
-        <button type="button" class="btn-ghost btn-sm whitespace-nowrap" :disabled="busy" data-test="run-compose" @click="start">
+        <button v-if="path === 'needs-model'" type="button" class="btn-primary btn-sm whitespace-nowrap" data-test="run-add-model" @click="router.push('/settings')">
+          Add a model
+        </button>
+        <button v-else-if="path === 'unknown'" type="button" class="btn-ghost btn-sm whitespace-nowrap" :disabled="checking" data-test="run-retry-models" @click="retryModels">
+          Try again
+        </button>
+        <button v-else type="button" class="btn-ghost btn-sm whitespace-nowrap" :disabled="busy" data-test="run-compose" @click="start">
           {{ prompt || waiting ? 'New prompt' : runModel ? 'Copy instead' : 'Copy prompt' }}
         </button>
       </div>
     </header>
     <!-- Always in the page, so a screen reader announces the change rather than meeting a region that arrives full. -->
     <p class="sub" :class="{ 'sr-only': !calling }" role="status" data-test="run-calling">{{ calling ? `${calling.label} is working on it — this can take a minute. You can leave this page; the answer waits for you.` : '' }}</p>
+    <p v-if="path === 'needs-model' && !calling" class="sub" data-test="run-needs-model">
+      Feedback runs with your own AI model. Add one in Settings → AI models; until then your notes are kept and synced as usual.
+    </p>
+    <p v-if="path === 'unknown' && !calling" class="sub" data-test="run-models-unknown">
+      {{ checking ? 'Looking for your AI model…' : 'Could not check for your AI model. Feedback needs a connection; try again when online.' }}
+    </p>
     <p v-if="waiting && !prompt && !calling && !reply && !modelRun" class="sub" data-test="run-waiting">{{ runModel ? 'This run is waiting for its reply: run it again, or paste a reply.' : 'A prompt you copied earlier is waiting for its reply.' }}</p>
     <p v-if="info" class="sub" data-test="run-info">{{ info }}</p>
     <button v-if="prompt" type="button" class="btn-ghost btn-sm mt-2" data-test="run-copy-again" @click="copyAgain">Copy again</button>

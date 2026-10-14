@@ -50,15 +50,37 @@ function readRunModel(): RunModel | null {
 /** The model this device runs with (its label kept for the Run button), or null for copy and paste. Reactive: Settings and
  *  the run panel share it. */
 export const runModel = ref<RunModel | null>(readRunModel())
+/** "Copy and paste" was picked on this device (Settings): the only way a run without a model offers the paste path. */
+export const pasteChosen = ref(read(MODEL_KEY) === MANUAL)
 /** The owner's choice on this device: a model, or null for "Copy and paste". Either one is remembered as chosen. */
 export function setRunModel(m: RunModel | null): void {
   runModel.value = m
+  pasteChosen.value = m === null
   write(MODEL_KEY, m ? JSON.stringify(m) : MANUAL)
 }
 /** No choice on this device: it follows the account (`reconcileRunModel`). Also the remove path for the chosen model. */
 export function unsetRunModel(): void {
   runModel.value = null
+  pasteChosen.value = false
   write(MODEL_KEY, null)
+}
+
+/** The account's models were read on this page load (by the run panel or by Settings): only then does "no model" mean
+ *  the account has none, rather than a device that has not asked yet or could not (offline, a failed request). */
+export const modelsKnown = ref(false)
+
+/** How a run starts on this device. `unknown`: no model chosen here and the account's models not read yet. */
+export type RunPath = 'model' | 'paste' | 'needs-model' | 'unknown'
+/**
+ * The run path (D-113, alpha gap G1): with a model, the model. Without one, copy and paste only where it was picked on
+ * this device ("Copy and paste" in Settings, offered only once the account has a model) or where a pasted run is already
+ * waiting for its reply — so an account with no model (an invitee without a key) never meets the paste path; it is told
+ * to add a model instead.
+ */
+export function runPath(model: RunModel | null, chosePaste: boolean, waiting: boolean, known: boolean): RunPath {
+  if (model) return 'model'
+  if (chosePaste || waiting) return 'paste'
+  return known ? 'needs-model' : 'unknown'
 }
 
 /**
@@ -70,6 +92,7 @@ export function unsetRunModel(): void {
  */
 export function reconcileRunModel(models: readonly { id: string; label: string; hasKey: boolean }[]): void {
   const usable = models.filter((m) => m.hasKey)
+  modelsKnown.value = true
   if (read(MODEL_KEY) === MANUAL) return
   const cur = runModel.value
   const still = cur && usable.find((m) => m.id === cur.id)
@@ -88,7 +111,8 @@ let asked = false
 let generation = 0
 /**
  * The run panel's half of D-102: a device with no choice asks the account for its models once (one request even when two
- * panels mount together). Resolves once `runModel` is settled. Failure (offline, signed out) leaves copy and paste.
+ * panels mount together). Resolves once `runModel` is settled. Failure (offline, signed out) leaves the models unknown
+ * (`modelsKnown` false): the panel says it could not check, and the next panel or Try again asks again.
  */
 export function adoptAccountModel(list: () => Promise<readonly { id: string; label: string; hasKey: boolean }[]>): Promise<void> {
   if (asked || read(MODEL_KEY) !== null) return Promise.resolve()
@@ -143,6 +167,7 @@ export function opensOnArrival(stage: RunStage, waitingRunId: string | null): bo
 export function clearRunWith(): void {
   generation++
   asked = false
+  modelsKnown.value = false
   unsetRunModel()
   clearWaitingCall()
   clearEnded()

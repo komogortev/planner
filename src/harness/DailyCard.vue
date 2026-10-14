@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { RouterLink } from 'vue-router'
 import { addDays } from '@/domain/harness'
 import { summaryText, type SummaryPlan } from '@/domain/summary'
 import type { Task, TaskState } from '@/domain/tasks'
@@ -209,7 +210,10 @@ async function saveIt() {
       <p v-if="undo" class="sub mt-1" data-test="daily-undo-line">
         {{ undo.label }}: “{{ undo.task.text }}” · <button type="button" class="link" data-test="daily-undo" @click="undoLast">Undo</button>
       </p>
-      <p v-if="!tasks.length" class="sub mt-1" data-test="daily-empty">Nothing for today. Tasks come from your notes after Get feedback, or add one with +.</p>
+      <!-- Empty (alpha gap G6): with notes waiting, point at the strip below; with none, at the recorder — a first-run account
+           has no strip yet, so "Get feedback" named a control that was not on screen. -->
+      <p v-if="!tasks.length && props.loop.work.value.notes" class="sub mt-1" data-test="daily-empty">Nothing for today yet. Your notes are waiting: Get feedback below turns them into Tasks, or add one with +.</p>
+      <p v-else-if="!tasks.length" class="sub mt-1" data-test="daily-empty">Nothing for today. Write what's on your mind on the <RouterLink to="/" class="link" data-test="daily-empty-record">recorder</RouterLink>; feedback turns your notes into Tasks. Or add one with +.</p>
       <!-- D-106: the add box belongs to the open (expanded) card; the short view is today's list only. -->
       <div v-if="expanded" class="flex gap-1.5 mt-2">
         <input ref="addInput" v-model="newText" class="input in" placeholder="+ task" aria-label="New task" data-test="daily-add-input" @keydown.enter="add" />
