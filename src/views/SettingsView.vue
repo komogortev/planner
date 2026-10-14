@@ -163,7 +163,7 @@ onMounted(async () => {
         <button class="btn-danger" data-test="sign-out" @click="signOut">Sign out</button>
         <InstallButton />
       </div>
-      <p v-if="signOutError" class="text-sm text-rose-300 mt-3" role="alert" data-test="sign-out-error">{{ signOutError }}</p>
+      <p v-if="signOutError" class="text-sm text-err mt-3" role="alert" data-test="sign-out-error">{{ signOutError }}</p>
       <p v-if="signOutBlocked !== null" class="text-sm text-amber-300 mt-3" role="alert" data-test="sign-out-blocked">
         <template v-if="signOutBlocked > 0">
           {{ signOutBlocked }} {{ signOutBlocked === 1 ? 'note has' : 'notes have' }} not reached the server. Signing out clears this
@@ -220,7 +220,7 @@ onMounted(async () => {
       </div>
       <p v-if="!online" class="text-xs text-slate-400 mt-2">Both need a connection.</p>
       <p v-if="exportedAt" class="text-xs text-slate-400 mt-2" data-test="export-done">Exported at {{ exportedAt }}.</p>
-      <p v-if="exportError" class="text-sm text-red-400 mt-2" role="alert" data-test="export-error">{{ exportError }}</p>
+      <p v-if="exportError" class="text-sm text-err mt-2" role="alert" data-test="export-error">{{ exportError }}</p>
 
       <div v-if="deleteOpen" class="mt-4 border-t border-slate-700 pt-4" data-test="delete-panel">
         <p class="text-sm mb-2">
@@ -245,7 +245,7 @@ onMounted(async () => {
           </button>
           <button class="btn-ghost" :disabled="deleting" @click="deleteOpen = false">Cancel</button>
         </div>
-        <p v-if="deleteError" class="text-sm text-red-400 mt-2" role="alert" data-test="delete-error">{{ deleteError }}</p>
+        <p v-if="deleteError" class="text-sm text-err mt-2" role="alert" data-test="delete-error">{{ deleteError }}</p>
       </div>
     </section>
 
