@@ -51,7 +51,7 @@
   Google (step 6) — those people sign in with GitHub.
 - Pin pnpm via `"packageManager"` in `package.json`; `paths-ignore: ['docs/**', '*.md']` on the deploy workflow;
   bump `deploy.yml` from Node 20 (CI already runs typecheck + tests on Node 24, #20).
-- Install-prompt mount race (`useInstallPrompt.ts:93`) + dismissal escape hatch — scheduled in H1.
+- Install-prompt mount race (`useInstallPrompt.ts`, listeners attach on mount) — scheduled in H1. The dismissal is gone (2026-10-14: Install stays until the app is installed).
 - Phone verification of Base (install, offline reload, data survives SW update) — part of [SLICE-ACCEPTANCE.md](SLICE-ACCEPTANCE.md) §2.
 
 ## Decision log

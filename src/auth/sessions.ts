@@ -55,3 +55,15 @@ export function seenLabel(at: number, now: number = Date.now()): string {
   if (days < 7) return `${days} days ago`
   return new Date(at).toISOString().slice(0, 10)
 }
+
+/**
+ * What the card lists up front: this device and the others seen today (the ones that may be in use right now); the rest
+ * fold away (owner, 2026-10-14: a full list was mostly old sign-ins). "Today" is `seenLabel`'s, so a row never says
+ * "last seen today" in one part and sits in the other.
+ */
+export function splitRecent<T extends Pick<SessionView, 'current' | 'lastSeenAt'>>(sessions: T[], now: number = Date.now()): { recent: T[]; older: T[] } {
+  const recent: T[] = []
+  const older: T[] = []
+  for (const s of sessions) (s.current || seenLabel(s.lastSeenAt, now) === 'today' ? recent : older).push(s)
+  return { recent, older }
+}
