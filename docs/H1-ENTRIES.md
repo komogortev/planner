@@ -14,7 +14,7 @@ The first full loop of the helper, nothing more:
 4. The app syncs with the **backend** whenever it can.
 5. The backend authenticates the caller, cleans and stores the entry, and serves entries back on query.
 
-**Acceptance (exit).** One week of daily capture on the phone (installed PWA — the owner's is Android) and the desktop (browser), both signed in
+**Acceptance (exit) — superseded 2026-10-13 by [SLICE-ACCEPTANCE.md](SLICE-ACCEPTANCE.md) §2 (D-115); kept as history.** One week of daily capture on the phone (installed PWA — the owner's is Android) and the desktop (browser), both signed in
 to the same account:
 
 - every entry written on either device is present on both and on the backend;

@@ -17,7 +17,7 @@ Plus) cannot be registered: since 2026-02-19 Anthropic's terms limit subscriptio
 since 2026-04-04 those tokens are blocked in third-party apps. The user pays their provider per token. Copy-paste stays
 as the free executor `manual`.
 
-**Acceptance (S2).** On the owner's phone, three days running: (a) a harness run with a registered model stores the same
+**Acceptance (S2) — superseded 2026-10-13 by [SLICE-ACCEPTANCE.md](SLICE-ACCEPTANCE.md) §3 L1, L5–L8 (D-115); kept as history.** On the owner's phone, three days running: (a) a harness run with a registered model stores the same
 records a paste run would, with no copy or paste; (b) a reply that is cut off or malformed stores nothing and the run
 says why; (c) a Worker test shows the key is never returned to any client; (d) a Worker test shows a second account
 cannot call the first account's model (negative control).
