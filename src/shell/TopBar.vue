@@ -101,6 +101,8 @@ const menuBtn = ref<HTMLButtonElement | null>(null)
 .menu-btn { position: relative; flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 10px; color: var(--bar-text); }
 .menu-btn:hover, .menu-btn[aria-expanded='true'] { background: rgb(255 255 255 / 0.1); }
 .menu-btn svg { width: 22px; height: 22px; }
-/* The touch target is 48px (missed taps reported on the phone, owner 2026-10-14); the drawn button stays 40. */
-.menu-btn::before { content: ''; position: absolute; inset: -4px; }
+/* The touch target (missed taps reported on the phone, owner 2026-10-14; again "especially on the left side", same day): the
+   drawn button stays 40, its hit area spans the bar's full height and reaches 20px to the left, across the gap to the brand,
+   where a thumb aimed at the icon tends to land. Measured in the pane: every point of the bar right of x = button - 20 hits it. */
+.menu-btn::before { content: ''; position: absolute; inset: -4px -4px -4px -20px; }
 </style>
