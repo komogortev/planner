@@ -1,11 +1,11 @@
 # Personal Planner — STATE
 
 ## SNAPSHOT
-- **Phase/Last:** H1 built · HW S3 v2 live · H5 in real use. 2026-10-13: one slice gate ([SLICE-ACCEPTANCE.md](SLICE-ACCEPTANCE.md), D-113–D-116: copy-paste retired, alpha by invite); system widgets with per-account activation (Today on; Summary, Notes off); proposal outcome buttons + Correct…; D-22 signed-in devices; AI model on by default. Vibe-code mode.
-- **Working:** prod = Pages `2792e5b`, Worker `69cb5aa`, D1 `0010`; smoke 16/16. `pnpm check` app 577 · Worker 221.
-- **Broken:** nothing known. **Summary** reads only open notes, never Tasks (v1 lens): it cannot show done vs carried over. **Not verified on a phone:** DEVICE-CHECKS 37 (Correct…), 38 (sign out a device); the Dexie v7 drop; D-105 on a real model.
+- **Phase/Last:** H1 built · HW S3 v2 live · H5 in real use. 2026-10-14: owner phone calibration of Settings (#132–#133); nav layout settled as D-117: an always-shown bottom band (page dots as links + More bottom sheet, #134) with a per-device A/B switch to a top bar (#135). Vibe-code mode.
+- **Working:** prod = Pages `f8e36b3`, Worker `69cb5aa`, D1 `0010`. `pnpm check` app 583 · Worker 221.
+- **Broken:** nothing known. **Summary** reads only open notes, never Tasks (v1 lens). **Not verified on a phone:** DEVICE-CHECKS 37–40 (Correct…, sign out a device, band + More, the A/B switch); the Dexie v7 drop; D-105 on a real model.
 - **Blocker:** none.
-- **Next:** alpha gate A2 (tester notice, owner sends) + A5 (`/log` own limit) → invites; tester invite expires 2026-10-24. Then Summary v3 (done vs carried, own design pass); copy-paste removal PR (D-113); H5 S3 routines. Nav layout research: own session (chip). Parked: `feat/s3b-dashboard-loop`; §9 point 9; server-side duplicate-model check; sign-out diagnostics (re-entry: Sign out does nothing on a build ≥ `041e303`); names glossary (re-entry: a second unplaceable name).
+- **Next:** owner runs B vs A on the phone (DEVICE-CHECKS 39–40; D-117 open subjects: separator, More's look, A as fallback). Alpha gate A2 (tester notice, owner sends) + A5 (`/log` own limit) → invites; tester invite expires 2026-10-24. Then Summary v3; questions strip as a bottom sheet; Ask me now (harness slice); copy-paste removal (D-113); H5 S3. Parked as before.
 ---
 
 ## Context
@@ -57,6 +57,8 @@
 ## Decision log
 
 Full log: PROJECT.md → Decisions log. Latest:
+
+- 2026-10-14 (calibration + nav) — Owner phone notes: the active model marked by background only, row actions outlined, App info update row restored, signed-in devices folded to today, Install's × removed (#132, #133). Nav research → D-117: B, the always-shown band (dots kept as links, one layout for phone and desktop) with a More bottom sheet, sign-out shared via `useSignOut` (#134); then the owner's A/B switch in the menu, A = top bar (#135). Why B: keeps the dots, menu in thumb reach, no extra space; A is the recorded fallback. Session inactivity sign-out already exists (30 days sliding); a shorter one was not taken (the clutter was < 3 days old).
 
 - 2026-10-13 (layout + models) — Owner notes from the phone: Today's + moved to the header (no bottom row), App info update result beside its button (#129); AI model on by default for several models too, the switch says AI model, the active model is highlighted with Use on the rest (#130). Amber warnings and error lines moved to theme tokens (`--glass-warn`, `--glass-err`; #127, #130): both pale classes were illegible on the light glass. D-22 deployed: `0010` + Worker `69cb5aa`, columns confirmed on the remote D1, smoke 16/16.
 
