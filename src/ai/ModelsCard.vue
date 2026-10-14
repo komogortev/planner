@@ -4,6 +4,7 @@ import { useOnline } from '@/composables/useOnline'
 import { storedToken } from '@/auth/signIn'
 import { awaitCall, deleteModel, listModels, ModelsError, outcomeText, presetOf, PRESETS, saveModel, testModel, type ModelView, type Preset } from './models'
 import { reconcileRunModel, runModel, setRunModel, unsetRunModel } from './runWith'
+import GeminiKeyHelp from './GeminiKeyHelp.vue'
 
 // Settings → AI models (H5-MODELS §6, S2). Register a model with its API key, test it, remove it, and choose which one this
 // device runs with ("Copy and paste" is always there). The key goes to the Worker once, on save, and never comes back: the
@@ -186,6 +187,7 @@ const chooseAi = () => {
           <label class="label" for="m-max">Max tokens per reply</label>
           <input id="m-max" v-model.number="form.maxTokens" class="input" type="number" min="256" max="64000" step="1" required data-test="model-max" />
           <label class="label" for="m-key">API key</label>
+          <GeminiKeyHelp v-if="preset.id === 'gemini'" />
           <input id="m-key" v-model="form.key" class="input" type="password" required autocomplete="off" spellcheck="false" autocapitalize="off" data-test="model-key" />
           <p v-if="formError" class="text-sm text-err" role="alert" data-test="model-form-error">{{ formError }}</p>
           <button class="btn-primary justify-self-start" type="submit" :disabled="saving" data-test="model-save">{{ saving ? 'Saving…' : 'Save' }}</button>

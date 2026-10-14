@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { awaitCall, getCall, listModels, ModelsError, outcomeText, presetOf, PRESETS, saveModel, startCall, type CallStatus, type CallView } from '../models'
+import { awaitCall, GEMINI_KEY_URL, getCall, listModels, ModelsError, outcomeText, presetOf, PRESETS, saveModel, startCall, type CallStatus, type CallView } from '../models'
 
 const API = 'https://api.test'
 const view = (status: CallStatus, over: Partial<CallView> = {}): CallView => ({
@@ -94,6 +94,8 @@ describe('presets and wording', () => {
     expect(presetOf({ format: g.format, baseUrl: g.baseUrl }).id).toBe('gemini')
     expect(presetOf({ format: 'openai-chat', baseUrl: 'https://llm.example.com/v1' }).id).toBe('custom')
     expect(g.note).toMatch(/free tier/) // the preset says where the notes go (H5-S1-SPIKE §5)
+    expect(g.note).toMatch(/people at Google may read it/) // Google's terms: human review on unpaid quota (2026-10-14)
+    expect(GEMINI_KEY_URL).toBe('https://aistudio.google.com/apikey') // the help panel's link, from Google's key page
     expect(g.model).toBe('gemini-3.1-flash-lite')
   })
 

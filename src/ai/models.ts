@@ -54,11 +54,15 @@ export const PRESETS: readonly Preset[] = [
   { id: 'openai', name: 'OpenAI', format: 'openai-chat', baseUrl: 'https://api.openai.com/v1', model: '' },
   {
     id: 'gemini', name: 'Google Gemini', format: 'openai-chat', baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai', model: 'gemini-3.1-flash-lite',
-    note: 'Gemini’s free tier may use what you send to improve Google’s products. Your notes go to Google on every run.',
+    // Google's terms (read 2026-10-14): on unpaid quota human reviewers may read input and output, except in the EEA, CH, UK.
+    note: 'Outside the EEA, Switzerland and the UK, Gemini’s free tier may use what you send to improve Google’s products, and people at Google may read it. Each run with this model sends your notes to Google.',
   },
   { id: 'openrouter', name: 'OpenRouter', format: 'openai-chat', baseUrl: 'https://openrouter.ai/api/v1', model: '' },
   { id: 'custom', name: 'Other (OpenAI-compatible)', format: 'openai-chat', baseUrl: '', model: '' },
 ]
+
+/** Where a Gemini key is created (Google AI Studio). The help panel (GeminiKeyHelp.vue) links it. */
+export const GEMINI_KEY_URL = 'https://aistudio.google.com/apikey'
 
 /** The preset a saved model came from, for its label in the list; `custom` when the endpoint matches none. */
 export function presetOf(m: Pick<ModelView, 'format' | 'baseUrl'>): Preset {
