@@ -149,6 +149,11 @@ through, so it moves risk back onto the app. Not recommended during alpha.
 
 **Scopes:** `planner:items.read` (required for any access) · `planner:items.triage` (stage C) · `offline_access`.
 
+**A connection is bound to projects (§10).** On the consent page the owner ticks the projects this connection may read:
+one (an agent working in that repo) or all (a desktop journal session). The choice is stored in the grant's `props`
+(`{ userId, projects: [...] | '*' }`), and the server adds it to every read, like the account. A session in one repo
+then can't read another project's items, even the owner's own.
+
 **Every tool call re-checks D1:** `users.id = props.userId AND disabled_at IS NULL`. KV grants outlive D1 state. Without
 this check, a revoked or deleted account's agent token would keep reading until it expired. Same rule as
 `authenticate()`'s join on `users`.
@@ -305,6 +310,35 @@ waits for the same condition unless the owner moves it (§9 Q8).
 Out of scope: per-project widgets, notes as items (M-b, §2.4), lens/run tools (H3 proper), the
 Claude phone app as a client (same endpoint; untested).
 
+## 10. Direction: the planner as a project hub (owner, 2026-10-14; proposed staging)
+
+The owner's model, as stated: everything he captures is filed against the relevant active local projects. On contact, an
+agent gets that project's share of all of it, on demand, not only its Tasks. Agents write back. The planner shows a
+**widget per project** with that project's state: the last piece of work, how many sessions each piece took, a roadmap
+summary. There is one such widget for each project the owner runs.
+
+How it maps onto what exists (no new concepts beyond §6.1 except where named):
+
+| Want | Existing piece | Change |
+|---|---|---|
+| All data portioned per project | `project` on Tasks (§2) | Extend to notes (M-b) and to the Journal's derived records (questions, answers) through their Task. The read filter stays the server's (§4, "only narrows"), with the connection's projects added |
+| Agent writes back the project's state | **Report** (immutable AI output, A1/T5) and the `claude-code` **executor** VOCABULARY already names ("outside, over MCP, H3") | A `post_report` tool. The report has `executor: 'claude-code'`, it belongs to the project's widget, and its body is written by the agent. The validator adds the executor value; citations become optional for agent reports (they cite repo work, not notes) |
+| Sessions per piece of work | none | A small record per agent session, `{ project, track, startedAt, endedAt, summary }`, posted by the agent (a Stop hook can call the tool). New kind → Dexie bump |
+| A widget per project | **Prompt widget / clone** (D-111), whose last report it shows | A **project widget**: a clone bound to one project that shows the latest agent report plus counts from the session records. It needs no model run of its own |
+| Two-way sync | MCP tools both ways | Not a file sync. Planner → agent: reads (§4). Agent → planner: reports, session records, close proposals (§4.2). Nothing the agent sends edits a Task or a note (A1) |
+
+Two things to settle before anything here is built:
+
+- **The word for a piece of work inside a project.** "Feature" is banned in this vocabulary (it collides with Lens and
+  the model gate). Candidate: **Track**. To be decided with the VOCABULARY row.
+- **What may leave a project.** A project widget copies an agent's summary into the backend (D1, server-readable, T6).
+  For a project whose data must stay on its machine, the agent, which follows that project's own rules, decides what a
+  report may say. The planner can't tell. A project whose rules forbid any summary leaving it gets no project widget.
+
+**Staging:** §7's stages A–C stand as the first step (read marked Tasks). Then: **E** project-bound connections (above;
+built with B, because it costs nothing extra there) · **F** `post_report` + project widget · **G** session records and
+the per-track counts · **H** notes and Journal records per project. Each one waits for the last to be used for a week.
+
 ## 9. Open questions (each with a recommendation)
 
 | # | Question | Options | Recommended |
@@ -319,3 +353,5 @@ Claude phone app as a client (same endpoint; untested).
 | Q8 | When | after restore-edit reconcile + tester signed in · stage A now · after alpha | **After reconcile + tester signed in (§8)**; stage A only earlier if the owner says so |
 | Q9 | The word | Project · Feedback | **Project**: the marker names a destination; "feedback" is one use of it |
 | Q10 | Can the MCP sign-in create an account or redeem an invite | yes · no | **No**: accounts are created only in the app's own sign-in (invite gate stays one door) |
+| Q11 | Is the project hub (§10) the vision, with §2–§7 its first step | yes · keep this design to marked Tasks only | **Yes, staged as §10**: the first step is unchanged and the later ones reuse Report, executor and widget clones. The §6 Vision sentence then reads "…let their own coding agents read and report on each project…" |
+| Q12 | Connection scope | per project (consent picks) · whole account | **Per project, with "all" as an explicit choice** (§3.3) |
