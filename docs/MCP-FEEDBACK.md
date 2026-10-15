@@ -194,7 +194,7 @@ no bulk overwrite, no tool that accepts its own proposal.
 | `list_projects` | B | — | `[{ project, open, total }]` for the caller's marked Tasks |
 | `list_items` | B | `project?`, `state?` (`open` default · `all`), `triaged?` (bool), `since?` (opaque cursor), `limit?` (≤ 100) | `{ items: [{ id, project, text, state, due, followUpOn, createdAt, updatedAt, triagedAt, changedSinceTriage }], next }` |
 | `get_item` | B | `id` | one item, same shape; **not found** for an unmarked id or another account's id. There is no 403, so the tool can't confirm that an id exists |
-| `mark_triaged` | C | `ids` (≤ 50), `note?` (≤ 200 chars) | per id: `triaged` · `not_found` |
+| `mark_triaged` | C | `ids` (≤ 50), `reply?` (≤ 2,000 chars: the agent's answer, shown under the item in the planner) | per id: `triaged` · `not_found` |
 
 - **One shape, declared once.** MCP tools describe themselves: `tools/list` publishes each tool's input JSON Schema, and
   `registerTool` (2.3.1) also takes an `outputSchema`. A tool returns `structuredContent` that must match it. So Claude Code
@@ -220,7 +220,7 @@ no bulk overwrite, no tool that accepts its own proposal.
 
 | | Storage | Device sees it | Cost |
 |---|---|---|---|
-| **T-a (Recommended)** | **New record kind `triage`**, id = the Task's id (as `entryState` uses its entry's id): `{ taskId, at, client, note }`. **Written by the Worker** through `pushRecords(db, userId, …)`: the same code path, version counter and isolation as a device push | Yes, through the normal pull: the marked row shows "Seen by Claude Code · 2 h ago". The owner can clear it (the device soft-deletes the row), and the item is untriaged again | Validator kind + Dexie table → **Dexie v8**, so **the rollback floor moves** to the first v8 build (RUNBOOK: fix forward past it) |
+| **T-a (Recommended)** | **New record kind `triage`**, id = the Task's id (as `entryState` uses its entry's id): `{ taskId, at, client, reply }`. **Written by the Worker** through `pushRecords(db, userId, …)`: the same code path, version counter and isolation as a device push | Yes, through the normal pull: the marked row shows "Seen by Claude Code · 2 h ago". The owner can clear it (the device soft-deletes the row), and the item is untriaged again | Validator kind + Dexie table → **Dexie v8**, so **the rollback floor moves** to the first v8 build (RUNBOOK: fix forward past it) |
 | T-b | Server-only table `agent_triage` | No | One D1 migration, no Dexie change. The owner can't see what the agent took in, and can't undo it from the phone |
 | T-c | A `triagedAt` field on the Task | Yes | Two writers on one row: a device editing the Task from a stale base would overwrite the agent's mark, or the reverse. CAS keeps the text, but the race recurs |
 
@@ -416,3 +416,17 @@ Two things to settle before anything here is built:
 **Staging:** §7's stages A–C stand as the first step (read marked Tasks). Then: **E** project-bound connections (above;
 built with B, because it costs nothing extra there) · **F** `post_state` + project widget (subscribed projects only) · **G** session records and
 the per-track counts · **H** notes and Journal records per project. Each one waits for the last to be used for a week.
+
+### 10.3 Asking from the planner (the other direction)
+
+An MCP server can't call Claude Code: Claude Code connects only while a session runs, and only when the session calls a
+tool. So a question asked from the planner's UI reaches Claude in one of two ways (checked against the Claude Code docs,
+2026-10-14).
+
+| | How | Latency | Cost / limits |
+|---|---|---|---|
+| **Inbox (Recommended)** | On the phone, write the ask as a Task marked with the project (the §2 marker; no new UI). The next session in that repo reads it on start: a SessionStart hook or the agent's first call, `list_items({ project, triaged: false })`. The agent does the work and answers with `mark_triaged(id, reply)`. The reply shows under the item on every device after the next sync | the next session in that repo | Nothing beyond stages B–C. Works with any session, interactive or scheduled |
+| Live, into a running session | A **channel**: a local MCP server that pushes events into a session that is already open (Claude Code feature, `--channels`). A planner channel plugin would poll `/mcp` for new asks with the connection's token, push each one in, and send the reply back the same way | seconds, while the session is open | **Research preview:** only allowlisted plugins register, so a custom one needs `--dangerously-load-development-channels`. Needs Bun and an open session. Claude Code doesn't register a channel server that negotiates protocol 2026-07-28. Parked. **Re-entry:** the preview opens to non-allowlisted plugins, or the owner finds next-session latency too slow three times in a week |
+
+Driving a session from the phone already exists outside the planner (Claude Code's Remote Control from the Claude app).
+The planner doesn't duplicate it; its part is the inbox: what you wrote, waiting for the agent of the project it is about.
