@@ -198,6 +198,11 @@ no bulk overwrite, no tool that accepts its own proposal.
   older build's row without `project`) and checks each result against the published `outputSchema`, so a Task field change
   that breaks the item fails a test, not the agent. The SDK takes any Standard Schema with a JSON form, and the planner's
   validators aren't one, so the item schema is `zod` (already a dependency of the SDK) in that one file.
+- **Request input only narrows.** The account (from the token) and "marked" (`project` not null) are conditions the
+  server adds to every read itself, outside anything built from the request. A tool argument can only add an AND to them,
+  never an OR, so no argument can widen the set. This is what makes the surface safe, whatever the agent sends. It is
+  also why a more generic query tool would be equally safe; the choice of a few named tools is about how well an agent
+  uses them, not security. I1 and I4 test it.
 - **`since`** is the per-account `server_version` (the cursor the sync protocol already has), so "what changed since my
   last look" costs nothing new. The cursor is opaque to the client.
 - **What an item exposes:** a Task's own fields only. `sourceEntryIds` are left out; a cited note may be unmarked
