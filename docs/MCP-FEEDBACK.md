@@ -340,7 +340,7 @@ How it maps onto what exists (no new concepts beyond §6.1 except where named):
 | Want | Existing piece | Change |
 |---|---|---|
 | All data portioned per project | `project` on Tasks (§2) | Extend to notes (M-b) and to the Journal's derived records (questions, answers) through their Task. The read filter stays the server's (§4, "only narrows"), with the connection's projects added |
-| Agent writes back the project's state | the `claude-code` **executor** VOCABULARY already names ("outside, over MCP, H3") | A `post_state` tool writing **one replaceable state row per project** (record kind `projectState`, id = the project slug): the agent's current summary, last piece of work, roadmap lines, ≤ 10,000 chars. Each post replaces the row; it is AI output about a repo, not owner text, so replacing it loses nothing A1/A12 protect. Not an immutable Report: one Report per session would grow without bound (below) |
+| Agent writes back the project's state | the `claude-code` **executor** VOCABULARY already names ("outside, over MCP, H3") | A `post_state` tool writing **one replaceable state row per project** (record kind `projectState`, id = the project slug): the project's own named fields (§10.1), ≤ 10,000 chars. Each post replaces the row; it is AI output about a repo, not owner text, so replacing it loses nothing A1/A12 protect. Not an immutable Report: one Report per session would grow without bound (below) |
 | Sessions per piece of work | none | A small record per agent session, `{ project, track, startedAt, endedAt, summary ≤ 200 chars }`, posted by the agent (a Stop hook can call the tool). New kind → Dexie bump |
 | A widget per project | **Widget** (one Dashboard, one account) | A new widget kind **`project`**, one instance per project, on the same Dashboard as Today. It shows the latest agent report plus counts from the session records. It holds no lens and runs no model, so it is not a D-111 clone (a clone carries a lens into the Journal). Each project is a part of the one planner's scope: it is not its own planner, account or Dashboard. Switched on from the Widgets page like any other widget |
 | Two-way sync | MCP tools both ways | Not a file sync. Planner → agent: reads (§4). Agent → planner: reports, session records, close proposals (§4.2). Nothing the agent sends edits a Task or a note (A1) |
@@ -369,10 +369,23 @@ push uses (record kind `projectProposal`, new). Each device then pulls it with i
 as for any record. Nobody runs SQL against D1; the admin login of 2026-10-14 is never part of the path.
 
 **What the agent sends is data, not a template.** The project widget is a kind built into the app's code, as the system
-widgets are; its component renders it. `display` is a short list of field names from a fixed allowlist (`summary`,
-`lastWork`, `tracks`, `roadmap`, `sessions`), plus their order. The shared validator in `src/domain/records.ts` rejects
-anything else. No markup, script or prompt travels, so a misbehaving agent can at worst propose a widget that shows the
-wrong fields, and the owner sees it on the card before tapping Add.
+widgets are, and one generic component renders it. Projects differ (one tracks its last piece of work and its roadmap,
+another the month it last closed), so the fields are the project's own, not a fixed planner list:
+
+- **The state row is a small set of named fields:** `{ key, label, kind, value }`, at most 20 fields, `key` a slug,
+  `kind` one of `text` (≤ 500 chars) · `number` · `date` · `lines` (≤ 20 lines of ≤ 200 chars), and the row ≤ 10,000
+  chars in all. The agent defines them in its first `post_state` and may add more later.
+- **`display` is the ordered list of keys the widget shows**, drawn from the keys the state row holds. From a session:
+  "show last work, sessions this week and the roadmap on my planner widget" → the agent, which knows the keys it posts,
+  sends `display: ['lastWork', 'sessionsThisWeek', 'roadmap']` in `connect_project` or later in `set_display`. A key not in
+  the state row is refused, so a widget can never point at a field that doesn't exist. `get_state` returns the keys, so an
+  agent in a new session sees what is there before it changes anything.
+- **Session counts per track** stay a computed field the planner adds (`sessions`), since they come from the session
+  rows, not from the state row.
+
+The shared validator in `src/domain/records.ts` checks every kind and bound. Values render as plain text, never as
+markup, and no script or prompt travels. A misbehaving agent can at worst fill its own project's widget with wrong text,
+which the owner sees, and switching the widget off stops its intake.
 
 Why a tap and not a widget the agent switches on itself: the intake gate below accepts data only for a project with an
 active widget. An agent that could create the widget would open its own gate, so the owner's tap is the subscription.
