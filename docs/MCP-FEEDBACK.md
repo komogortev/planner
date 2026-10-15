@@ -149,10 +149,11 @@ through, so it moves risk back onto the app. Not recommended during alpha.
 
 **Scopes:** `planner:items.read` (required for any access) · `planner:items.triage` (stage C) · `offline_access`.
 
-**A connection is bound to projects (§10).** On the consent page the owner ticks the projects this connection may read:
-one (an agent working in that repo) or all (a desktop journal session). The choice is stored in the grant's `props`
-(`{ userId, projects: [...] | '*' }`), and the server adds it to every read, like the account. A session in one repo
-then can't read another project's items, even the owner's own.
+**A connection is bound to projects (§10).** Each project carries the connections allowed to read it. A project is
+bound to a connection when the owner accepts that connection's `connect_project` proposal (§10.1); the consent page
+grants the connection, not a list of projects, because at first sign-in no project exists yet. A desktop journal
+session may be granted "all projects", ticked explicitly on the consent page. The server adds the binding to every read,
+like the account, so a session in one repo can't read another project's items, even the owner's own.
 
 **Every tool call re-checks D1:** `users.id = props.userId AND disabled_at IS NULL`. KV grants outlive D1 state. Without
 this check, a revoked or deleted account's agent token would keep reading until it expired. Same rule as
@@ -325,7 +326,7 @@ Claude phone app as a client (same endpoint; untested).
 | Q9 | The word | Project · Feedback | **Project**: the marker names a destination; "feedback" is one use of it |
 | Q10 | Can the MCP sign-in create an account or redeem an invite | yes · no | **No**: accounts are created only in the app's own sign-in (invite gate stays one door) |
 | Q11 | Is the project hub (§10) the vision, with §2–§7 its first step | yes · keep this design to marked Tasks only | **Yes, staged as §10**: the first step is unchanged and the later ones add a project widget kind, one state row per project and small session rows. The §6 Vision sentence then reads "…let their own coding agents read and report on each project…" |
-| Q12 | Connection scope | per project (consent picks) · whole account | **Per project, with "all" as an explicit choice** (§3.3) |
+| Q12 | Connection scope | per project, bound by accepting the agent's `connect_project` · ticked on the consent page · whole account | **Per project, bound by the owner's one-tap accept (§10.1)**; "all projects" only as an explicit consent-page choice |
 
 ## 10. Direction: the planner as a project hub (owner, 2026-10-14; proposed staging)
 
@@ -343,6 +344,30 @@ How it maps onto what exists (no new concepts beyond §6.1 except where named):
 | Sessions per piece of work | none | A small record per agent session, `{ project, track, startedAt, endedAt, summary ≤ 200 chars }`, posted by the agent (a Stop hook can call the tool). New kind → Dexie bump |
 | A widget per project | **Widget** (one Dashboard, one account) | A new widget kind **`project`**, one instance per project, on the same Dashboard as Today. It shows the latest agent report plus counts from the session records. It holds no lens and runs no model, so it is not a D-111 clone (a clone carries a lens into the Journal). Each project is a part of the one planner's scope: it is not its own planner, account or Dashboard. Switched on from the Widgets page like any other widget |
 | Two-way sync | MCP tools both ways | Not a file sync. Planner → agent: reads (§4). Agent → planner: reports, session records, close proposals (§4.2). Nothing the agent sends edits a Task or a note (A1) |
+
+### 10.1 Setup: the agent proposes, the owner taps once (owner, 2026-10-14)
+
+The planner can't see the owner's machine, so it can't list local projects; they come from the agent. Setup needs no
+planner configuration screen, no prompt and no copy-paste:
+
+1. **Once per machine:** `claude mcp add --transport http planner <url>`. The browser opens the planner's sign-in
+   (GitHub/Google) and the consent page once; refresh tokens keep it signed in after that. The owner signs in to the
+   planner from Claude, never to Claude from the planner.
+2. **Once per repo, in a session:** "connect this project to my planner". The agent calls `connect_project({ project,
+   name, display })`. `display` is the widget's configuration: which state fields it shows (summary, last piece of work,
+   sessions per track, roadmap lines) and in what order. It is stored as a pending proposal and nothing shows yet.
+3. **On any device:** a card on the Dashboard, "Claude Code wants to add the *Planner* widget: summary · last work ·
+   sessions per track. Add / Not now". **Add** creates the project, binds it to that connection, and creates the
+   project widget switched on, with the agent's `display`. One tap.
+4. **From then on:** the agent posts `post_state` and session rows (a Stop hook can do it), and every device shows them
+   after its next sync.
+
+Why a tap and not a widget the agent switches on itself: the intake gate below accepts data only for a project with an
+active widget. An agent that could create the widget would open its own gate, so the owner's tap is the subscription.
+Changing `display` later is either the widget's ⋯ menu (D-100) or another proposal from the agent; the owner's edit wins.
+A proposal the owner dismisses is not repeated for that project (D-74's rule).
+
+### 10.2 Intake and growth
 
 **Only connected projects receive anything (owner, 2026-10-14).** The server accepts `post_state` and session records
 only for a project that is **(a)** in the connection's projects and **(b)** has an active project widget on the
