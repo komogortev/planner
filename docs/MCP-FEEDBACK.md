@@ -339,10 +339,21 @@ How it maps onto what exists (no new concepts beyond §6.1 except where named):
 | Want | Existing piece | Change |
 |---|---|---|
 | All data portioned per project | `project` on Tasks (§2) | Extend to notes (M-b) and to the Journal's derived records (questions, answers) through their Task. The read filter stays the server's (§4, "only narrows"), with the connection's projects added |
-| Agent writes back the project's state | **Report** (immutable AI output, A1/T5) and the `claude-code` **executor** VOCABULARY already names ("outside, over MCP, H3") | A `post_report` tool. The report has `executor: 'claude-code'`, it belongs to the project's widget, and its body is written by the agent. The validator adds the executor value; citations become optional for agent reports (they cite repo work, not notes) |
-| Sessions per piece of work | none | A small record per agent session, `{ project, track, startedAt, endedAt, summary }`, posted by the agent (a Stop hook can call the tool). New kind → Dexie bump |
+| Agent writes back the project's state | the `claude-code` **executor** VOCABULARY already names ("outside, over MCP, H3") | A `post_state` tool writing **one replaceable state row per project** (record kind `projectState`, id = the project slug): the agent's current summary, last piece of work, roadmap lines, ≤ 10,000 chars. Each post replaces the row; it is AI output about a repo, not owner text, so replacing it loses nothing A1/A12 protect. Not an immutable Report: one Report per session would grow without bound (below) |
+| Sessions per piece of work | none | A small record per agent session, `{ project, track, startedAt, endedAt, summary ≤ 200 chars }`, posted by the agent (a Stop hook can call the tool). New kind → Dexie bump |
 | A widget per project | **Widget** (one Dashboard, one account) | A new widget kind **`project`**, one instance per project, on the same Dashboard as Today. It shows the latest agent report plus counts from the session records. It holds no lens and runs no model, so it is not a D-111 clone (a clone carries a lens into the Journal). Each project is a part of the one planner's scope: it is not its own planner, account or Dashboard. Switched on from the Widgets page like any other widget |
 | Two-way sync | MCP tools both ways | Not a file sync. Planner → agent: reads (§4). Agent → planner: reports, session records, close proposals (§4.2). Nothing the agent sends edits a Task or a note (A1) |
+
+**Only connected projects receive anything (owner, 2026-10-14).** The server accepts `post_state` and session records
+only for a project that is **(a)** in the connection's projects and **(b)** has an active project widget on the
+Dashboard. Anything else is refused with `not_subscribed` and stores nothing. Switching a project widget off stops its
+intake. An agent that posts on every session from every repo costs nothing for the projects the owner didn't connect.
+
+**Growth, per project per year at 5 agent sessions a day** (`node` estimate from the validator caps, 2026-10-14): a full
+report each session ≈ **17.4 MB**; one replaceable state row ≈ **9.8 KB**; session rows ≈ **0.56 MB**. Every record also
+syncs to every device, so the phone carries the same amount. The state row plus session rows keep a project under 1 MB
+a year. Session rows past a year fold into per-track counts (re-entry: an account's session rows pass 10,000). D1's
+free-plan storage limit is not read here; it goes into S0 with the KV limits.
 
 Two things to settle before anything here is built:
 
@@ -353,5 +364,5 @@ Two things to settle before anything here is built:
   report may say. The planner can't tell. A project whose rules forbid any summary leaving it gets no project widget.
 
 **Staging:** §7's stages A–C stand as the first step (read marked Tasks). Then: **E** project-bound connections (above;
-built with B, because it costs nothing extra there) · **F** `post_report` + project widget · **G** session records and
+built with B, because it costs nothing extra there) · **F** `post_state` + project widget (subscribed projects only) · **G** session records and
 the per-track counts · **H** notes and Journal records per project. Each one waits for the last to be used for a week.
