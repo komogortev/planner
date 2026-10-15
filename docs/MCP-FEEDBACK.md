@@ -310,6 +310,23 @@ waits for the same condition unless the owner moves it (§9 Q8).
 Out of scope: per-project widgets, notes as items (M-b, §2.4), lens/run tools (H3 proper), the
 Claude phone app as a client (same endpoint; untested).
 
+## 9. Open questions (each with a recommendation)
+
+| # | Question | Options | Recommended |
+|---|---|---|---|
+| Q1 | What carries the marker | Task field · Entry tag · widget · boolean flag; set by the owner · by the Journal | **Task field `project` (M-a), set by the owner's chip or by confirming a Journal proposal in the run it already makes (M-e)**; Entry tag as M-b on its re-entry |
+| Q2 | Marker value | project slug · boolean | **Slug**: one agent session per repo |
+| Q3 | Where the endpoint runs | separate Worker `planner-mcp` · inside `planner-api` | **Separate Worker (E-a)**: no blast radius on sync during alpha; costs one GitHub OAuth App and one Google redirect URI, set up by the owner |
+| Q4 | Authorization server | `@cloudflare/workers-oauth-provider` + KV · own AS in D1 (T3's "own OAuth code") | **The library.** The MCP auth spec changed this year (CIMD over DCR, resource binding). Tracking it by hand is the larger risk, and KV is a free-plan binding on the same account. Needs a T2 log line (a new primitive) |
+| Q5 | Client registration | CIMD only · CIMD + DCR · pre-registered | **CIMD only**, DCR off: DCR is an unauthenticated KV write per call. Fall back to DCR with a rate limit only if S0 shows Claude Code can't use CIMD here |
+| Q6 | Where "triaged" lives | synced `triage` kind · server-only table · Task field | **Synced kind (T-a)**: the owner sees and can undo what the agent took; accepts the Dexie v8 bump in stage C |
+| Q7 | Who gets it | every account · owner first | **Built for every account, switched on for the owner's account first** (an allowlist row). Opened to invitees after a week of owner use and an updated tester notice line ("your coding agent can read items you mark") |
+| Q8 | When | after restore-edit reconcile + tester signed in · stage A now · after alpha | **After reconcile + tester signed in (§8)**; stage A only earlier if the owner says so |
+| Q9 | The word | Project · Feedback | **Project**: the marker names a destination; "feedback" is one use of it |
+| Q10 | Can the MCP sign-in create an account or redeem an invite | yes · no | **No**: accounts are created only in the app's own sign-in (invite gate stays one door) |
+| Q11 | Is the project hub (§10) the vision, with §2–§7 its first step | yes · keep this design to marked Tasks only | **Yes, staged as §10**: the first step is unchanged and the later ones reuse Report, executor and widget clones. The §6 Vision sentence then reads "…let their own coding agents read and report on each project…" |
+| Q12 | Connection scope | per project (consent picks) · whole account | **Per project, with "all" as an explicit choice** (§3.3) |
+
 ## 10. Direction: the planner as a project hub (owner, 2026-10-14; proposed staging)
 
 The owner's model, as stated: everything he captures is filed against the relevant active local projects. On contact, an
@@ -338,20 +355,3 @@ Two things to settle before anything here is built:
 **Staging:** §7's stages A–C stand as the first step (read marked Tasks). Then: **E** project-bound connections (above;
 built with B, because it costs nothing extra there) · **F** `post_report` + project widget · **G** session records and
 the per-track counts · **H** notes and Journal records per project. Each one waits for the last to be used for a week.
-
-## 9. Open questions (each with a recommendation)
-
-| # | Question | Options | Recommended |
-|---|---|---|---|
-| Q1 | What carries the marker | Task field · Entry tag · widget · boolean flag; set by the owner · by the Journal | **Task field `project` (M-a), set by the owner's chip or by confirming a Journal proposal in the run it already makes (M-e)**; Entry tag as M-b on its re-entry |
-| Q2 | Marker value | project slug · boolean | **Slug**: one agent session per repo |
-| Q3 | Where the endpoint runs | separate Worker `planner-mcp` · inside `planner-api` | **Separate Worker (E-a)**: no blast radius on sync during alpha; costs one GitHub OAuth App and one Google redirect URI, set up by the owner |
-| Q4 | Authorization server | `@cloudflare/workers-oauth-provider` + KV · own AS in D1 (T3's "own OAuth code") | **The library.** The MCP auth spec changed this year (CIMD over DCR, resource binding). Tracking it by hand is the larger risk, and KV is a free-plan binding on the same account. Needs a T2 log line (a new primitive) |
-| Q5 | Client registration | CIMD only · CIMD + DCR · pre-registered | **CIMD only**, DCR off: DCR is an unauthenticated KV write per call. Fall back to DCR with a rate limit only if S0 shows Claude Code can't use CIMD here |
-| Q6 | Where "triaged" lives | synced `triage` kind · server-only table · Task field | **Synced kind (T-a)**: the owner sees and can undo what the agent took; accepts the Dexie v8 bump in stage C |
-| Q7 | Who gets it | every account · owner first | **Built for every account, switched on for the owner's account first** (an allowlist row). Opened to invitees after a week of owner use and an updated tester notice line ("your coding agent can read items you mark") |
-| Q8 | When | after restore-edit reconcile + tester signed in · stage A now · after alpha | **After reconcile + tester signed in (§8)**; stage A only earlier if the owner says so |
-| Q9 | The word | Project · Feedback | **Project**: the marker names a destination; "feedback" is one use of it |
-| Q10 | Can the MCP sign-in create an account or redeem an invite | yes · no | **No**: accounts are created only in the app's own sign-in (invite gate stays one door) |
-| Q11 | Is the project hub (§10) the vision, with §2–§7 its first step | yes · keep this design to marked Tasks only | **Yes, staged as §10**: the first step is unchanged and the later ones reuse Report, executor and widget clones. The §6 Vision sentence then reads "…let their own coding agents read and report on each project…" |
-| Q12 | Connection scope | per project (consent picks) · whole account | **Per project, with "all" as an explicit choice** (§3.3) |
