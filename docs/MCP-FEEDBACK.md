@@ -324,7 +324,7 @@ Claude phone app as a client (same endpoint; untested).
 | Q8 | When | after restore-edit reconcile + tester signed in · stage A now · after alpha | **After reconcile + tester signed in (§8)**; stage A only earlier if the owner says so |
 | Q9 | The word | Project · Feedback | **Project**: the marker names a destination; "feedback" is one use of it |
 | Q10 | Can the MCP sign-in create an account or redeem an invite | yes · no | **No**: accounts are created only in the app's own sign-in (invite gate stays one door) |
-| Q11 | Is the project hub (§10) the vision, with §2–§7 its first step | yes · keep this design to marked Tasks only | **Yes, staged as §10**: the first step is unchanged and the later ones reuse Report, executor and widget clones. The §6 Vision sentence then reads "…let their own coding agents read and report on each project…" |
+| Q11 | Is the project hub (§10) the vision, with §2–§7 its first step | yes · keep this design to marked Tasks only | **Yes, staged as §10**: the first step is unchanged and the later ones add a project widget kind, one state row per project and small session rows. The §6 Vision sentence then reads "…let their own coding agents read and report on each project…" |
 | Q12 | Connection scope | per project (consent picks) · whole account | **Per project, with "all" as an explicit choice** (§3.3) |
 
 ## 10. Direction: the planner as a project hub (owner, 2026-10-14; proposed staging)
