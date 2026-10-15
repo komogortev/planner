@@ -362,6 +362,18 @@ planner configuration screen, no prompt and no copy-paste:
 4. **From then on:** the agent posts `post_state` and session rows (a Stop hook can do it), and every device shows them
    after its next sync.
 
+**How the proposal reaches the devices (no direct database access).** The agent's call arrives at `/mcp` with its OAuth
+token. The token was issued from the owner's own planner sign-in, so the Worker knows the account from the token alone
+(A11). The Worker writes the proposal as a record **of that account only**, through the same `pushRecords` path a device
+push uses (record kind `projectProposal`, new). Each device then pulls it with its own session token on the next sync,
+as for any record. Nobody runs SQL against D1; the admin login of 2026-10-14 is never part of the path.
+
+**What the agent sends is data, not a template.** The project widget is a kind built into the app's code, as the system
+widgets are; its component renders it. `display` is a short list of field names from a fixed allowlist (`summary`,
+`lastWork`, `tracks`, `roadmap`, `sessions`), plus their order. The shared validator in `src/domain/records.ts` rejects
+anything else. No markup, script or prompt travels, so a misbehaving agent can at worst propose a widget that shows the
+wrong fields, and the owner sees it on the card before tapping Add.
+
 Why a tap and not a widget the agent switches on itself: the intake gate below accepts data only for a project with an
 active widget. An agent that could create the widget would open its own gate, so the owner's tap is the subscription.
 Changing `display` later is either the widget's ⋯ menu (D-100) or another proposal from the agent; the owner's edit wins.
