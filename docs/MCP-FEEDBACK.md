@@ -36,6 +36,23 @@ item, a note a marked Task cites, an answer, a report: none of these is readable
 | M-b | Reserved Entry tag `project:<slug>` | none (`entries.tags` column and cleaning shipped); a reserved-prefix rule in `clean.ts` | No: the case had no notes | Capture stays typeless (D-07): the user marks the note, nothing classifies it. Good second step (§2.4) |
 | M-c | Dedicated Feedback widget (D-111 clone) | widget record + a lens; D-111 filters by Journal **tags**, which Tasks don't carry yet | Partly | Couples the marker to the Journal and a model run. A marker the owner set by hand would then depend on the AI |
 | M-d | A boolean `feedback` flag | same as M-a | Yes | Can't tell two projects apart. A dev with two repos would get both lists in each session |
+| **M-e (Recommended, with M-a)** | **The Journal proposes the project in the run it already makes**; the owner confirms with one tap, and only then is `Task.project` set | a `taskProposal` op `project` (validator; the table exists, no Dexie bump) and one line per project in the prompt | Yes: the six Tasks enter the next run as never-assessed (`tasksWaiting`) | No second loop. Same pattern as D-111 (the Journal tags once per run) and D-105 (ask, never correct silently) |
+
+**Why the planner didn't associate the six items itself (checked in `src/domain/harness2.ts`).** The Journal already
+reads hand-added Tasks: `tasksWaiting` puts every never-assessed open Task into the next run. But it had nothing to
+associate them *to*. No project exists in the schema or the prompt, and harness v2's output has no op that classifies
+(create · attach · close · revise · split · merge, plus questions). The model can't know "the planner" is one of the
+owner's projects unless something tells it. So the gap is missing input and a missing op. A loop isn't missing.
+
+**Why the model proposes and doesn't set it.** The marker is the export gate. A wrong model guess would hand a personal
+Task to an agent, and a guess nobody confirmed breaks the privacy default. So the model's answer is a proposal, as for
+every other change to a record (A1). A rejected proposal is never made again (D-74).
+
+**Where the Journal's project list comes from (no new record kind).** The slugs already on the account's Tasks, each
+with the texts of up to three Tasks marked with it as examples. Cold start: the owner marks the first item by hand
+(chip, §2.3), and from then on the Journal proposes. A project with no marked Task is never offered to the model, so it
+can't invent one. A project description field waits until slugs alone prove too thin (re-entry: the owner rejects more
+than a third of project proposals in a week).
 
 **Why M-a with a slug, not a boolean.** The surface is "my Claude Code session in repo X reads what I noted about X". A
 slug lets each `claude mcp add` (or each session) ask for its own project. With one project the slug costs one word.
@@ -49,8 +66,12 @@ slug lets each `claude mcp add` (or each session) ask for its own project. With 
 - **Dexie:** no new version. The field is not an index, and the marked list is filtered in memory (an account holds
   tens to hundreds of Tasks). **The rollback floor does not move** (RUNBOOK: never roll Pages back past a Dexie bump; there
   is none here).
-- **The harness:** the Journal prompt doesn't carry `project`, and v2's output has no op that sets or clears it. A
-  harness-created Task is unmarked until the owner marks it. A "propose a project" op is out of scope (§8).
+- **The harness (M-e):** the prompt lists the projects in use with their example texts. The output gains a proposal op
+  `{ op: 'project', taskId, project, evidence }`, valid only for an open, unmarked Task in the prompt and a project from
+  the list. It is stored as a `taskProposal` with `op: 'project'` and shown on the row as "About *planner*? ✓ ✕".
+  Confirming sets `project`, and the owner's chip edits stay authoritative. The model never sets or clears `project`
+  itself. Adding a value to `taskProposal.op` is not an ADDED_FIELDS change: the Worker deploys first, and **how an older
+  build treats an unknown op on pull must be read before S-A merges** (dropped or rejected, never a failed pull).
 
 **Blast radius.** If the validator is wrong (for example `project` required instead of added), **every Task push from
 every device is rejected**. The owner sees it first: the sync pill shows rejected changes after any Today edit, and the
@@ -244,6 +265,7 @@ for this surface.
 |---|---|---|---|
 | **S0** | Spike: `planner-mcp` on a throwaway route with one test account. CIMD sign-in from Claude Code with DCR disabled (if it fails, enable DCR with a registration rate limit; record which). KV free-plan limits read. `@modelcontextprotocol/server` and the OAuth library through the dependency audit, pinned exactly | D-119 accepted | A real `claude mcp add` + one tool call, logged in this doc |
 | **A** | Marker: validator + chip + row action (§2) | none (app only; independent of MCP) | I8; DEVICE-CHECKS row on the phone |
+| **A2** | Journal proposes projects (M-e): prompt list, `project` op, confirm on the row | A, with at least one marked Task | a run on the owner's account proposes a project for an unmarked dev Task and none for a personal one; the older-build pull read |
 | **B** | `planner-mcp` read tools, consent, admission, `agent_calls`, Settings connections | S0, A | I1, I2, I4–I7 green with controls; owner reads his own items from a Claude Code session |
 | **C** | `mark_triaged`, `triage` kind, Dexie v8 | B used for a week | I3; stale-build test with v8 |
 | **D** | `propose_close` | §4.2 re-entry | — |
@@ -260,14 +282,14 @@ last item named before the second invitee. Before that, the only allowed work is
 Stage A is small and app-only, so it could go earlier. It still changes Today, the surface the tester meets first. So it
 waits for the same condition unless the owner moves it (§9 Q8).
 
-Out of scope: harness-proposed markers, per-project widgets, notes as items (M-b, §2.4), lens/run tools (H3 proper), the
+Out of scope: per-project widgets, notes as items (M-b, §2.4), lens/run tools (H3 proper), the
 Claude phone app as a client (same endpoint; untested).
 
 ## 9. Open questions (each with a recommendation)
 
 | # | Question | Options | Recommended |
 |---|---|---|---|
-| Q1 | What carries the marker | Task field · Entry tag · widget · boolean flag | **Task field `project` (M-a)**; Entry tag as M-b on its re-entry |
+| Q1 | What carries the marker | Task field · Entry tag · widget · boolean flag; set by the owner · by the Journal | **Task field `project` (M-a), set by the owner's chip or by confirming a Journal proposal in the run it already makes (M-e)**; Entry tag as M-b on its re-entry |
 | Q2 | Marker value | project slug · boolean | **Slug**: one agent session per repo |
 | Q3 | Where the endpoint runs | separate Worker `planner-mcp` · inside `planner-api` | **Separate Worker (E-a)**: no blast radius on sync during alpha; costs one GitHub OAuth App and one Google redirect URI, set up by the owner |
 | Q4 | Authorization server | `@cloudflare/workers-oauth-provider` + KV · own AS in D1 (T3's "own OAuth code") | **The library.** The MCP auth spec changed this year (CIMD over DCR, resource binding). Tracking it by hand is the larger risk, and KV is a free-plan binding on the same account. Needs a T2 log line (a new primitive) |
