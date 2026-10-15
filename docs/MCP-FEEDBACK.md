@@ -121,9 +121,16 @@ disabled).
 | **E-a (Recommended)** | **A second Worker `planner-mcp`** (own `wrangler.toml`, own deploy) using `OAuthProvider` in its one-Worker form: it is both the AS and the only resource (`/mcp`). It binds **the same D1** (migrations stay owned by `api/`) and a new KV namespace. It reads records only through `api/src/records.ts`, imported as code | **None on sync.** `planner-api`'s export, routes and CORS don't change. A broken MCP deploy breaks only MCP. The kill switch is `wrangler delete` or a disabled route, with nothing to roll back in the app |
 | E-b | Inside `planner-api`: `OAuthProvider` becomes the default export, the Hono app its `defaultHandler`, `/mcp` its `apiRoute` | Every request (`/sync`, `/auth`, `/ai/calls`) passes the provider's router first. A bug there is an outage for every tester, and the first to notice is anyone whose sync pill turns red |
 
-E-a costs a second GitHub OAuth App. A GitHub OAuth App has one callback host, so the owner creates the app (one-time,
-reversible), plus one added redirect URI on the existing Google client. E-b reuses both. With testers on the app, the
-isolation is worth that one-time step.
+E-a costs a second GitHub OAuth App. A GitHub OAuth App has one callback URL, and GitHub accepts only that URL's
+host, with its path or a subdirectory of it. `planner-mcp` gets its own `workers.dev` host, so the app the planner signs
+in with today can't send a person back to it. The owner registers a second app, "planner MCP", in GitHub → Developer
+settings (one-time, deletable), and adds one authorized redirect URI to the planner's existing Google OAuth client. E-b
+reuses both. With testers on the app, the isolation is worth that one-time step. (Not read: the callback URL registered
+today, which sits in the owner's GitHub settings.)
+
+A third shape avoids the console steps: `planner-mcp` delegates sign-in to `planner-api` (a `flow=mcp` start, the
+existing callbacks, a one-time code handed back over a Service Binding). It edits `auth.ts`, the file every sign-in passes
+through, so it moves risk back onto the app. Not recommended during alpha.
 
 ### 3.3 Authorization flow (E-a)
 
@@ -183,6 +190,14 @@ no bulk overwrite, no tool that accepts its own proposal.
 | `get_item` | B | `id` | one item, same shape; **not found** for an unmarked id or another account's id. There is no 403, so the tool can't confirm that an id exists |
 | `mark_triaged` | C | `ids` (≤ 50), `note?` (≤ 200 chars) | per id: `triaged` · `not_found` |
 
+- **One shape, declared once.** MCP tools describe themselves: `tools/list` publishes each tool's input JSON Schema, and
+  `registerTool` (2.3.1) also takes an `outputSchema`. A tool returns `structuredContent` that must match it. So Claude Code
+  needs no client code and no copy of the shape. The item is a projection of a Task, written once in
+  `src/domain/agentItem.ts` (environment-free, T7): `toAgentItem(task, triage)` plus its schema, imported by the tools. The
+  Task validator stays the authority for what a Task is. A test runs `toAgentItem` over every Task fixture (including an
+  older build's row without `project`) and checks each result against the published `outputSchema`, so a Task field change
+  that breaks the item fails a test, not the agent. The SDK takes any Standard Schema with a JSON form, and the planner's
+  validators aren't one, so the item schema is `zod` (already a dependency of the SDK) in that one file.
 - **`since`** is the per-account `server_version` (the cursor the sync protocol already has), so "what changed since my
   last look" costs nothing new. The cursor is opaque to the client.
 - **What an item exposes:** a Task's own fields only. `sourceEntryIds` are left out; a cited note may be unmarked
