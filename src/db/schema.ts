@@ -33,4 +33,9 @@ export interface SyncMeta {
    * lost were put back. Kept on disk because the sweep takes more than one request: an interruption must not forget it.
    */
   reconcile?: boolean
+  /**
+   * Which one-time re-pull this device has finished (`REPULL` in sync/engine.ts). An older build drops a record it cannot
+   * validate and its cursor moves past it (G2: a `project` widget), so after updating it must pull from 0 once to get it.
+   */
+  repull?: number
 }

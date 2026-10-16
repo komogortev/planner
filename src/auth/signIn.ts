@@ -144,6 +144,10 @@ export function lastResult(): { at: number; text: string } | null {
 
 export function signOutLocally(): void {
   localStorage.removeItem(TOKEN_KEY)
+  // Project cards keep their last GitHub answer on the device (ProjectCard.vue); it may hold a private repo's text.
+  try {
+    for (const k of Object.keys(localStorage)) if (k.startsWith('planner.project.')) localStorage.removeItem(k)
+  } catch { /* storage unavailable: nothing was cached either */ }
 }
 
 /** Put a token back — only for an interrupted sign-out, which must leave the device as it found it. */

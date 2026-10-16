@@ -15,6 +15,8 @@ import type { CycleLock } from './lock'
 /** Measured limits (H1-S2-BACKEND.md, step 7): push ≤ 50 mutations and ≤ 100 KB, pull pages of 100. */
 export const PUSH_BATCH_MAX = 50
 export const PUSH_BATCH_BYTES = 100_000
+/** Bump to make every device pull from 0 once (G2, 2026-10-16: `project` widgets an older build dropped). */
+export const REPULL = 1
 export const PULL_PAGE = 100
 export const BACKOFF_FIRST_MS = 2_000
 export const BACKOFF_MAX_MS = 300_000
@@ -385,6 +387,13 @@ export class SyncEngine {
     const { db } = this.d
     const known = await db.syncMeta.get(userId)
     let cursor = known?.cursor ?? 0
+    // A one-time pull from 0 (REPULL): rows an older build of this device dropped are fetched again. Upserts are idempotent
+    // and a queued local edit still wins, as on any pull. Marked done only after the last page, so an interruption repeats it.
+    const repulling = (known?.repull ?? 0) < REPULL
+    // The cursor this device had stored: D-58 compares the server's head with it, not with the re-pull's 0, or a restore that
+    // lands during the re-pull would go unseen and the notes the server lost would never be put back.
+    const stored = cursor
+    if (repulling) cursor = 0
     // D-58: a sweep from 0 that finds the notes the server lost. Started when the server's `head` is below the cursor, or by an
     // earlier cycle that did not finish it (the marker on disk). `seen` collects every id the server returns on the way, so the
     // notes it no longer has can be found at the end; it is not kept, so an interrupted sweep starts over from 0.
@@ -400,7 +409,7 @@ export class SyncEngine {
       // its counter edited). "Versions above N" would hear nothing for ever, and what is written from now on would never
       // arrive. Start again from 0 — upserts are idempotent — once per cycle, so a server that keeps claiming a low head
       // cannot loop the client. An older Worker sends no `head`: nothing changes.
-      if (!rewound && typeof page.head === 'number' && page.head < cursor) {
+      if (!rewound && typeof page.head === 'number' && page.head < Math.max(cursor, stored)) {
         rewound = true
         cursor = 0
         await this.markRewind(userId, gen)
@@ -436,7 +445,11 @@ export class SyncEngine {
           }
           if (rows.length > 0) await db.table(RECORD_TABLE[kind]).bulkPut(rows)
         }
-        await db.syncMeta.put({ userId, cursor: next, lastPushAt: known?.lastPushAt ?? null, lastPullAt: new Date(this.now()).toISOString(), ...(rewound ? { reconcile: true } : {}) })
+        const repull = repulling && !page.more ? REPULL : known?.repull
+        // While re-pulling, the stored cursor never goes down: an interrupted re-pull starts from 0 again anyway, and a lower
+        // cursor on disk would hide a later restore from the check above.
+        const keep = repulling && !rewound ? Math.max(next, stored) : next
+        await db.syncMeta.put({ userId, cursor: keep, lastPushAt: known?.lastPushAt ?? null, lastPullAt: new Date(this.now()).toISOString(), ...(rewound ? { reconcile: true } : {}), ...(repull ? { repull } : {}) })
       })
       this.set({ pulled: this.state.pulled + page.changes.length + incoming.length })
       if (!page.more) {
@@ -460,7 +473,7 @@ export class SyncEngine {
       this.live(gen)
       const known = await db.syncMeta.get(userId)
       this.live(gen) // the read waited for any clear queued ahead of this transaction; a reset it made must win
-      await db.syncMeta.put({ userId, cursor: 0, lastPushAt: known?.lastPushAt ?? null, lastPullAt: known?.lastPullAt ?? null, reconcile: true })
+      await db.syncMeta.put({ ...known, userId, cursor: 0, lastPushAt: known?.lastPushAt ?? null, lastPullAt: known?.lastPullAt ?? null, reconcile: true })
     })
   }
 

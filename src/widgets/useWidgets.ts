@@ -7,14 +7,27 @@ import { useLiveQuery } from '@/composables/useLiveQuery'
 import { syncSoon } from '@/sync'
 import { pendingJournal } from '@/harness/loop'
 import { resolveSystemWidgets, SYSTEM_WIDGETS, systemWidgetRow, type HeldWidget, type SystemWidgetId } from './system'
+import { projectWidgetId, projectWidgetRow, resolveProjectWidgets } from './projects'
+import type { WidgetRecord } from '@/domain/records'
 
 export function useWidgets() {
   // null until the first read: the defaults must not show (or be toggled from) before the stored rows are known.
-  const rows = useLiveQuery<HeldWidget[] | null>(() => db.widgets.toArray(), null)
+  const rows = useLiveQuery<(HeldWidget & Partial<WidgetRecord>)[] | null>(() => db.widgets.toArray(), null)
   const loaded = computed(() => rows.value !== null)
   const widgets = computed(() => resolveSystemWidgets(rows.value ?? []))
   const isActive = (id: SystemWidgetId) => loaded.value && (widgets.value.find((w) => w.id === id)?.active ?? false)
-  return { widgets, loaded, isActive }
+  const projects = computed(() => resolveProjectWidgets(rows.value ?? []))
+  return { widgets, loaded, isActive, projects }
+}
+
+/** Switch a repo's project widget on or off (G2). The first switch writes the row; off keeps it (never deleted). */
+export async function setProjectActive(repo: string, isPrivate: boolean, active: boolean): Promise<{ ok: true } | { ok: false; error: string }> {
+  const now = new Date().toISOString()
+  const held = await db.widgets.get(projectWidgetId(repo))
+  const r = await writeRecords(db, [{ recordKind: 'widget', row: { ...projectWidgetRow(repo, isPrivate, active, now, held) } }], now)
+  if (!r.ok) return { ok: false, error: r.errors.join('; ') }
+  syncSoon()
+  return { ok: true }
 }
 
 export async function setWidgetActive(id: SystemWidgetId, active: boolean): Promise<{ ok: true } | { ok: false; error: string }> {
