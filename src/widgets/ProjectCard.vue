@@ -4,6 +4,9 @@ import { useOnline } from '@/composables/useOnline'
 import { storedToken } from '@/auth/signIn'
 import { IntegrationsError, projectState, type ProjectState, type SentIssue } from '@/integrations/github'
 import IssueSheet from './IssueSheet.vue'
+import CardMenu from './CardMenu.vue'
+import { cardTint } from './tints'
+import { setProjectActive, useWidgets } from './useWidgets'
 import type { ProjectWidget } from './projects'
 import { ageText, BRIEF_DEFAULT, briefBlocks, githubLink, snapshotBlocks } from './projectView'
 
@@ -12,11 +15,14 @@ import { ageText, BRIEF_DEFAULT, briefBlocks, githubLink, snapshotBlocks } from 
 // is kept on this device, so the card shows it offline with its age. How it looks is the repo's `.planner.json`.
 // Folded by default (C1): the snapshot fields `.planner.json`'s `brief` names and the last merge; More opens the rest. The
 // fold is remembered per card on this device.
-// New issue (C2) opens the send sheet; the card lists the open issues the planner sent, the newest one when folded.
+// New issue (C2) opens the send sheet; the card lists the issues the planner sent, the newest one when folded.
+// C4: the card wears the widget's tint; its ⋯ menu holds Refresh, Open on GitHub, Remove and the colour. Sections are told
+// apart by label, divider and contrast tier (state → in flight → history), never by their own background.
 const props = defineProps<{ project: ProjectWidget }>()
 const online = useOnline()
 const signedIn = storedToken() !== null
 const cacheKey = computed(() => `planner.project.${props.project.id}`)
+const { tintOf } = useWidgets()
 
 function cached(): ProjectState | null {
   try {
@@ -72,6 +78,8 @@ const issues = computed(() => (Array.isArray(state.value?.issues) ? state.value!
 const issuesError = computed(() => (state.value?.issues && !Array.isArray(state.value.issues) ? state.value.issues.error : null))
 /** The folded line's word for where a sent issue stands: its PR's state once there is one, else the issue's own. */
 const issueStatus = (i: SentIssue) => (i.pr ? `PR ${i.pr.state}` : i.state === 'closed' ? 'closed' : day(i.createdAt))
+/** The dot beside a sent issue: live while open, done once its PR merged, muted when closed. */
+const issueTone = (i: SentIssue) => (i.pr?.state === 'merged' ? 'tone-done' : i.state === 'closed' ? 'tone-muted' : 'tone-live')
 const sheetOpen = ref(false)
 const newIssueBtn = ref<HTMLButtonElement | null>(null)
 /** A sent issue joins the card at once; the next Refresh reads the list from GitHub again. */
@@ -81,27 +89,42 @@ function onSent(issue: SentIssue): void {
   state.value = { ...state.value, issues: [issue, ...rest].slice(0, 5) }
   try { localStorage.setItem(cacheKey.value, JSON.stringify(state.value)) } catch { /* the card still shows it */ }
 }
+
+const repoLink = computed(() => githubLink(`https://github.com/${props.project.repo}`))
+const openRepo = () => { if (repoLink.value) window.open(repoLink.value, '_blank', 'noopener,noreferrer') }
+/** Off, never deleted (G2): the card leaves the Dashboard and its switch stays on the Widgets page. */
+async function switchOff(): Promise<void> {
+  const r = await setProjectActive(props.project.repo, props.project.private, false)
+  if (!r.ok) error.value = r.error
+}
 </script>
 
 <template>
-  <section class="card project" :data-test="`project-card-${project.repo}`">
+  <section class="card project" v-bind="cardTint(tintOf(project.id))" :data-test="`project-card-${project.repo}`">
     <header class="head">
       <div class="min-w-0">
         <h3 class="font-semibold truncate">{{ title }}</h3>
         <p class="sub truncate">
-          {{ project.repo }} · {{ project.private ? 'private' : 'public' }}<template v-if="state"> · {{ ageText(state.fetchedAt, now) }}</template>
+          {{ project.repo }} · {{ project.private ? 'private' : 'public' }}<template v-if="loading"> · reading…</template><template v-else-if="state"> · {{ ageText(state.fetchedAt, now) }}</template>
         </p>
       </div>
-      <button class="btn-ghost btn-sm shrink-0" :disabled="loading || !online || !signedIn" data-test="project-refresh" @click="refresh">
-        {{ loading ? 'Reading…' : 'Refresh' }}
-      </button>
+      <!-- C4: one control in the header, like Today; Refresh lives in the menu with the card's other actions. -->
+      <CardMenu :widget-id="project.id" :label="`${title} options`">
+        <template #default="{ close }">
+          <button type="button" :disabled="loading || !online || !signedIn" data-test="project-refresh" @click="close(); refresh()">
+            {{ loading ? 'Reading…' : 'Refresh' }}
+          </button>
+          <button v-if="repoLink" type="button" data-test="project-open-github" @click="close(); openRepo()">Open on GitHub</button>
+          <button type="button" data-test="project-switch-off" @click="close(); switchOff()">Remove from Dashboard</button>
+        </template>
+      </CardMenu>
     </header>
 
     <p v-if="error" class="text-sm text-err mt-2" role="alert" data-test="project-error">{{ error }}</p>
     <p v-if="!state && !error" class="sub mt-2">{{ !signedIn || !online ? 'Sign in and go online to read this project.' : 'Reading GitHub…' }}</p>
-
     <p v-if="state?.configError" class="text-xs text-warn mt-2" data-test="project-config-error">{{ state.configError }}</p>
 
+    <!-- Folded (C1): one line per tier. State at full contrast, the newest sent issue with its status dot, the last merge dimmed. -->
     <div v-if="state && !open" class="mt-2 grid gap-1.5" data-test="project-brief">
       <p v-if="snapshotError" class="sub">{{ snapshotError }}</p>
       <p v-for="(f, i) in brief.fields" :key="i" class="field">
@@ -111,18 +134,22 @@ function onSent(issue: SentIssue): void {
       <p v-if="blocks.length > 0 && brief.missing.length > 0" class="text-xs text-slate-500" data-test="project-brief-missing">
         No {{ brief.missing.join(', ') }} field in the snapshot.
       </p>
-      <p v-if="lastMerge" class="merge sub" data-test="project-last-merge">
-        <span class="min-w-0 truncate">Last merged #{{ lastMerge.number }} {{ lastMerge.title }}</span>
-        <span class="shrink-0">{{ day(lastMerge.mergedAt) }}</span>
-      </p>
-      <p v-if="issues[0]" class="merge sub" data-test="project-last-issue">
+      <p v-if="issues[0]" class="row tier-active" data-test="project-last-issue">
+        <span class="dot" :class="issueTone(issues[0])" aria-hidden="true" />
         <span class="min-w-0 truncate">Sent #{{ issues[0].number }} {{ issues[0].title }}</span>
-        <span class="shrink-0">{{ issueStatus(issues[0]) }}<template v-if="issues.length > 1"> · +{{ issues.length - 1 }}</template></span>
+        <span class="meta">{{ issueStatus(issues[0]) }}<template v-if="issues.length > 1"> · +{{ issues.length - 1 }}</template></span>
+      </p>
+      <p v-if="lastMerge" class="row tier-history" data-test="project-last-merge">
+        <span class="min-w-0 truncate">Merged #{{ lastMerge.number }} {{ lastMerge.title }}</span>
+        <span class="meta">{{ day(lastMerge.mergedAt) }}</span>
       </p>
     </div>
 
+    <!-- Expanded: three sections in tier order (now → in flight → history), told apart by label, divider and contrast;
+         no section has its own background, so the card stays one surface (owner, 2026-10-16). -->
     <template v-if="state && open">
-      <div v-if="state.snapshot" class="mt-3" data-test="project-snapshot">
+      <section v-if="state.snapshot" class="sec" data-test="project-snapshot">
+        <h4 class="sec-head">State</h4>
         <p v-if="snapshotError" class="sub">{{ snapshotError }}</p>
         <template v-else>
           <p v-if="state.snapshot && 'found' in state.snapshot && !state.snapshot.found" class="text-xs text-slate-500 mb-1">
@@ -134,38 +161,39 @@ function onSent(issue: SentIssue): void {
             </li>
           </ul>
         </template>
-      </div>
+      </section>
 
-      <div v-if="state.merges" class="mt-3" data-test="project-merges">
-        <h4 class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">Recently merged</h4>
-        <p v-if="mergesError" class="sub">{{ mergesError }}</p>
-        <p v-else-if="merges.length === 0" class="sub">Nothing merged yet.</p>
-        <ul v-else class="merges">
-          <li v-for="m in merges" :key="m.number" class="merge">
-            <a v-if="githubLink(m.url)" :href="githubLink(m.url)!" target="_blank" rel="noopener noreferrer" class="min-w-0 truncate">#{{ m.number }} {{ m.title }}</a>
-            <span v-else class="min-w-0 truncate">#{{ m.number }} {{ m.title }}</span>
-            <span class="sub shrink-0">{{ day(m.mergedAt) }}</span>
-          </li>
-        </ul>
-      </div>
-
-      <div v-if="issues.length > 0 || issuesError" class="mt-3" data-test="project-issues">
-        <h4 class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">Sent from the planner</h4>
+      <section v-if="issues.length > 0 || issuesError" class="sec tier-active" data-test="project-issues">
+        <h4 class="sec-head">Sent from the planner</h4>
         <p v-if="issuesError" class="sub">{{ issuesError }}</p>
-        <ul v-else class="merges">
+        <ul v-else class="rows">
           <li v-for="i in issues" :key="i.number" class="sent" :data-test="`project-issue-${i.number}`">
-            <div class="merge">
+            <div class="row">
+              <span class="dot" :class="issueTone(i)" aria-hidden="true" />
               <a v-if="githubLink(i.url)" :href="githubLink(i.url)!" target="_blank" rel="noopener noreferrer" class="min-w-0 truncate">#{{ i.number }} {{ i.title }}</a>
               <span v-else class="min-w-0 truncate">#{{ i.number }} {{ i.title }}</span>
-              <span class="sub shrink-0">{{ i.state === 'closed' ? 'closed' : day(i.createdAt) }}</span>
+              <span class="meta">{{ i.state === 'closed' ? 'closed' : day(i.createdAt) }}</span>
             </div>
-            <p v-if="i.bot" class="sub truncate" data-test="project-issue-bot">{{ i.bot }}</p>
-            <p v-if="i.pr" class="sub" data-test="project-issue-pr">
+            <p v-if="i.bot" class="indent sub truncate" data-test="project-issue-bot">{{ i.bot }}</p>
+            <p v-if="i.pr" class="indent sub" data-test="project-issue-pr">
               <a v-if="githubLink(i.pr.url)" :href="githubLink(i.pr.url)!" target="_blank" rel="noopener noreferrer">PR #{{ i.pr.number }}</a> {{ i.pr.state }}
             </p>
           </li>
         </ul>
-      </div>
+      </section>
+
+      <section v-if="state.merges" class="sec tier-history" data-test="project-merges">
+        <h4 class="sec-head">Recently merged</h4>
+        <p v-if="mergesError" class="sub">{{ mergesError }}</p>
+        <p v-else-if="merges.length === 0" class="sub">Nothing merged yet.</p>
+        <ul v-else class="rows">
+          <li v-for="m in merges" :key="m.number" class="row">
+            <a v-if="githubLink(m.url)" :href="githubLink(m.url)!" target="_blank" rel="noopener noreferrer" class="min-w-0 truncate">#{{ m.number }} {{ m.title }}</a>
+            <span v-else class="min-w-0 truncate">#{{ m.number }} {{ m.title }}</span>
+            <span class="meta">{{ day(m.mergedAt) }}</span>
+          </li>
+        </ul>
+      </section>
 
       <p v-if="state.configSource === 'default'" class="text-xs text-slate-500 mt-3" data-test="project-default-config">
         Default layout: add a .planner.json to the repo to change it.
@@ -188,9 +216,6 @@ function onSent(issue: SentIssue): void {
 <style scoped>
 .head { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.75rem; }
 .sub { font-size: 0.75rem; color: rgb(var(--s-400)); }
-.blocks { display: grid; gap: 0.35rem; font-size: 0.85rem; line-height: 1.35; overflow-wrap: anywhere; }
-.blocks .item { padding-left: 0.9rem; position: relative; }
-.blocks .item::before { content: '•'; position: absolute; left: 0; color: rgb(var(--s-400)); }
 .field {
   font-size: 0.85rem; line-height: 1.35; overflow-wrap: anywhere;
   display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
@@ -199,17 +224,44 @@ function onSent(issue: SentIssue): void {
   font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
   color: rgb(var(--s-400)); margin-right: 0.4rem;
 }
+
+/* Sections: a small-caps label and a hairline above each but the first. No backgrounds: one card, one surface. */
+.sec { margin-top: 0.85rem; }
+.sec + .sec { padding-top: 0.75rem; border-top: 1px solid var(--glass-btn-edge); }
+.sec-head {
+  font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
+  color: rgb(var(--s-400)); margin-bottom: 0.4rem;
+}
+.blocks { display: grid; gap: 0.35rem; font-size: 0.85rem; line-height: 1.35; overflow-wrap: anywhere; }
+.blocks .item { padding-left: 0.9rem; position: relative; }
+.blocks .item::before { content: '•'; position: absolute; left: 0; color: rgb(var(--s-400)); }
+
+/* Rows: title left, a quiet meta right. */
+.rows { display: grid; gap: 0.35rem; }
+.row { display: flex; align-items: baseline; gap: 0.5rem; min-width: 0; font-size: 0.85rem; }
+.row > .min-w-0 { flex: 1; }
+.meta { flex-shrink: 0; font-size: 0.72rem; color: rgb(var(--s-400)); }
+.sent { display: grid; gap: 0.1rem; min-width: 0; }
+.indent { padding-left: 1rem; }
+
+/* Tier: in flight. The status dot is the card's only colour: open = live, PR merged = done, closed = muted. */
+.dot { flex-shrink: 0; width: 0.5rem; height: 0.5rem; border-radius: 999px; align-self: center; }
+.tone-live { background: rgb(125 185 240); }
+.tone-done { background: rgb(120 200 140); }
+.tone-muted { background: rgb(var(--s-500)); }
+.tier-active a { text-decoration: underline; text-underline-offset: 2px; }
+
+/* Tier: history. Dimmer and smaller, links quiet until pointed at: it's the record, not the work. */
+.tier-history { opacity: 0.72; }
+.tier-history .row, .tier-history.row { font-size: 0.8rem; }
+.tier-history a { text-decoration: none; }
+.tier-history a:hover, .tier-history a:focus-visible { text-decoration: underline; text-underline-offset: 2px; }
+
 .foot {
-  display: grid; grid-template-columns: 1fr 1fr; margin-top: 0.5rem; margin-bottom: -0.5rem;
+  display: grid; grid-template-columns: 1fr 1fr; margin-top: 0.75rem; margin-bottom: -0.5rem;
   border-top: 1px solid var(--glass-btn-edge);
 }
 .toggle { min-height: 2.75rem; font-size: 0.78rem; color: rgb(var(--s-400)); background: transparent; border: 0; }
 .toggle + .toggle { border-left: 1px solid var(--glass-btn-edge); }
 .toggle:disabled { opacity: 0.5; }
-.sent { display: grid; gap: 0.1rem; min-width: 0; }
-.sent a { text-decoration: underline; text-underline-offset: 2px; }
-.merges { display: grid; gap: 0.3rem; font-size: 0.85rem; }
-.merge { display: flex; justify-content: space-between; gap: 0.75rem; min-width: 0; }
-.merge a { text-decoration: underline; text-underline-offset: 2px; }
-.btn-sm { padding: 0.3rem 0.75rem; font-size: 0.78rem; background: transparent; border: 1px solid var(--glass-btn-edge); color: var(--glass-text); }
 </style>

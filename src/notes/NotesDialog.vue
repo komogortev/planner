@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import CardMenu from '@/widgets/CardMenu.vue'
+import { cardTint } from '@/widgets/tints'
+import { useWidgets } from '@/widgets/useWidgets'
 import { computed, ref, watch } from 'vue'
 import { isBodyTap } from '@/composables/bodyTap'
 import { db } from '@/db'
@@ -67,15 +70,19 @@ function onBody(e: MouseEvent) {
   if (!open.value) open.value = true
   else if ((e.target as Element).closest('[data-test="notes-head"]')) open.value = false
 }
+const { tintOf } = useWidgets() // C4: the card's tint
 </script>
 
 <template>
-  <section class="card dialog" :class="{ 'tap-to-open': !open && total > 0 }" data-test="notes-dialog" :data-open="open" aria-label="Notes" @click="onBody">
+  <section class="card dialog" :class="{ 'tap-to-open': !open && total > 0 }" v-bind="cardTint(tintOf('system-notes'))" data-test="notes-dialog" :data-open="open" aria-label="Notes" @click="onBody">
     <header class="head" data-test="notes-head">
       <h3 class="font-semibold">
         <button type="button" class="toggle" :aria-expanded="open" :disabled="total === 0" data-test="notes-toggle">Notes</button>
       </h3>
-      <span class="count" data-test="notes-count">{{ count }}</span>
+      <span class="flex gap-1.5 items-center">
+        <span class="count" data-test="notes-count">{{ count }}</span>
+        <CardMenu widget-id="system-notes" label="Notes options" />
+      </span>
     </header>
     <p v-if="total === 0" class="empty" data-test="notes-empty">Nothing captured yet. Write something on Home.</p>
     <template v-else>

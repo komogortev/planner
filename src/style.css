@@ -154,6 +154,13 @@
       inset 0 -18px 20px -14px var(--glass-pool);
   }
 
+  /* A widget card's tint (C4): a low wash of the chosen hue over the same glass, and a tinted edge. Text keeps the glass's
+     contrast; only the hue changes. `--tint` is set inline from the widget's `appearance` (widgets/tints.ts). */
+  .card[data-tint] {
+    background: linear-gradient(160deg, rgb(var(--tint) / 0.2), rgb(var(--tint) / 0.08)), var(--glass-bg);
+    border-color: rgb(var(--tint) / 0.38);
+  }
+
   .input {
     @apply w-full rounded-xl bg-slate-800 text-slate-100 text-sm px-4 py-2.5 border border-slate-700 focus:outline-none focus:border-indigo-500 transition-colors;
   }
