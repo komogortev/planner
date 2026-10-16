@@ -397,3 +397,43 @@ describe('S3 v2: tasks, and the build from before them', () => {
     expect(res.map((r) => r.status)).toEqual(['applied', 'applied'])
   })
 })
+
+// ── C4: a widget's appearance (its tint), and the build from before it ─────────────────────────────────────────────
+describe('C4: widget appearance', () => {
+  const widget = (over: Record<string, unknown> = {}) => ({
+    id: 'system-today', name: 'Today', kind: 'system', active: true, lens: null, lineage: null, project: null,
+    appearance: { tint: 'teal' }, createdAt: iso(), updatedAt: iso(), deletedAt: null, ...over,
+  })
+  const stored = async (id: string) => JSON.parse(((await rows('SELECT data FROM records WHERE id = ?', id))[0] as { data: string }).data) as Record<string, unknown>
+
+  it('a tinted widget is stored and pulled back with its tint; a tint id this build does not list is still accepted', async () => {
+    const a = await account('a@example.com')
+    expect((await pushOk(a, [rec('widget', widget())]))[0]).toMatchObject({ status: 'applied' })
+    expect((await pull(a)).records).toMatchObject([{ appearance: { tint: 'teal' } }])
+    expect((await pushOk(a, [rec('widget', widget({ id: 'w-later', appearance: { tint: 'deep-teal2' } }))]))[0]).toMatchObject({ status: 'applied' })
+  })
+
+  it('a malformed appearance is refused', async () => {
+    const a = await account('a@example.com')
+    for (const appearance of [{ tint: 'Teal' }, { tint: '' }, { tint: 'x'.repeat(25) }, { tint: '-teal' }, { tint: 3 }, {}, 'teal']) {
+      expect((await pushOk(a, [rec('widget', widget({ id: `w-${JSON.stringify(appearance).length}-${Math.random().toString(36).slice(2, 6)}`, appearance }))]))[0], JSON.stringify(appearance)).toMatchObject({ status: 'rejected' })
+    }
+  })
+
+  // Known positive for the merge: the tint is really stored before the older build's edit.
+  it("the older build's switch (no appearance key) keeps the stored tint", async () => {
+    const a = await account('a@example.com')
+    await pushOk(a, [rec('widget', widget())])
+    expect(await stored('system-today')).toMatchObject({ appearance: { tint: 'teal' } })
+    const { appearance: _a, ...asOlderBuild } = widget({ active: false, updatedAt: iso(5) })
+    expect((await pushOk(a, [rec('widget', asOlderBuild, 1)]))[0]).toMatchObject({ status: 'applied', serverVersion: 2 })
+    expect(await stored('system-today')).toMatchObject({ active: false, appearance: { tint: 'teal' } })
+  })
+
+  it('an explicit null clears the tint (the menu\'s "Default glass")', async () => {
+    const a = await account('a@example.com')
+    await pushOk(a, [rec('widget', widget())])
+    await pushOk(a, [rec('widget', widget({ appearance: null, updatedAt: iso(5) }), 1)])
+    expect((await stored('system-today')).appearance).toBeNull()
+  })
+})

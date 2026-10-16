@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { cleanRecord, flatten, restoreAbsent } from '@/domain/records'
 import { projectWidgetId, projectWidgetRow, resolveProjectWidgets } from '../projects'
+import { SYSTEM_WIDGETS, systemWidgetRow } from '../system'
 import { ageText, BRIEF_DEFAULT, briefBlocks, githubLink, segments, snapshotBlocks, snapshotFields } from '../projectView'
 
 const NOW = '2026-10-16T10:00:00.000Z'
@@ -35,7 +36,7 @@ describe('project widget records', () => {
   it("an older build's widget row is accepted with `project` absent, and an edit from it keeps the stored repo", () => {
     const older = { id: 'system-today', name: 'Today', kind: 'system', active: true, lens: null, lineage: null, createdAt: NOW, updatedAt: NOW, deletedAt: null }
     const c = cleanRecord('widget', older)
-    expect(c.ok && c.value.absent).toEqual(['project'])
+    expect(c.ok && c.value.absent).toEqual(['project', 'appearance'])
     expect(c.ok && flatten(c.value)).toEqual(older)
     const stored = projectWidgetRow('komogortev/planner', false, true, NOW)
     const { id: _i, ...storedFields } = stored
@@ -43,6 +44,19 @@ describe('project widget records', () => {
     expect(edit.ok).toBe(false) // a project row with its repo dropped is refused on its own…
     const kept = restoreAbsent({ recordKind: 'widget', id: stored.id, deletedAt: null, fields: { ...storedFields, active: false }, absent: ['project'] } as never, JSON.stringify(storedFields))
     expect(kept.ok && kept.value.fields.project).toEqual({ repo: 'komogortev/planner', private: false }) // …and the Worker restores it
+  })
+
+  it('C4: a switch keeps the held tint; without a held row the key is left out, never written as null', () => {
+    const tinted = { createdAt: NOW, appearance: { tint: 'rose' } }
+    expect(projectWidgetRow('komogortev/planner', false, false, NOW, tinted).appearance).toEqual({ tint: 'rose' })
+    expect(systemWidgetRow(SYSTEM_WIDGETS[0]!, false, NOW, tinted).appearance).toEqual({ tint: 'rose' })
+    expect(projectWidgetRow('komogortev/planner', false, true, NOW, { createdAt: NOW, appearance: null }).appearance).toBeNull() // cleared stays cleared
+    for (const row of [projectWidgetRow('komogortev/planner', false, true, NOW), systemWidgetRow(SYSTEM_WIDGETS[0]!, true, NOW, { createdAt: NOW })]) {
+      expect(row).not.toHaveProperty('appearance')
+      expect(errorsOf({ ...row })).toEqual([])
+    }
+    expect(errorsOf({ ...projectWidgetRow('komogortev/planner', false, true, NOW, tinted) })).toEqual([])
+    expect(errorsOf({ ...projectWidgetRow('komogortev/planner', false, true, NOW), appearance: { tint: 'Rose' } })).toEqual(['appearance: tint is not a tint id'])
   })
 
   it('ids are derived from the repo, case-insensitively, so two devices write one row', () => {
