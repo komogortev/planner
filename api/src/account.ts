@@ -7,13 +7,14 @@ import { PULL_MAX, revisionsFor } from './entries'
 import { pullAll, recordRevisionsFor } from './records'
 import { callView, sweep, type CallRow } from './aiCalls'
 import { modelView, type ModelRow } from './models'
+import { integrationView, type IntegrationRow } from './integrations'
 import type { Env } from './index'
 
 /**
  * Children first, `users` last (foreign keys). `delete` uses the numbered parameter ?1 = the account id. `exported`
  * says where the table's content reaches the export (sessions never do: they hold only token hashes).
  */
-export const ACCOUNT_TABLES: readonly { table: string; delete: string; exported: 'entries' | 'revisions' | 'records' | 'recordRevisions' | 'models' | 'aiCalls' | 'account' | 'identities' | 'no' }[] = [
+export const ACCOUNT_TABLES: readonly { table: string; delete: string; exported: 'entries' | 'revisions' | 'records' | 'recordRevisions' | 'models' | 'aiCalls' | 'integrations' | 'account' | 'identities' | 'no' }[] = [
   { table: 'entry_revisions', delete: 'DELETE FROM entry_revisions WHERE user_id = ?1', exported: 'revisions' },
   { table: 'entries', delete: 'DELETE FROM entries WHERE user_id = ?1', exported: 'entries' },
   // The harness and widget records (0008): the owner's answers and instructions are theirs, so they export and delete too.
@@ -22,6 +23,8 @@ export const ACCOUNT_TABLES: readonly { table: string; delete: string; exported:
   // H5 (0009): registered models (exported without the key columns) and the model calls with their replies.
   { table: 'ai_calls', delete: 'DELETE FROM ai_calls WHERE user_id = ?1', exported: 'aiCalls' },
   { table: 'models', delete: 'DELETE FROM models WHERE user_id = ?1', exported: 'models' },
+  // GitHub bridge G1 (0011): connected accounts, exported without the token columns.
+  { table: 'integrations', delete: 'DELETE FROM integrations WHERE user_id = ?1', exported: 'integrations' },
   { table: 'sessions', delete: 'DELETE FROM sessions WHERE user_id = ?1', exported: 'no' },
   { table: 'identities', delete: 'DELETE FROM identities WHERE user_id = ?1', exported: 'identities' },
   // The invite is keyed by the person's email, so it goes with the account (re-inviting is a new row).
@@ -78,7 +81,10 @@ export async function exportPage(db: D1Database, s: AuthedSession, since: number
   const aiCalls = first
     ? (await db.prepare('SELECT * FROM ai_calls WHERE user_id = ? ORDER BY started_at').bind(s.id).all<CallRow>()).results.map(callView)
     : undefined
-  return { format: EXPORT_FORMAT, exportedAt: Date.now(), ...(first ? { account, identities, models, aiCalls } : {}), entries: page.changes, revisions, records, recordRevisions, cursor: page.cursor, more: page.more }
+  const integrations = first
+    ? (await db.prepare('SELECT * FROM integrations WHERE user_id = ? ORDER BY provider').bind(s.id).all<IntegrationRow>()).results.map(integrationView)
+    : undefined
+  return { format: EXPORT_FORMAT, exportedAt: Date.now(), ...(first ? { account, identities, models, aiCalls, integrations } : {}), entries: page.changes, revisions, records, recordRevisions, cursor: page.cursor, more: page.more }
 }
 
 /** Deletes every row of the account in one batch, after remembering its session tokens so its devices can be told. */
