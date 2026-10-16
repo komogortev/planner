@@ -1,11 +1,11 @@
 # Personal Planner — STATE
 
 ## SNAPSHOT
-- **Phase/Last:** H1 built · HW S3 v2 live · H5 in real use. 2026-10-16: D-120 (personal tool, open source, MIT); D-121 GitHub bridge: G1 live (#152, owner connected, expiry read), G2 live (#154): repos switched on in Integrations show on the Dashboard with STATE snapshot + merges; card config = the repo's `.planner.json`; one-time re-pull (`REPULL`). C1 live (#158): project cards open folded (`.planner.json` `brief`, default Next; More expands). Rollback floor `80540b1`.
-- **Working:** prod = Pages + Worker `2832597` (`c906a566`), D1 `0011`; smoke 17/17. `pnpm check` app 622 · Worker 255. **Verified on the phone (owner, 10-16):** GitHub connected, repo list, Planner card with real STATE.
-- **Broken:** **Summary** reads only open notes (v1 lens; owner only). After a D1 restore, edits acknowledged after the restore point revert (A7, inferred). "Recently merged" reads the last 30 closed PRs. **Not verified on a phone:** DEVICE-CHECKS 37–41; #148 menu tap; D-105 on a real model; the card title from `.planner.json` (#156, needs a Refresh); the folded card (#158).
+- **Phase/Last:** H1 built · HW S3 v2 live · H5 in real use. 2026-10-16: D-120 (personal tool, open source, MIT); D-121 GitHub bridge: G1 live (#152, owner connected, expiry read), G2 live (#154): repos switched on in Integrations show on the Dashboard with STATE snapshot + merges; card config = the repo's `.planner.json`; one-time re-pull (`REPULL`). C1 live (#158): cards open folded (`.planner.json` `brief`). C2 live (#160): New issue on a card sends one issue (kinds = `.planner.json` `issues`, label `planner`, retry-safe request id); the card lists open sent issues. Rollback floor `80540b1`.
+- **Working:** prod = Pages + Worker `b00b8d0` (`9bb80684`), D1 `0011`; smoke 17/17. `pnpm check` app 622 · Worker 263. **Verified on the phone (owner, 10-16):** GitHub connected, repo list, Planner card with real STATE.
+- **Broken:** **Summary** reads only open notes (v1 lens; owner only). After a D1 restore, edits acknowledged after the restore point revert (A7, inferred). "Recently merged" reads the last 30 closed PRs. **Not verified on a phone:** DEVICE-CHECKS 37–41; #148 menu tap; D-105 on a real model; the card title from `.planner.json` (#156, needs a Refresh); the folded card (#158); **a real Send (#160, owner on the phone): label creation + issue create with the fine-grained token are untested against GitHub**.
 - **Blocker:** none.
-- **Next:** owner calibrates the Planner card while testing → A2 tester notice → invites (expires 2026-10-24) → restore-edit reconcile. Bridge prep C2 (G4 sheet: send an issue from a card, explicit only; issue kinds from `.planner.json`), then C3 (thin G5). Then Summary v3; D-113; H5 S3.
+- **Next:** owner calibrates the Planner card while testing → A2 tester notice → invites (expires 2026-10-24) → restore-edit reconcile. Bridge prep C3 (thin G5: sent issues' status + linked PR, `@claude` toggle, "Set up Claude" help), after the owner's first real Send. Then Summary v3; D-113; H5 S3.
 ---
 
 ## Context
@@ -57,6 +57,8 @@
 ## Decision log
 
 Full log: PROJECT.md → Decisions log. Latest:
+
+- 2026-10-16 (C2) — New issue sheet shipped (#160). Found in the browser: the sheet rendered under the next card (each card is a stacking context), now teleported to `body`. Review fixes: a 5xx on create says "may have been sent" (retry is safe), a secondary rate limit isn't a token problem, an earlier landing keeps unsent edits. Open: two racing sends of one id can both create if the Worker outlives its client (unverified); a renamed login misses earlier sends. `@claude` toggle and "From a note" moved to C3.
 
 - 2026-10-16 (bridge prep C1–C3) — Owner narrowed the next bridge step to client-side means of starting GitHub work plus card polish (cards dumped the whole snapshot, had no brief view, no task form). Gap: G4/G5 had no code. Lineup C1 card fold → C2 issue sheet (G4) → C3 thin G5, as prep for G4. Issue kinds come from each repo's `.planner.json` (recommended over parsing ISSUE_TEMPLATE forms). Found: the planner repo has no `claude-code-action` workflow, so the G4 `@claude` toggle stays hidden there until one is added. C1 shipped (#158); the first Worker deploy run exited 1 with no reproduced cause, two reruns clean (one data point).
 
