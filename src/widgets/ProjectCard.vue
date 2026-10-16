@@ -2,7 +2,8 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useOnline } from '@/composables/useOnline'
 import { storedToken } from '@/auth/signIn'
-import { IntegrationsError, projectState, type ProjectState } from '@/integrations/github'
+import { IntegrationsError, projectState, type ProjectState, type SentIssue } from '@/integrations/github'
+import IssueSheet from './IssueSheet.vue'
 import type { ProjectWidget } from './projects'
 import { ageText, BRIEF_DEFAULT, briefBlocks, githubLink, snapshotBlocks } from './projectView'
 
@@ -11,6 +12,7 @@ import { ageText, BRIEF_DEFAULT, briefBlocks, githubLink, snapshotBlocks } from 
 // is kept on this device, so the card shows it offline with its age. How it looks is the repo's `.planner.json`.
 // Folded by default (C1): the snapshot fields `.planner.json`'s `brief` names and the last merge; More opens the rest. The
 // fold is remembered per card on this device.
+// New issue (C2) opens the send sheet; the card lists the open issues the planner sent, the newest one when folded.
 const props = defineProps<{ project: ProjectWidget }>()
 const online = useOnline()
 const signedIn = storedToken() !== null
@@ -65,6 +67,18 @@ function toggle(): void {
 }
 const brief = computed(() => briefBlocks(blocks.value, state.value?.config.brief ?? BRIEF_DEFAULT))
 const lastMerge = computed(() => merges.value[0] ?? null)
+
+const issues = computed(() => (Array.isArray(state.value?.issues) ? state.value!.issues : []))
+const issuesError = computed(() => (state.value?.issues && !Array.isArray(state.value.issues) ? state.value.issues.error : null))
+const sheetOpen = ref(false)
+const newIssueBtn = ref<HTMLButtonElement | null>(null)
+/** A sent issue joins the card at once; the next Refresh reads the list from GitHub again. */
+function onSent(issue: SentIssue): void {
+  if (!state.value) return
+  const rest = issues.value.filter((i) => i.number !== issue.number)
+  state.value = { ...state.value, issues: [issue, ...rest].slice(0, 5) }
+  try { localStorage.setItem(cacheKey.value, JSON.stringify(state.value)) } catch { /* the card still shows it */ }
+}
 </script>
 
 <template>
@@ -99,6 +113,10 @@ const lastMerge = computed(() => merges.value[0] ?? null)
         <span class="min-w-0 truncate">Last merged #{{ lastMerge.number }} {{ lastMerge.title }}</span>
         <span class="shrink-0">{{ day(lastMerge.mergedAt) }}</span>
       </p>
+      <p v-if="issues[0]" class="merge sub" data-test="project-last-issue">
+        <span class="min-w-0 truncate">Sent #{{ issues[0].number }} {{ issues[0].title }}</span>
+        <span v-if="issues.length > 1" class="shrink-0">+{{ issues.length - 1 }} open</span>
+      </p>
     </div>
 
     <template v-if="state && open">
@@ -129,14 +147,33 @@ const lastMerge = computed(() => merges.value[0] ?? null)
         </ul>
       </div>
 
+      <div v-if="issues.length > 0 || issuesError" class="mt-3" data-test="project-issues">
+        <h4 class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">Sent from the planner, open</h4>
+        <p v-if="issuesError" class="sub">{{ issuesError }}</p>
+        <ul v-else class="merges">
+          <li v-for="i in issues" :key="i.number" class="merge">
+            <a v-if="githubLink(i.url)" :href="githubLink(i.url)!" target="_blank" rel="noopener noreferrer" class="min-w-0 truncate">#{{ i.number }} {{ i.title }}</a>
+            <span v-else class="min-w-0 truncate">#{{ i.number }} {{ i.title }}</span>
+            <span class="sub shrink-0">{{ day(i.createdAt) }}</span>
+          </li>
+        </ul>
+      </div>
+
       <p v-if="state.configSource === 'default'" class="text-xs text-slate-500 mt-3" data-test="project-default-config">
         Default layout: add a .planner.json to the repo to change it.
       </p>
     </template>
 
-    <button v-if="state" class="toggle" :aria-expanded="open" data-test="project-toggle" @click="toggle">
-      {{ open ? 'Less ▴' : 'More ▾' }}
-    </button>
+    <div v-if="state" class="foot">
+      <button ref="newIssueBtn" class="toggle" :disabled="!signedIn" data-test="project-new-issue" @click="sheetOpen = true">＋ New issue</button>
+      <button class="toggle" :aria-expanded="open" data-test="project-toggle" @click="toggle">
+        {{ open ? 'Less ▴' : 'More ▾' }}
+      </button>
+    </div>
+    <IssueSheet
+      v-if="state" v-model:open="sheetOpen" :repo="project.repo" :is-private="project.private" :kinds="state.config.issues ?? []"
+      :trigger="newIssueBtn" @sent="onSent"
+    />
   </section>
 </template>
 
@@ -154,11 +191,13 @@ const lastMerge = computed(() => merges.value[0] ?? null)
   font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
   color: rgb(var(--s-400)); margin-right: 0.4rem;
 }
-.toggle {
-  display: block; width: 100%; min-height: 2.75rem; margin-top: 0.5rem; margin-bottom: -0.5rem;
-  font-size: 0.78rem; color: rgb(var(--s-400)); background: transparent; border: 0;
+.foot {
+  display: grid; grid-template-columns: 1fr 1fr; margin-top: 0.5rem; margin-bottom: -0.5rem;
   border-top: 1px solid var(--glass-btn-edge);
 }
+.toggle { min-height: 2.75rem; font-size: 0.78rem; color: rgb(var(--s-400)); background: transparent; border: 0; }
+.toggle + .toggle { border-left: 1px solid var(--glass-btn-edge); }
+.toggle:disabled { opacity: 0.5; }
 .merges { display: grid; gap: 0.3rem; font-size: 0.85rem; }
 .merge { display: flex; justify-content: space-between; gap: 0.75rem; min-width: 0; }
 .merge a { text-decoration: underline; text-underline-offset: 2px; }

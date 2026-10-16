@@ -52,8 +52,15 @@ export function parseExpiry(header: string | null): number | null {
  * Throws `KeyBoxUnavailable` when MODEL_KEY_SECRET is missing or malformed: a caller answers 503 `not configured`, as PUT does.
  */
 export async function githubToken(env: Env, userId: string): Promise<string | null> {
+  return (await githubAccount(env, userId))?.token ?? null
+}
+
+/** The stored token with the GitHub login it belongs to (G4 finds the issues this login sent). Same nulls and throws. */
+export async function githubAccount(env: Env, userId: string): Promise<{ token: string; login: string } | null> {
   const r = await getRow(env.DB, userId)
-  return r ? openKey(env.MODEL_KEY_SECRET, r.key_ct, r.key_iv, userId, SLOT, GITHUB_API) : null
+  if (!r) return null
+  const token = await openKey(env.MODEL_KEY_SECRET, r.key_ct, r.key_iv, userId, SLOT, GITHUB_API)
+  return token ? { token, login: r.login } : null
 }
 
 type Vars = { session: AuthedSession }

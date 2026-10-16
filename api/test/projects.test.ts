@@ -95,6 +95,7 @@ describe('GET /projects/state', () => {
         { number: 5, title: 'older', merged_at: '2026-10-14T10:00:00Z', html_url: 'https://github.com/komogortev/planner/pull/5' },
         { number: 6, title: 'newer', merged_at: '2026-10-15T10:00:00Z', html_url: 'https://evil.example/6' },
       ]),
+      (u) => (u.pathname.endsWith('/issues') ? Response.json([]) : undefined),
     )
     const res = await call(a.token, `/projects/state?repo=${encodeURIComponent('komogortev/planner')}`)
     expect(res.status).toBe(200)
@@ -111,7 +112,9 @@ describe('GET /projects/state', () => {
     expect(JSON.stringify(out)).not.toContain(TOKEN)
     expect(ghCalls(spy)).toEqual([
       '/repos/komogortev/planner/contents/.planner.json', '/repos/komogortev/planner/contents/docs/STATE.md', '/repos/komogortev/planner/pulls',
+      '/repos/komogortev/planner/issues',
     ])
+    expect(out.issues).toEqual([]) // the stub has no issues: the list is empty, not an error
   })
 
   it('without .planner.json: the defaults, and the card is told so', async () => {
@@ -193,7 +196,7 @@ describe('GET /projects/state', () => {
 
 describe('parseConfig', () => {
   it('takes each valid key, defaults each invalid one, and names what it ignored', () => {
-    expect(parseConfig('{"title":"P","state":"STATE.md","show":["merges"]}')).toEqual({ config: { title: 'P', state: 'STATE.md', show: ['merges'], brief: ['Next'] }, error: null })
+    expect(parseConfig('{"title":"P","state":"STATE.md","show":["merges"]}')).toEqual({ config: { title: 'P', state: 'STATE.md', show: ['merges'], brief: ['Next'], issues: [] }, error: null })
     expect(parseConfig('{"state":"../secrets","show":["issues"],"extra":1}')).toEqual({
       config: DEFAULT_CONFIG, error: '.planner.json: ignored state, show, extra',
     })
@@ -208,6 +211,154 @@ describe('parseConfig', () => {
     for (const bad of [[], ['a', 'b', 'c', 'd', 'e'], [''], ['  '], ['x'.repeat(31)], [1], 'Next', null]) {
       expect(parseConfig(JSON.stringify({ brief: bad })), JSON.stringify(bad)).toEqual({ config: DEFAULT_CONFIG, error: '.planner.json: ignored brief' })
     }
+  })
+})
+
+describe('parseConfig issues (C2)', () => {
+  it('takes kinds with their labels; one bad kind refuses the whole key and names it', () => {
+    expect(parseConfig('{"issues":[{"name":" Bug ","labels":["bug"]},{"name":"Task"}]}')).toEqual({
+      config: { ...DEFAULT_CONFIG, issues: [{ name: 'Bug', labels: ['bug'] }, { name: 'Task', labels: [] }] }, error: null,
+    })
+    for (const bad of [
+      [], 'Bug', [{ name: '' }], [{ name: 'x'.repeat(25) }], [{ name: 'Bug' }, { name: 'bug' }], [{ name: 'Bug', extra: 1 }],
+      [{ name: 'Bug', labels: ['a,b'] }], [{ name: 'Bug', labels: ['a', 'b', 'c', 'd'] }], [{ name: 'Bug', labels: 'bug' }],
+      Array.from({ length: 9 }, (_, i) => ({ name: `k${i}` })), [null],
+    ]) {
+      expect(parseConfig(JSON.stringify({ issues: bad })), JSON.stringify(bad)).toEqual({ config: DEFAULT_CONFIG, error: '.planner.json: ignored issues' })
+    }
+  })
+})
+
+describe('GET /projects/state: the issues the planner sent (C2)', () => {
+  it('lists open planner-labelled issues by this login, newest first, without pull requests', async () => {
+    const a = await connected('a@example.com')
+    await addProject(a.id, 'komogortev/planner')
+    const spy = github(file('docs/STATE.md', STATE), pulls([]), (u) => (u.pathname.endsWith('/issues') ? Response.json([
+      { number: 9, title: 'a PR', created_at: NOW, pull_request: {}, html_url: 'https://github.com/komogortev/planner/pull/9' },
+      { number: 8, title: 'Fix the card', created_at: NOW, html_url: 'https://github.com/komogortev/planner/issues/8' },
+      { number: 7, title: 'foreign link', created_at: NOW, html_url: 'https://evil.example/7' },
+    ]) : undefined))
+    const out = (await (await call(a.token, '/projects/state?repo=komogortev/planner')).json()) as Record<string, unknown>
+    expect(out.issues).toEqual([
+      { number: 8, title: 'Fix the card', createdAt: NOW, url: 'https://github.com/komogortev/planner/issues/8' },
+      { number: 7, title: 'foreign link', createdAt: NOW, url: 'https://github.com/komogortev/planner/issues/7' },
+    ])
+    const q = new URL(String(spy.mock.calls.find(([u]) => String(u).includes('/issues'))![0])).searchParams
+    expect([q.get('labels'), q.get('creator'), q.get('state')]).toEqual(['planner', 'octo', 'open'])
+  })
+})
+
+describe('POST /projects/issue (C2)', () => {
+  const RID = '0b6c3f0e-6a51-4d0c-9a3b-2f1e5d7c8a90'
+  type Sent = { method: string; path: string; body: Record<string, unknown> | null }
+  /** GitHub stubbed with methods: a repo holding `existing` issues; records every call. */
+  function githubWrite(opts: { existing?: unknown[]; config?: string; listStatus?: number; createStatus?: number } = {}) {
+    const sent: Sent[] = []
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = new URL(String(input))
+      const method = init?.method ?? 'GET'
+      const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : null
+      if (url.pathname === '/user') return Response.json({ login: 'octo' })
+      sent.push({ method, path: url.pathname, body })
+      if (url.pathname.endsWith('/contents/.planner.json')) return opts.config ? new Response(opts.config) : Response.json({}, { status: 404 })
+      if (url.pathname.endsWith('/issues') && method === 'GET') return Response.json(opts.existing ?? [], { status: opts.listStatus ?? 200 })
+      if (url.pathname.endsWith('/labels')) return Response.json({}, { status: body?.name === 'planner' ? 422 : 201 })
+      if (url.pathname.endsWith('/issues') && method === 'POST') {
+        return Response.json({ number: 12, title: body?.title, created_at: NOW, html_url: 'https://github.com/komogortev/planner/issues/12' }, { status: opts.createStatus ?? 201 })
+      }
+      return Response.json({ message: 'Not Found' }, { status: 404 })
+    })
+    return sent
+  }
+  const send = (token: string, extra: Record<string, unknown> = {}) =>
+    call(token, '/projects/issue', { method: 'POST', body: JSON.stringify({ repo: 'komogortev/planner', title: ' Fix the card ', body: 'Steps', requestId: RID, ...extra }) })
+  const creates = (sent: Sent[]) => sent.filter((s) => s.method === 'POST' && s.path.endsWith('/issues'))
+
+  it('sends one issue with the kind\'s labels and the request marker, and answers with it', async () => {
+    const a = await connected('a@example.com')
+    await addProject(a.id, 'komogortev/planner')
+    const sent = githubWrite({ config: '{"issues":[{"name":"Bug","labels":["bug"]}]}' })
+    const res = await send(a.token, { kind: 'bug' })
+    expect(res.status).toBe(201)
+    const out = await res.json()
+    expect(out).toEqual({ issue: { number: 12, title: 'Fix the card', createdAt: NOW, url: 'https://github.com/komogortev/planner/issues/12' }, created: true })
+    expect(JSON.stringify(out)).not.toContain(TOKEN)
+    expect(sent.filter((s) => s.path.endsWith('/labels')).map((s) => s.body?.name)).toEqual(['planner', 'bug'])
+    expect(creates(sent)).toEqual([{ method: 'POST', path: '/repos/komogortev/planner/issues', body: {
+      title: 'Fix the card', body: `Steps\n\n<!-- planner:${RID} -->`, labels: ['planner', 'bug'],
+    } }])
+  })
+
+  it('a retried send finds the first issue by its request id and creates no second one', async () => {
+    const a = await connected('a@example.com')
+    await addProject(a.id, 'komogortev/planner')
+    const sent = githubWrite({ existing: [{ number: 12, title: 'Fix the card', created_at: NOW, body: `Steps\n\n<!-- planner:${RID} -->`, html_url: 'https://github.com/komogortev/planner/issues/12' }] })
+    const res = await send(a.token)
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ issue: { number: 12, title: 'Fix the card', createdAt: NOW, url: 'https://github.com/komogortev/planner/issues/12' }, created: false })
+    expect(creates(sent)).toEqual([])
+    // Known positive for the same stub: another request id does create.
+    const other = await send(a.token, { requestId: '1b6c3f0e-6a51-4d0c-9a3b-2f1e5d7c8a90' })
+    expect(other.status).toBe(201)
+  })
+
+  it("B cannot send to A's repo: 404 before any GitHub call", async () => {
+    const a = await connected('a@example.com')
+    await addProject(a.id, 'komogortev/planner')
+    const b = await connected('b@example.com')
+    const sent = githubWrite()
+    expect((await send(b.token)).status).toBe(404)
+    expect(sent).toEqual([])
+    expect((await send(a.token)).status).toBe(201) // the same request from the owner goes through
+  })
+
+  it('refuses bad input before GitHub, a kind the repo does not declare, and a send it cannot check for an earlier one', async () => {
+    const a = await connected('a@example.com')
+    await addProject(a.id, 'komogortev/planner')
+    let sent = githubWrite()
+    for (const extra of [{ title: '  ' }, { title: 'x'.repeat(201) }, { body: 'x'.repeat(10_001) }, { requestId: 'r1' }, { kind: 3 }, { repo: 'nope' }]) {
+      expect((await send(a.token, extra)).status, JSON.stringify(extra).slice(0, 40)).toBe(400)
+    }
+    expect(sent).toEqual([])
+    vi.restoreAllMocks()
+    sent = githubWrite({ config: '{"issues":[{"name":"Bug"}]}' })
+    const unknown = await send(a.token, { kind: 'Idea' })
+    expect(unknown.status).toBe(409)
+    expect(((await unknown.json()) as { error: string }).error).toMatch(/not an issue kind/)
+    expect(creates(sent)).toEqual([])
+    vi.restoreAllMocks()
+    sent = githubWrite({ listStatus: 403 })
+    const blind = await send(a.token)
+    expect(blind.status).toBe(409)
+    expect(((await blind.json()) as { error: string }).error).toMatch(/Issues: Read and write.*No issue was sent/)
+    expect(creates(sent)).toEqual([])
+  })
+
+  it('a 5xx on create may hide a made issue: it says so instead of "nothing was sent"; a secondary limit is not a permission problem', async () => {
+    const a = await connected('a@example.com')
+    await addProject(a.id, 'komogortev/planner')
+    githubWrite({ createStatus: 502 })
+    const flaky = await send(a.token)
+    expect(flaky.status).toBe(502)
+    const msg = ((await flaky.json()) as { error: string }).error
+    expect(msg).toMatch(/may have been sent/)
+    expect(msg).not.toMatch(/Nothing was sent|No issue was sent/)
+    vi.restoreAllMocks()
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => (new URL(String(input)).pathname === '/user'
+      ? Response.json({ login: 'octo' })
+      : Response.json({ message: 'You have exceeded a secondary rate limit' }, { status: 403, headers: { 'retry-after': '60' } })))
+    const limited = await send(a.token)
+    expect(limited.status).toBe(429)
+    expect(((await limited.json()) as { error: string }).error).toMatch(/limiting/)
+  })
+
+  it('a create GitHub refuses says what the token lacks', async () => {
+    const a = await connected('a@example.com')
+    await addProject(a.id, 'komogortev/planner')
+    githubWrite({ createStatus: 403 })
+    const res = await send(a.token)
+    expect(res.status).toBe(409)
+    expect(((await res.json()) as { error: string }).error).toMatch(/Issues: Read and write/)
   })
 })
 
