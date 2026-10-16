@@ -1,0 +1,5 @@
+{
+  "title": "Planner",
+  "state": "docs/STATE.md",
+  "show": ["snapshot", "merges"]
+}
