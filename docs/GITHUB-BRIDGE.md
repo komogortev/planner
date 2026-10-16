@@ -72,6 +72,13 @@ Each slice is one PR. When a slice adds something the client writes, the Worker 
 - **`MODEL_KEY_SECRET` now protects GitHub tokens too.** RUNBOOK's "never regenerate" warning gains "and every connected
   GitHub token".
 
+**Built (2026-10-16):** migration `0011`, `api/src/integrations.ts`, `src/integrations/` (`IntegrationsCard`, client),
+account export and delete. Only fine-grained tokens are accepted (`github_pat_…`); a classic `ghp_` token is refused before
+GitHub is asked. Worker tests 226 → 240, app 600 → 604. Seven negative controls, all caught: the token in the view, no
+account filter on read, a GitHub 401 ignored, the table missing from delete-account, a delete without the account filter,
+classic tokens accepted, a GitHub 403 taken as "rejected". The expiry header name (`github-authentication-token-expiration`) is still recalled; the first
+real connect shows whether a date appears.
+
 **Blast radius.** A leaked token is the worst failure: anyone holding it can read the chosen repos and write issues as
 the user. The single-view test is written first and shown failing (R2). A wrong `0011` is additive; the undo is a
 follow-up migration, and Time Travel is not needed.

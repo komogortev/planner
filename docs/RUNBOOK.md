@@ -94,8 +94,10 @@ Last bump: v7 (financial tables dropped, D-112).
 Secrets: production via `pnpm --dir api exec wrangler secret bulk <file>` (then delete the file); local in `api/.env`,
 which only the owner edits.
 
-**`MODEL_KEY_SECRET` (H5, encrypts users' model API keys — [H5-MODELS.md](H5-MODELS.md) §6).** 32 random bytes, base64.
-Without it, saving a model key and every model call answer 503 `not configured`; nothing else breaks. Create it so the
+**`MODEL_KEY_SECRET` (H5, encrypts users' model API keys — [H5-MODELS.md](H5-MODELS.md) §6 — and, since G1, their
+connected GitHub tokens — [GITHUB-BRIDGE.md](GITHUB-BRIDGE.md) §4).** 32 random bytes, base64. **Never regenerate it once
+set:** every stored model key and GitHub token stops decrypting, and each user must paste them again.
+Without it, saving a model key, connecting GitHub and every model call answer 503 `not configured`; nothing else breaks. Create it so the
 value is never printed (run from `apps/personal-planner`):
 
 ```bash

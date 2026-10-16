@@ -1,7 +1,7 @@
 // S2b — account data lifecycle (ARCHITECTURE A13; DECISION-TREE D-48..D-50). Every claim of the form "X did not happen"
 // is paired with a check that the thing it protects *did* exist first (rows exercised, then rows gone).
 import { env } from 'cloudflare:test'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ACCOUNT_TABLES, uncoveredTables } from '../src/account'
 import { createSession } from '../src/auth'
 import { pushMutations } from '../src/entries'
@@ -46,6 +46,7 @@ const COUNT_BY_ACCOUNT: Record<string, string> = {
   records: 'SELECT COUNT(*) AS n FROM records WHERE user_id = ?',
   ai_calls: 'SELECT COUNT(*) AS n FROM ai_calls WHERE user_id = ?',
   models: 'SELECT COUNT(*) AS n FROM models WHERE user_id = ?',
+  integrations: 'SELECT COUNT(*) AS n FROM integrations WHERE user_id = ?',
   sessions: 'SELECT COUNT(*) AS n FROM sessions WHERE user_id = ?',
   identities: 'SELECT COUNT(*) AS n FROM identities WHERE user_id = ?',
   invites: 'SELECT COUNT(*) AS n FROM invites WHERE used_by = ?',
@@ -76,8 +77,15 @@ async function populated(email: string) {
     `INSERT INTO ai_calls (user_id, id, model_id, stage, run_id, entry_count, prompt_bytes, prompt, status, reply, started_at, finished_at)
      VALUES (?, ?, 'm1', 'harness', 'run-1', 3, 120, NULL, 'ok', ?, ?, ?)`,
   ).bind(a.id, crypto.randomUUID(), `reply for ${email}`, Date.now() - 5000, Date.now()).run()
-  return { a, keep, gone, edited, asked, modelKey }
+  // G1: a connected GitHub account, through the route (GitHub's /user stubbed), so the token is really sealed.
+  const githubPat = `github_pat_${email.replace(/[^a-z]/g, '')}_SECRET_TOKEN_0000`
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async () => Response.json({ login: `gh-${email}` }))
+  const gh = await call(a.token, '/me/integrations/github', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: githubPat }) })
+  expect(gh.status).toBe(200)
+  vi.restoreAllMocks()
+  return { a, keep, gone, edited, asked, modelKey, githubPat }
 }
+afterEach(() => vi.restoreAllMocks())
 
 describe('A13 — every table is covered', () => {
   it('the real schema has no table outside ACCOUNT_TABLES and ACCOUNT_EXEMPT', async () => {
@@ -127,6 +135,17 @@ describe('GET /me/export', () => {
     expect(text).not.toContain(hash)
     expect(text).not.toContain(a.token)
     expect(text).not.toContain('token_hash')
+  })
+
+  it('carries the GitHub connection without its token', async () => {
+    const { a, githubPat } = await populated('a@example.com')
+    const stored = (await env.DB.prepare('SELECT key_ct FROM integrations WHERE user_id = ?').bind(a.id).first<{ key_ct: string }>())!.key_ct
+    expect(stored).toBeTruthy() // exercised: a sealed token exists to be leaked
+    const res = await call(a.token, '/me/export')
+    const text = await res.clone().text()
+    expect(((await res.json()) as { integrations: unknown[] }).integrations).toMatchObject([{ provider: 'github', login: 'gh-a@example.com', keyHint: githubPat.slice(-4) }])
+    expect(text).not.toContain(githubPat)
+    expect(text).not.toContain(stored)
   })
 
   it('carries models without their key and calls without their prompt', async () => {

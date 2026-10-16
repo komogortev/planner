@@ -14,6 +14,7 @@ import { storageUsage, syncEngine, syncNow, type StorageUsage } from '@/sync'
 import { useOnline } from '@/composables/useOnline'
 import PreferencesCard from '@/components/PreferencesCard.vue'
 import ModelsCard from '@/ai/ModelsCard.vue'
+import IntegrationsCard from '@/integrations/IntegrationsCard.vue'
 import SessionsCard from '@/auth/SessionsCard.vue'
 import InstallButton from '@/components/InstallButton.vue'
 import { APP_ENV } from '@/env/applyEnvCue'
@@ -240,6 +241,8 @@ onMounted(async () => {
     <PreferencesCard />
 
     <ModelsCard />
+
+    <IntegrationsCard />
 
     <!-- ============================================================ -->
     <section class="card">

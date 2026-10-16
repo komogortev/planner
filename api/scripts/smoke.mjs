@@ -46,6 +46,9 @@ const checks = [
   ['api /health', async () => (await (await fetch(`${API}/health`)).json()).ok === true],
   ['/me without a token → 401', async () => (await fetch(`${API}/me`)).status === 401],
   ['/me with a bad token → 401', async () => (await fetch(`${API}/me`, { headers: { Authorization: 'Bearer nope' } })).status === 401],
+  // Proves the gate only: a Worker without G1 answers 401 here too (/me's middleware). The deploy is proved by the
+  // deployment tag and `d1 migrations list --remote` showing 0011, and the route by a real connect.
+  ['/me/integrations/github without a token → 401 (gated)', async () => (await fetch(`${API}/me/integrations/github`)).status === 401],
   ['sign-in start, valid → 302 to the provider', async () => {
     const r = await fetch(`${API}/auth/start/github?return_to=${enc(APP)}&nonce=${NONCE}`, { redirect: 'manual' })
     return r.status === 302 && new URL(r.headers.get('location')).host === 'github.com'

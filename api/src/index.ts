@@ -7,6 +7,7 @@ import { appOrigins, appUrls } from './config'
 import { logApi } from './log'
 import { modelsApi } from './models'
 import { sessionsApi } from './sessions'
+import { integrationsApi } from './integrations'
 import { byIp } from './ratelimit'
 import { entriesApi, sync } from './sync'
 import { envIcon } from '../../src/env/appEnv'
@@ -64,6 +65,7 @@ app.route('/sync', sync)
 app.route('/entries', entriesApi)
 app.route('/me/models', modelsApi)
 app.route('/me/sessions', sessionsApi)
+app.route('/me/integrations', integrationsApi)
 app.route('/me', meApi)
 app.route('/ai/calls', aiCallsApi)
 app.route('/log', logApi)
