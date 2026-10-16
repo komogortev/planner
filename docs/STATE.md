@@ -2,10 +2,10 @@
 
 ## SNAPSHOT
 - **Phase/Last:** H1 built · HW S3 v2 live · H5 in real use. 2026-10-16: D-120 (personal tool, open source, MIT); D-121 GitHub bridge: G1 live (#152, owner connected, expiry read), G2 live (#154): repos switched on in Integrations show on the Dashboard with STATE snapshot + merges; card config = the repo's `.planner.json`; one-time re-pull (`REPULL`). Rollback floor `80540b1`.
-- **Working:** prod = Pages `ae90c22`, Worker `ae90c22` (`9bc59b9b`), D1 `0011`; smoke 17/17. `pnpm check` app 618 · Worker 254.
-- **Broken:** **Summary** reads only open notes (v1 lens; owner only). After a D1 restore, edits acknowledged after the restore point revert (A7, inferred). "Recently merged" reads the last 30 closed PRs. **Not verified on a phone:** DEVICE-CHECKS 37–41; #148 menu tap; D-105 on a real model; **G2 with the real token** (repo list, card, the one-time re-pull).
+- **Working:** prod = Pages `7548445` (config-only after `ae90c22`), Worker `ae90c22` (`9bc59b9b`), D1 `0011`; smoke 17/17. `pnpm check` app 618 · Worker 254. **Verified on the phone (owner, 10-16):** GitHub connected, repo list, Planner card with real STATE.
+- **Broken:** **Summary** reads only open notes (v1 lens; owner only). After a D1 restore, edits acknowledged after the restore point revert (A7, inferred). "Recently merged" reads the last 30 closed PRs. **Not verified on a phone:** DEVICE-CHECKS 37–41; #148 menu tap; D-105 on a real model; the card title from `.planner.json` (#156, needs a Refresh).
 - **Blocker:** none.
-- **Next:** owner switches on `komogortev/planner` on the phone (G2 check) → A2 tester notice → invites (expires 2026-10-24) → restore-edit reconcile. Bridge G4 (send an issue, explicit only) after G2 is in use. Then Summary v3; D-113; H5 S3.
+- **Next:** owner calibrates the Planner card while testing → A2 tester notice → invites (expires 2026-10-24) → restore-edit reconcile. Bridge G4 (send an issue from a project card, explicit only) after G2 is in use. Then Summary v3; D-113; H5 S3.
 ---
 
 ## Context
