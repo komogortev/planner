@@ -22,7 +22,8 @@ Status column: **shipped** (in schema today) · **H<n>** (tier that introduces i
 | **Report** | `Report`, table `reports` | Stored output of a run, citing the entries it used. Immutable | Entry | H2 |
 | **Composer** | `composeRun()` | The one function that turns lens + entries + category rules into a prompt | — | H2 |
 | **Executor** | `executor` field | What performs a run: `copy-prompt` (shipped; shown as *manual*), `model` (the user's registered model via the Worker, H5) or `claude-code` (outside, over MCP, H3, optional) | — | shipped / H5 |
-| **Routine** | `Routine`, table `routines` | A declared run (the harness, a widget's run, a lens) bound to a time, run by the Worker with the app closed through the user's registered model (D-89) | Lens (what is run); Run (one execution) | H5 S3 |
+| **Schedule** | `Schedule`, table `schedules` | A declared run (the harness, a widget's run, a lens) bound to a time, run by the Worker with the app closed through the account's default model (D-89 as renamed by D-138, D-126) | Lens (what is run); Run (one execution); Routine | H5 S3 |
+| **Routine** | not built (parked, D-139) | A recurring personal item the owner ticks off (pills in the morning). Shows on its day; **done** or **cancel** clears it until the next occurrence; no tap leaves it until the day ends and is not stored; never carries over, no snooze | Task (carries, goes overdue); Schedule (an AI run) | parked |
 | **Project** | widget `kind: 'project'`, field `project: { repo, private }` | A GitHub repo the user switched on, shown on the Dashboard as a card with its STATE snapshot and recent merges. How the card looks is the repo's own `.planner.json`. Switched off, never deleted | Theme (parked); Category; the planner's own PROJECT.md | G2 (D-121) |
 | **Integration** | D1 table `integrations`, `IntegrationsCard` | An outside account the user connected by pasting a token, held encrypted on the Worker and never returned (GitHub first: login, last 4 characters, expiry) | Model (also a pasted key, but for model calls) | G1 (D-121) |
 | **Model** | `ModelConfig`, D1 table `models` | A model the user registered: label, request format, endpoint, the provider's model id; the key is held encrypted on the Worker and never returned (D-79) | a provider account or subscription | H5 |
@@ -74,7 +75,7 @@ Status column: **shipped** (in schema today) · **H<n>** (tier that introduces i
 | Commitment (for open loops) | **Task** with `direction: 'promise'` | `Commitment` named the deleted financial record (D-112). A lens may still *title* its report "Today's commitments"; that is report text |
 | Activity | **Task** with `completedAt`, `repeatEveryDays` | The 2026-06 Activity-log design folded into Task |
 | Label | Category or Tag | Ambiguous between the two |
-| Recipe | **Lens** | Alternative considered for "feature". Lens confirmed by the owner 2026-10-09. (*Routine* was rejected here too because it implies a schedule; since D-89 it names exactly that) |
+| Recipe | **Lens** | Alternative considered for "feature". Lens confirmed by the owner 2026-10-09. (*Routine* was rejected here too because it implies a schedule. D-89 then used it for a timed run; D-138 renamed that to **Schedule** and gave *Routine* its everyday meaning, D-139) |
 
 ## Deleted domain (2026-10-13, D-112: the names are free for reuse only with a new definition)
 

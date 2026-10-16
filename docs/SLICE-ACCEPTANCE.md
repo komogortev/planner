@@ -27,7 +27,7 @@ test lowers the raise-only test-count floor explicitly in the same PR.
 | A9 | Summary v3, listed for every account (D-122 Q3) | open — R3 |
 | A10 | No paste path left in the code (D-113) | open — R4 |
 | A11 | The nightly export runs and covers the owner's account only (D-122 Q1) | open — R6 |
-| A12 | H5 S3: Today arrives on a day the app was not opened; a pause stops it; notifications (D-122 Q2); a second account's schedule never runs with the first's key | open — R2 design, R7 |
+| A12 | H5 S3: Today arrives on a day the app was not opened (Morning schedule); a pause stops it; a tick skips while a reply waits; a second account's schedule never runs with the first's key. Notifications deferred past R1–R10 (D-127) | open — R7 (design decided, [H5-S3-SCHEDULES.md](H5-S3-SCHEDULES.md)) |
 | A13 | G5: one real issue → Action → PR → merge shown on a planner-repo card (D-122 Q4) | open — R8 |
 
 Also re-enters at alpha, owner's call and not a gate item: the nightly export cron (deferred 2026-10-11; its proposed
