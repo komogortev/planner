@@ -1,11 +1,11 @@
 # Personal Planner — STATE
 
 ## SNAPSHOT
-- **Phase/Last:** H1 built · HW S3 v2 live · H5 in real use. 2026-10-16: D-120 (personal tool, open source, MIT); D-121 GitHub bridge: G1 live (#152, owner connected, expiry read), G2 live (#154): repos switched on in Integrations show on the Dashboard with STATE snapshot + merges; card config = the repo's `.planner.json`; one-time re-pull (`REPULL`). C1 live (#158): cards open folded (`.planner.json` `brief`). C2 live (#160): New issue on a card sends one issue (kinds = `.planner.json` `issues`, label `planner`, retry-safe request id); the card lists open sent issues. Rollback floor `80540b1`.
-- **Working:** prod = Pages + Worker `b00b8d0` (`9bb80684`), D1 `0011`; smoke 17/17. `pnpm check` app 622 · Worker 263. **Verified on the phone (owner, 10-16):** GitHub connected, repo list, Planner card with real STATE.
-- **Broken:** **Summary** reads only open notes (v1 lens; owner only). After a D1 restore, edits acknowledged after the restore point revert (A7, inferred). "Recently merged" reads the last 30 closed PRs. **Not verified on a phone:** DEVICE-CHECKS 37–41; #148 menu tap; D-105 on a real model; the card title from `.planner.json` (#156, needs a Refresh); the folded card (#158); **a real Send (#160, owner on the phone): label creation + issue create with the fine-grained token are untested against GitHub**.
+- **Phase/Last:** H1 built · HW S3 v2 live · H5 in real use. 2026-10-16: D-120 (open source, MIT); D-121 GitHub bridge G1–G2 live; bridge prep C1–C3 live: cards fold (`.planner.json` `brief`), New issue sends one issue (kinds = `.planner.json` `issues`, retry-safe, "Sent from koplanner" sign-off), loop back (bot line, linked PR, Ask Claude when the repo runs the Action). C4 (#165, #166): synced card tint per widget, one ⋯ menu on cards and Widgets rows, tiered project sections. Rollback floor `80540b1`.
+- **Working:** prod = Worker `b0bee66` (`5157a181`), Pages = #166 merge, D1 `0011`; smoke 17/17. `pnpm check` app 626 · Worker 280. **Verified on the phone (owner, 10-16):** GitHub connected, Planner card with real STATE, a real Send (#160).
+- **Broken:** **Summary** reads only open notes (v1 lens; owner only). After a D1 restore, edits acknowledged after the restore point revert (A7, inferred). A tint picked on a device that hasn't pulled a switch writes its on/off back (C4, accepted). **Not verified on a phone:** DEVICE-CHECKS 37–41; #148; D-105 on a real model; folded card, loop back, tints (#158–#166). **Untested end to end:** the Claude Action answering an `@claude` issue (no repo has the workflow).
 - **Blocker:** none.
-- **Next:** owner calibrates the Planner card while testing → A2 tester notice → invites (expires 2026-10-24) → restore-edit reconcile. Bridge prep C3 (thin G5: sent issues' status + linked PR, `@claude` toggle, "Set up Claude" help), after the owner's first real Send. Then Summary v3; D-113; H5 S3.
+- **Next:** owner calibrates cards and tints on the phone → A2 tester notice → invites (expires 2026-10-24) → restore-edit reconcile. Optional: add the Claude workflow to a repo to close the Action loop. Then Summary v3; D-113; H5 S3.
 ---
 
 ## Context
@@ -57,6 +57,8 @@
 ## Decision log
 
 Full log: PROJECT.md → Decisions log. Latest:
+
+- 2026-10-16 (C3, C4) — C3 (#164): sent issues show the last bot line (`claude[bot]` first) and the linked same-repo PR; `/state` detects a Claude workflow with an issue trigger, and the sheet then offers Ask Claude, else set-up help; every sent body ends "Sent from koplanner" (owner). Rate limits in these reads degrade instead of failing the card. C4 (owner: sections blended, wanted per-project colour and card menus like Today): `appearance: { tint }` is an ADDED_FIELD on widget rows with REPULL 2, shipped and deployed to the Worker before the UI (#165); then tints, one ⋯ menu on every card and Widgets row (soft duplicate marking, horizontal dots, Refresh in the menu), and project sections tiered by label, hairline and contrast with no section backgrounds (#166). Rule recorded: a future look setting is a new top-level field, never nested in `appearance`.
 
 - 2026-10-16 (C2) — New issue sheet shipped (#160). Found in the browser: the sheet rendered under the next card (each card is a stacking context), now teleported to `body`. Review fixes: a 5xx on create says "may have been sent" (retry is safe), a secondary rate limit isn't a token problem, an earlier landing keeps unsent edits. Open: two racing sends of one id can both create if the Worker outlives its client (unverified); a renamed login misses earlier sends. `@claude` toggle and "From a note" moved to C3.
 

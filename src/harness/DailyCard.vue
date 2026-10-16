@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import CardMenu from '@/widgets/CardMenu.vue'
+import { cardTint } from '@/widgets/tints'
+import { useWidgets } from '@/widgets/useWidgets'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import { addDays } from '@/domain/harness'
@@ -26,18 +29,11 @@ const shownTasks = computed(() => (expanded.value ? tasks.value : tasks.value.sl
 const hiddenCount = computed(() => tasks.value.length - shownTasks.value.length)
 // Back to a few lines once the list fits, and on a new day (the card can stay mounted past midnight).
 watch(day, () => (expanded.value = false))
-const menuOpen = ref(false)
-const menuRoot = ref<HTMLElement | null>(null)
-const menuButton = ref<HTMLButtonElement | null>(null)
-function closeMenu() {
-  menuOpen.value = false
-  menuButton.value?.focus()
-}
+const { tintOf } = useWidgets() // C4: the card's tint
 const cardRoot = ref<HTMLElement | null>(null)
 // D-104: one row at a time shows its actions. A tap outside the card puts them away.
 const activeId = ref<string | null>(null)
 const onDocClick = (e: MouseEvent) => {
-  if (menuOpen.value && menuRoot.value && !menuRoot.value.contains(e.target as Node)) menuOpen.value = false
   if (activeId.value && cardRoot.value && !cardRoot.value.contains(e.target as Node)) activeId.value = null
 }
 onMounted(() => document.addEventListener('click', onDocClick))
@@ -164,7 +160,7 @@ async function saveIt() {
 </script>
 
 <template>
-  <section ref="cardRoot" class="card daily" data-test="daily-card" aria-label="Today">
+  <section ref="cardRoot" class="card daily" v-bind="cardTint(tintOf('system-today'))" data-test="daily-card" aria-label="Today">
     <header class="flex items-center justify-between gap-2">
       <h3 class="font-semibold">Today <span class="sub">{{ day }}</span></h3>
       <div v-if="!summaryOpen" class="flex gap-1.5 items-center">
@@ -177,16 +173,12 @@ async function saveIt() {
         <button type="button" class="btn-ghost btn-xs btn-icon" aria-label="Add a task" title="Add a task" data-test="daily-add-open" @click="startAdd">
           <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 4v16M4 12h16" /></svg>
         </button>
-        <!-- Widget options (edit summary now; edit or remove the widget later) live behind ⋯, so the header holds one action. -->
-        <div ref="menuRoot" class="menu" @keydown.esc="closeMenu">
-          <button
-            ref="menuButton" type="button" class="btn-ghost btn-xs" aria-label="Today options" aria-controls="daily-menu-list" :aria-expanded="menuOpen"
-            data-test="daily-menu" @click="menuOpen = !menuOpen"
-          >⋯</button>
-          <div v-if="menuOpen" id="daily-menu-list" class="menu-list" data-test="daily-menu-list">
-            <button type="button" :disabled="!tasks.length" data-test="daily-edit-summary" @click="menuOpen = false; openSummary()">Edit summary</button>
-          </div>
-        </div>
+        <!-- Widget options live behind ⋯, so the header holds one action: the shared card menu (C4) with the colour. -->
+        <CardMenu widget-id="system-today" label="Today options">
+          <template #default="{ close }">
+            <button type="button" :disabled="!tasks.length" data-test="daily-edit-summary" @click="close(); openSummary()">Edit summary</button>
+          </template>
+        </CardMenu>
       </div>
     </header>
 
@@ -258,10 +250,5 @@ async function saveIt() {
 .btn-icon svg { width: 20px; height: 20px; }
 .link { text-decoration: underline; color: var(--glass-text); background: none; padding: 0; }
 .err { font-size: 0.75rem; color: var(--glass-err); margin-top: 0.35rem; }
-.menu { position: relative; }
-.menu-list { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; min-width: 10rem; padding: 4px; border-radius: 0.75rem; background: rgb(var(--s-900)); box-shadow: 0 6px 20px rgb(0 0 0 / 0.3); }
-.menu-list button { display: block; width: 100%; text-align: left; padding: 0.45rem 0.65rem; border-radius: 0.5rem; font-size: 0.85rem; color: rgb(var(--s-100)); }
-.menu-list button:hover:not(:disabled) { background: rgb(var(--s-800)); }
-.menu-list button:disabled { opacity: 0.5; }
 .more { display: block; margin-top: 0.5rem; font-size: 0.8rem; }
 </style>

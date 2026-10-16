@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import CardMenu from '@/widgets/CardMenu.vue'
+import { cardTint } from '@/widgets/tints'
+import { useWidgets } from '@/widgets/useWidgets'
 import { isBodyTap } from '@/composables/bodyTap'
 import { computed, ref } from 'vue'
 import { db } from '@/db'
@@ -55,13 +58,17 @@ function onBody(e: MouseEvent) {
   if (!open.value) open.value = true
   else if ((e.target as Element).closest('[data-test="journal-head"]')) open.value = false
 }
+const { tintOf } = useWidgets() // C4: the card's tint
 </script>
 
 <template>
-  <section class="card loop" :class="{ 'tap-to-open': !open }" data-test="journal-card" aria-label="Summary" @click="onBody">
+  <section class="card loop" :class="{ 'tap-to-open': !open }" v-bind="cardTint(tintOf('system-summary'))" data-test="journal-card" aria-label="Summary" @click="onBody">
     <header class="flex items-baseline justify-between" data-test="journal-head">
       <h3 class="font-semibold">Summary</h3>
-      <button type="button" class="btn-ghost btn-xs" :aria-expanded="open" data-test="journal-toggle" @click.stop="open = !open">{{ open ? 'Hide' : writtenToday ? 'Show' : 'Open' }}</button>
+      <div class="flex gap-1.5 items-center">
+        <button type="button" class="btn-ghost btn-xs" :aria-expanded="open" data-test="journal-toggle" @click.stop="open = !open">{{ open ? 'Hide' : writtenToday ? 'Show' : 'Open' }}</button>
+        <CardMenu widget-id="system-summary" label="Summary options" />
+      </div>
     </header>
     <div v-show="open">
       <div v-if="latest" class="report" data-test="journal-report">
