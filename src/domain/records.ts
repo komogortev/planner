@@ -96,12 +96,13 @@ export interface RunRecord {
   ranAt: string
   executor: Executor
   taskIds?: string[] // S3 v2: every task the harness prompt carried; absent on a run stored before
-  // H5: the registered model and its call (`/ai/calls`) when `executor` is 'model'; null for a copy-prompt run, absent on
-  // a run stored before H5.
+  // H5: the registered model and its call (`/ai/calls`) when `executor` is 'model'; null for a copy-prompt run (before
+  // D-113), absent on a run stored before H5.
   modelId?: string | null
   callId?: string | null
 }
-/** What performed a run (VOCABULARY "Executor"): the owner's paste, or the user's registered model through the Worker (H5). */
+/** What performed a run (VOCABULARY "Executor"): the user's registered model through the Worker (H5). `copy-prompt` (the owner's
+ *  paste) is retired by D-113 and stays valid only so rows stored before it keep syncing and exporting. */
 export type Executor = 'copy-prompt' | 'model'
 
 /** Each kind's own fields (the domain types), before the sync fields are added. */

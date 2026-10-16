@@ -10,7 +10,7 @@ import StripItemView from './StripItemView.vue'
 import type { Loop2 } from './useLoop2'
 
 // The questions strip (HW-HARNESS §11 Dashboard v2, D-70): each question or proposal under the Task it isolates, one
-// reply each. The run (copy-prompt, D-63) reads new notes and the Tasks changed since their last run ("N changes waiting
+// reply each. The run (the account's model, D-113) reads new notes and the Tasks changed since their last run ("N changes waiting
 // for feedback", D-72 until an automatic run exists).
 //
 // Docked under the Dashboard's scrolling cards (owner, calibration 2026-10-12): a suggestion to start a context round,
@@ -20,9 +20,9 @@ import type { Loop2 } from './useLoop2'
 // - `open` — a tap on the body: the detail view, read only — what is waiting and the next question. A second tap closes it.
 // - `work` — Get feedback, from either: every question in the queue with its own reply, then the run. The strip grows
 //   upwards (capped; it scrolls inside).
-// A tap anywhere outside the strip returns it to `line`. Nothing is lost on the way: a half-typed answer and a pasted
-// reply stay where they were (v-show), so tapping back in finds them. A run waiting for its reply opens in `work`, so the
-// paste box is there when the owner comes back.
+// A tap anywhere outside the strip returns it to `line`. Nothing is lost on the way: a half-typed answer stays where it
+// was (v-show), so tapping back in finds it. A run whose model call is still out opens in `work`, so its answer shows
+// when it arrives.
 const props = defineProps<{ loop: Loop2 }>()
 const items = computed(() => props.loop.items.value)
 const first = computed(() => items.value[0] ?? null)
@@ -69,8 +69,8 @@ function onDocClick(e: MouseEvent) {
 }
 onMounted(() => document.addEventListener('click', onDocClick, true))
 
-// Daily's Refresh (the owner asks for an update where the Tasks are): open the run and start it. With a model it
-// checks and stores by itself (D-103); a copied prompt leaves Check and Store to him.
+// Daily's Refresh (the owner asks for an update where the Tasks are): open the run and start it. The model's reply is
+// checked and stored by itself (D-103).
 const runStep = ref<InstanceType<typeof RunStep> | null>(null)
 watch(() => props.loop.refresh.value, async () => {
   mode.value = 'work'
@@ -131,7 +131,7 @@ async function store(reply: string, via?: ModelVia) {
       <p v-else class="sub mt-1" data-test="strip-empty">No open questions. Get feedback reads the waiting changes.</p>
     </div>
 
-    <!-- work: every question with its own reply, then the run. v-show, not v-if: typed answers and a pasted reply survive
+    <!-- work: every question with its own reply, then the run. v-show, not v-if: typed answers and a running call survive
          the strip closing. -->
     <div v-show="mode === 'work'" data-test="strip-work">
       <p v-if="changes" class="waiting" data-test="strip-changes-work">{{ changesLine }}</p>

@@ -14,7 +14,10 @@ import { answerRemoval, applySummary, planSummary, type RemovalChoice, type Summ
 import { addTask, confirmProposal, dailyTasks, editTask, upcomingTasks, rejectProposal, setTaskState, type Task, type TaskProposal, type TaskState } from '@/domain/tasks'
 import { uuid } from '@/utils/uuid'
 import { deviceZone, PendingStorageError, type Composed, type Outcome } from './loop'
-import { clearPending, loadPending2, pendingIsOtherVersion, savePending } from './pending'
+import { clearPending, loadPending2, savePending } from './pending'
+
+/** D-113: only a registered model's reply is stored; no other source exists any more. */
+export const NO_MODEL_REPLY = 'Only a reply from your AI model can be stored. Run again.'
 
 // No language setting exists yet (§9 point 4): the model answers in the language the owner wrote in.
 const HARNESS_LANGUAGE = 'the same language as the notes they come from'
@@ -94,22 +97,19 @@ export async function startHarness2(now = new Date().toISOString()): Promise<Com
 export const pendingHarness2 = (): RunHeader2 | null => loadPending2()
 
 /**
- * Check a pasted reply against the waiting run. With `store`, the surviving rows and the run record are written in one
+ * Check a model's reply against the waiting run. With `store`, the surviving rows and the run record are written in one
  * transaction and the run stops waiting. The check is recomputed from the tables at the moment of storing, so a stale
  * preview can never store more than a fresh check allows.
  */
 export async function applyHarnessReply2(text: string, opts: { store: boolean; now?: string; via?: ModelVia }): Promise<Outcome<{ applied: Applied2; header: RunHeader2; written: number }>> {
   const header = loadPending2()
-  if (!header) {
-    return pendingIsOtherVersion()
-      ? { ok: false, error: 'This reply is for a prompt from the previous version of the app. Copy a new prompt.' }
-      : { ok: false, error: 'No run is waiting for a reply. Copy a new prompt first.' }
-  }
+  if (!header) return { ok: false, error: 'No run is waiting for a reply. Run again.' }
   const parsed = parseHarnessOutput2(text)
   if (!parsed.ok) return parsed
   const now = opts.now ?? new Date().toISOString()
   const applied = applyHarness2(parsed.value, header, await loadHarnessData2(), now, deviceZone())
   if (!opts.store) return { ok: true, value: { applied, header, written: 0 } }
+  if (!opts.via) return { ok: false, error: NO_MODEL_REPLY }
   const run: RunRecord = {
     id: header.runId,
     stage: 'harness',

@@ -142,7 +142,7 @@ export interface RunHeader2 {
   taskIds: string[] // every task in the prompt (re-evaluate first)
   remaining: number
 }
-/** What the validator needs from the header; stored with the run so a late paste is checked against what was sent. */
+/** What the validator needs from the header; stored with the run so a late reply is checked against what was sent. */
 export type RunScope2 = Pick<RunHeader2, 'runId' | 'composedAt' | 'toAssessIds' | 'contextIds' | 'reevaluateIds' | 'taskIds'>
 
 /** Owner text cannot close the data block it sits in. */

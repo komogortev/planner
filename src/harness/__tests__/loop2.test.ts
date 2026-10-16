@@ -4,7 +4,6 @@ import { db } from '@/db'
 import { recordTables } from '@/db/records'
 import type { Entry } from '@/domain/entry'
 import { REMOVAL_QUESTION } from '@/domain/summary'
-import { startHarness } from '../loop'
 import {
   addTask2,
   answer2,
@@ -13,6 +12,7 @@ import {
   confirmProposal2,
   correctProposal2,
   harnessWork,
+  NO_MODEL_REPLY,
   rejectProposal2,
   setTaskState2,
   loadHarnessData2,
@@ -21,9 +21,9 @@ import {
   startHarness2,
   today,
 } from '../loop2'
-import { loadPending } from '../pending'
 
 // The suite runs in node: a minimal localStorage (the pending run lives there, like the capture draft).
+const VIA = { modelId: 'm1', callId: 'c-1' } // every stored reply comes from a registered model (D-113)
 const store = new Map<string, string>()
 Object.defineProperty(globalThis, 'localStorage', {
   value: {
@@ -68,7 +68,7 @@ describe('harness v2 on the device', () => {
     const c = (await startHarness2(NOW))!
     expect(c.header).toMatchObject({ harnessVersion: 2, toAssessIds: [N1, N2], taskIds: [] })
     expect(pendingHarness2()).toEqual(c.header)
-    const r = await applyHarnessReply2(firstReply, { store: true, now: LATER })
+    const r = await applyHarnessReply2(firstReply, { store: true, now: LATER, via: VIA })
     expect(r.ok).toBe(true)
     expect(await counts()).toEqual({ tasks: 1, taskProposals: 0, assessments: 3, questions: 1, runs: 1 })
     const [task] = await db.tasks.toArray()
@@ -79,7 +79,7 @@ describe('harness v2 on the device', () => {
     expect(pendingHarness2()).toBeNull()
   })
 
-  it('H5: a reply from a registered model stores a model run naming its model and call; a paste names neither', async () => {
+  it('H5: a reply from a registered model stores a model run naming its model and call; without one nothing is stored (D-113)', async () => {
     await startHarness2(NOW)
     expect((await applyHarnessReply2(firstReply, { store: true, now: LATER, via: { modelId: 'm1', callId: 'c-1' } })).ok).toBe(true)
     const [run] = await db.runs.toArray()
@@ -88,10 +88,9 @@ describe('harness v2 on the device', () => {
     expect(queued?.payload).toMatchObject({ executor: 'model', modelId: 'm1', callId: 'c-1' }) // what the Worker will validate
     await Promise.all([db.outbox.clear(), ...recordTables(db).map((t) => t.clear())])
     await startHarness2(NOW)
-    await applyHarnessReply2(firstReply, { store: true, now: LATER })
-    const [paste] = await db.runs.toArray()
-    expect(paste.executor).toBe('copy-prompt')
-    expect(paste).not.toHaveProperty('modelId') // left out, as an older build would: the shared rule accepts both
+    expect(await applyHarnessReply2(firstReply, { store: true, now: LATER })).toEqual({ ok: false, error: NO_MODEL_REPLY })
+    expect(await counts()).toEqual({ tasks: 0, taskProposals: 0, assessments: 0, questions: 0, runs: 0 })
+    expect(pendingHarness2()).not.toBeNull() // still waiting for its model's reply
   })
 
   it('negative control: Check without Store writes nothing and the run keeps waiting', async () => {
@@ -102,23 +101,23 @@ describe('harness v2 on the device', () => {
     expect(pendingHarness2()).not.toBeNull()
   })
 
-  it('a v1 prompt waiting at the switch is refused with its reason, and v1 never reads a v2 header', async () => {
-    await startHarness(NOW)
+  it('a harness v1 header left in the slot is never taken: nothing waits, and a new run replaces it', async () => {
+    localStorage.setItem('planner.run.pending.harness', JSON.stringify({ stage: 'harness', harnessVersion: 1, runId: 'v1-run', composedAt: NOW, toAssessIds: [], contextIds: [] }))
     expect(pendingHarness2()).toBeNull()
-    const r = await applyHarnessReply2(firstReply, { store: true, now: LATER })
-    expect(r).toEqual({ ok: false, error: expect.stringContaining('previous version') })
-    expect(await startHarness2(NOW)).not.toBeNull() // a v2 header now waits in the shared slot…
-    expect(loadPending('harness')).toBeNull() // …and v1 does not take it
+    const r = await applyHarnessReply2(firstReply, { store: true, now: LATER, via: VIA })
+    expect(r).toEqual({ ok: false, error: expect.stringContaining('No run is waiting') })
+    expect(await startHarness2(NOW)).not.toBeNull()
+    expect(pendingHarness2()?.runId).not.toBe('v1-run')
   })
 
-  it('nothing waiting at all: the plain message (known positive for the version check above)', async () => {
-    const r = await applyHarnessReply2(firstReply, { store: true, now: LATER })
+  it('nothing waiting at all: the plain message', async () => {
+    const r = await applyHarnessReply2(firstReply, { store: true, now: LATER, via: VIA })
     expect(r).toEqual({ ok: false, error: expect.stringContaining('No run is waiting') })
   })
 
   it('an answered question puts its Task back into the next run', async () => {
     await startHarness2(NOW)
-    await applyHarnessReply2(firstReply, { store: true, now: LATER })
+    await applyHarnessReply2(firstReply, { store: true, now: LATER, via: VIA })
     expect(await startHarness2(LATER)).toBeNull() // nothing new: no prompt
     const q = (await loadHarnessData2()).questions[0]
     expect(await answer2(q, 'E27, warm white', LATEST)).toEqual({ ok: true, value: 1 })
@@ -151,13 +150,13 @@ describe('Daily and the summary', () => {
 describe('proposals', () => {
   it('confirming a close marks the Task done; a second confirm is refused', async () => {
     await startHarness2(NOW)
-    await applyHarnessReply2(firstReply, { store: true, now: LATER })
+    await applyHarnessReply2(firstReply, { store: true, now: LATER, via: VIA })
     const [task] = await db.tasks.toArray()
     await db.entries.put(note('a0000000-0000-4000-8000-000000000003', LATER, 'bulb replaced'))
     await startHarness2(LATEST)
     const r = await applyHarnessReply2(
       reply({ tasks: [{ op: 'close', taskId: task.id, entryId: 'a0000000-0000-4000-8000-000000000003', evidence: 'bulb replaced' }], questions: [] }),
-      { store: true, now: LATEST },
+      { store: true, now: LATEST, via: VIA },
     )
     expect(r.ok).toBe(true)
     const [p] = await db.taskProposals.toArray()
@@ -175,13 +174,13 @@ describe('proposals', () => {
 describe('correcting a proposal (strip "Correct…", owner 2026-10-13)', () => {
   async function closeProposed() {
     await startHarness2(NOW)
-    await applyHarnessReply2(firstReply, { store: true, now: LATER })
+    await applyHarnessReply2(firstReply, { store: true, now: LATER, via: VIA })
     const [task] = await db.tasks.toArray()
     await db.entries.put(note('a0000000-0000-4000-8000-000000000003', LATER, 'bulb replaced'))
     await startHarness2(LATEST)
     await applyHarnessReply2(
       reply({ tasks: [{ op: 'close', taskId: task.id, entryId: 'a0000000-0000-4000-8000-000000000003', evidence: 'bulb replaced' }], questions: [] }),
-      { store: true, now: LATEST },
+      { store: true, now: LATEST, via: VIA },
     )
     const [p] = await db.taskProposals.toArray()
     return { task, p }
@@ -216,13 +215,13 @@ describe('correcting a proposal (strip "Correct…", owner 2026-10-13)', () => {
 describe("owner actions act on the stored row, not the screen's copy (CodeReview)", () => {
   it('a rejected proposal cannot be confirmed from a stale copy', async () => {
     await startHarness2(NOW)
-    await applyHarnessReply2(firstReply, { store: true, now: LATER })
+    await applyHarnessReply2(firstReply, { store: true, now: LATER, via: VIA })
     const [task] = await db.tasks.toArray()
     await db.entries.put(note('a0000000-0000-4000-8000-000000000003', LATER, 'two different lamps'))
     await startHarness2(LATEST)
     await applyHarnessReply2(
       reply({ tasks: [{ op: 'split', taskId: task.id, into: [{ text: 'Hall bulb', sourceEntryIds: [N1] }, { text: 'Porch bulb', sourceEntryIds: [N2] }] }], questions: [] }),
-      { store: true, now: LATEST },
+      { store: true, now: LATEST, via: VIA },
     )
     const [shown] = await db.taskProposals.toArray()
     expect(await rejectProposal2(shown, LATEST)).toEqual({ ok: true, value: 1 })
@@ -233,7 +232,7 @@ describe("owner actions act on the stored row, not the screen's copy (CodeReview
 
   it('Done on a stale copy keeps what a stored run added since (sources)', async () => {
     await startHarness2(NOW)
-    await applyHarnessReply2(firstReply, { store: true, now: LATER })
+    await applyHarnessReply2(firstReply, { store: true, now: LATER, via: VIA })
     const [shown] = await db.tasks.toArray()
     await db.tasks.update(shown.id, { sourceEntryIds: [N1, N2, 'a0000000-0000-4000-8000-000000000003'], updatedAt: LATEST })
     expect(await setTaskState2(shown, 'done', null, LATEST)).toMatchObject({ ok: true })

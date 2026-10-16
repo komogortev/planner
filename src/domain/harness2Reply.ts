@@ -1,4 +1,4 @@
-// Harness v2, the reply side (HW-HARNESS.md §11): parse a pasted reply and validate it against the run that produced it.
+// Harness v2, the reply side (HW-HARNESS.md §11): parse a model's reply and validate it against the run that produced it.
 // Pure and environment-free, as `harness2.ts` (the prompt side). `create` and `attach` are applied; `close`, `revise`, `split`
 // and `merge` come back as proposals; nothing writes Task text over the owner's.
 import { isIsoDate, isWellFormed } from './clean'
@@ -168,7 +168,7 @@ export function applyHarness2(output: HarnessOutput2, run: RunScope2, data: Harn
     return res
   }
   // "Today" is the day the model was told, and the assessment time is the compose time: an answer given between compose and
-  // paste must still count as newer than the assessment.
+  // the reply must still count as newer than the assessment.
   const today = localDay(run.composedAt, timeZone)
   const horizon = addDays(today, FOLLOW_UP_MAX_DAYS)
   const staleAfter = (rows: Assessment[]) => rows.some((a) => a.runId !== run.runId && a.at >= run.composedAt)

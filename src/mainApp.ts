@@ -14,6 +14,7 @@ import { installLiveTextInput } from './composables/liveTextInput'
 import { db } from './db'
 import { isOlderThanData, storedVersion } from './db/staleBuild'
 import StaleBuild from './components/StaleBuild.vue'
+import { dropStrandedRuns } from './ai/runWith'
 import './style.css'
 
 // Local / preview builds get a coloured banner, tab title, favicon and status bar; prod is untouched.
@@ -24,6 +25,9 @@ applyTheme()
 installLiveTextInput()
 
 function startApp(): void {
+  // D-113: a run header with no model call waiting for it can never finish (no reply can be pasted); clear it before any
+  // panel reads it.
+  dropStrandedRuns()
   const app = createApp(App)
 
   app.use(createPinia())
