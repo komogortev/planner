@@ -31,10 +31,30 @@ export class FakeServer {
   /** After this many requests every answer is a 500 — a safety net so a client that loops FAILS a test instead of hanging it. */
   maxRequests = Infinity
 
-  /** The database was restored to an earlier point: later versions are gone and the counter is back at `version`. */
+  /** Every write in order, so a restore can put a row back at the version it had then (as D1 Time Travel does). */
+  private history: ({ key: string; row: Row } | { key: string; record: RecordRow })[] = []
+  private write(id: string, row: Row): void {
+    this.rows.set(id, row)
+    this.history.push({ key: id, row })
+  }
+  private writeRecord(key: string, record: RecordRow): void {
+    this.records.set(key, record)
+    this.history.push({ key, record })
+  }
+
+  /**
+   * The database was restored to an earlier point: every row is back at the version it had then (gone if it was created
+   * later), and the counter is back at `version`.
+   */
   restoreTo(version: number): void {
-    for (const [id, r] of this.rows) if (r.version > version) this.rows.delete(id)
-    for (const [key, r] of this.records) if (r.version > version) this.records.delete(key)
+    const kept = this.history.filter((h) => ('row' in h ? h.row.version : h.record.version) <= version)
+    this.rows.clear()
+    this.records.clear()
+    for (const h of kept) {
+      if ('row' in h) this.rows.set(h.key, h.row)
+      else this.records.set(h.key, h.record)
+    }
+    this.history = kept
     this.seq = version
   }
 
@@ -98,7 +118,7 @@ export class FakeServer {
     const same = cur && cur.body === m.payload.body && cur.deletedAt === m.payload.deletedAt
     if (same) return { entityId: m.entityId, status: 'duplicate', serverVersion: cur.version }
     const version = ++this.seq
-    this.rows.set(m.entityId, { ...m.payload, version })
+    this.write(m.entityId, { ...m.payload, version })
     return { entityId: m.entityId, status: 'applied', serverVersion: version }
   }
 
@@ -110,21 +130,21 @@ export class FakeServer {
     const { version: _v, recordKind: _k, ...curFields } = (cur ?? {}) as RecordRow
     if (cur && JSON.stringify(curFields) === JSON.stringify(m.payload)) return { entityId: m.entityId, status: 'duplicate', serverVersion: cur.version }
     const version = ++this.seq
-    this.records.set(key, { ...m.payload, recordKind: m.recordKind, id: m.entityId, version })
+    this.writeRecord(key, { ...m.payload, recordKind: m.recordKind, id: m.entityId, version })
     return { entityId: m.entityId, status: 'applied', serverVersion: version }
   }
 
   /** Put a record on the server as if another device had pushed it. */
   seedRecord(recordKind: string, payload: Record<string, unknown> & { id: string }): number {
     const version = ++this.seq
-    this.records.set(`${recordKind}/${payload.id}`, { ...payload, recordKind, version })
+    this.writeRecord(`${recordKind}/${payload.id}`, { ...payload, recordKind, version })
     return version
   }
 
   /** Put an entry on the server as if another device had pushed it. */
   seed(id: string, body: string, createdAt = '2026-10-10T10:00:00.000Z'): number {
     const version = ++this.seq
-    this.rows.set(id, { id, body, createdAt, occurredAt: null, categoryId: null, tags: [], origin: 'author', updatedAt: createdAt, deletedAt: null, version })
+    this.write(id, { id, body, createdAt, occurredAt: null, categoryId: null, tags: [], origin: 'author', updatedAt: createdAt, deletedAt: null, version })
     return version
   }
 

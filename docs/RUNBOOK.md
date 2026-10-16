@@ -141,12 +141,13 @@ pnpm --dir api exec wrangler d1 execute planner --remote --command "SELECT (SELE
 **What heals by itself (D-58).** A pull whose `head` is below the device's cursor, or a push given a version at or below
 it, starts a sweep from 0. Notes and records the server lost are uploaded again from the devices that still hold them.
 
+**Edits acknowledged after T** (since A8, 2026-10-16): a note or record the server returns below the version a device
+acknowledged for it is the restored copy; the device's edit (a Task done, an answer, a removal) is uploaded again on the
+server's version (`src/sync/sweep.ts`). Only from a device that still holds it, and it arrives when that device next syncs.
+Limit: a row another device edited after T at a lower version number is overwritten by the older edit; the server keeps a
+revision.
+
 **What does not heal:**
-- **Edits acknowledged after T** to a note or record that existed before T. A Task marked done, an answered question or a
-  widget switched on reverts on every device: the sweep returns the old version and nothing is queued locally. Testers
-  would see done Tasks open again and questions asked again. This is inferred from `engine.ts` (sweep and
-  `requeueLost`), not run. **Re-entry:** this was parked "until an edit or delete UI ships", and records are edited today,
-  so it is due. Proposed: before the first invitee beyond the tester.
 - `users.version_seq` edited by hand: set it to **at least `max(server_version)` of that account**. Below it, every device
   sweeps again on every poll.
 - Server-only logs: `ai_calls` (the daily model cap counts from it) and `error_log` lose the window. Harmless.
