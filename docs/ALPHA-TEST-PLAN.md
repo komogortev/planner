@@ -1,6 +1,6 @@
 # Alpha test plan — full scope (2026-10-16)
 
-**Status: accepted (owner, 2026-10-16) with the recommended answers to Q1–Q4 and Q6 (D-122); Q5 open. R1 ✅ 2026-10-16 (A8, #169). R3 ✅ 2026-10-16 (A9, #173). R2 ✅ decided 2026-10-16: [H5-S3-SCHEDULES.md](H5-S3-SCHEDULES.md), D-123…D-130 (Morning schedule only; notifications deferred past R10, which amends Q2). *Routine* renamed to **Schedule** (D-138); *Routine* now names a recurring personal item, parked (D-139).** Owner, 2026-10-16: alpha starts only when every roadmap item up to and including
+**Status: accepted (owner, 2026-10-16) with the recommended answers to Q1–Q4 and Q6 (D-122); Q5 open. R1 ✅ 2026-10-16 (A8, #169). R3 ✅ 2026-10-16 (A9, #173). R4 ✅ 2026-10-16 (A10, #174). R2 ✅ decided 2026-10-16: [H5-S3-SCHEDULES.md](H5-S3-SCHEDULES.md), D-123…D-130 (Morning schedule only; notifications deferred past R10, which amends Q2). *Routine* renamed to **Schedule** (D-138); *Routine* now names a recurring personal item, parked (D-139).** Owner, 2026-10-16: alpha starts only when every roadmap item up to and including
 H5 S3 has landed, plus UI calibrations found along the way. This **supersedes D-114** ("the declared slice is enough to
 open alpha"). The change is D-122 in [DECISION-TREE.md](DECISION-TREE.md). [SLICE-ACCEPTANCE.md](SLICE-ACCEPTANCE.md) stays the one gate: §1 gains rows A8–A13 (§3 below). Terms per
 [VOCABULARY.md](VOCABULARY.md).
@@ -39,7 +39,7 @@ automated test, a DEVICE-CHECKS row the owner ran on the phone, or **gap**: not 
 | # | Feature | Try | Should happen | Proof |
 |---|---|---|---|---|
 | T9 | Add a model | Settings → AI models → Add (Gemini: "How do I get a free key?") → Save → Test | Key shows only as its last 4 characters; Test says "Works" | L7; DEVICE-CHECKS 33, 41 — **41 gap** |
-| T10 | Get feedback | Write 2–3 notes, tap Get feedback on the strip | A run, then questions about your notes; no copy or paste anywhere | L1, L2; **gap: D-113 removal (paste code still shipped, hidden behind "no model")** |
+| T10 | Get feedback | Write 2–3 notes, tap Get feedback on the strip | A run, then questions about your notes; no copy or paste anywhere | L1, L2; D-113 removal (#174): `runWith.test.ts`, `summaryRun.test.ts`, `loop2.test.ts` refuse a store without a model call |
 | T11 | Answer | Answer a question; run again | The next run does not re-ask it and uses the answer | L2 `loop.test.ts` |
 | T12 | Proposals | A "Done? A note says…" proposal: read the buttons, try Correct… | Buttons name the outcome; Correct… is read by the next run | DEVICE-CHECKS 37 — **gap: not run on a phone** |
 | T13 | Today | Tasks from your notes show on Today; mark one done, push one to tomorrow | Done is gone tomorrow; pushed shows tomorrow; untouched stays, marked overdue | L3, L4 |
