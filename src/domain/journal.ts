@@ -153,6 +153,7 @@ export function validateReport(
   entries: Entry[],
   now: string,
   knownReportIds: ReadonlySet<string> = new Set(),
+  shown: (body: string) => string = fence, // how the prompt showed a note's text, so a quote of what the model saw matches
 ): ReportResult {
   const id = uuid5(`${run.widgetId}|${run.runId}`)
   // Reports are immutable: a second reply for a run that already has one is refused, never stored over it.
@@ -178,7 +179,7 @@ export function validateReport(
 
   const inSlice = new Set(run.entryIds)
   // A note is matched as written AND as shown in the prompt (`<note` is spaced there), so quoting what the model saw works.
-  const bodyOf = new Map(entries.map((e) => [e.id, [squash(e.body), squash(fence(e.body))]]))
+  const bodyOf = new Map(entries.map((e) => [e.id, [squash(e.body), squash(shown(e.body))]]))
   const kept: Citation[] = []
   const seen = new Set<string>()
   let dropped = 0
