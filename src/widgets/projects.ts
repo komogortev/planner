@@ -25,11 +25,22 @@ export function resolveProjectWidgets(rows: readonly (Partial<WidgetRecord> & { 
     .sort((a, b) => a.repo.toLowerCase().localeCompare(b.repo.toLowerCase()))
 }
 
-/** The row a switch writes. `held` keeps the first creation time, so switching again is an edit, not a new widget. */
-export function projectWidgetRow(repo: string, isPrivate: boolean, active: boolean, now: string, held?: Pick<WidgetRecord, 'createdAt'> | null): WidgetRecord {
+/**
+ * A held row's appearance for a rewrite of it (C4). Left out when this device doesn't hold one: the key is then absent,
+ * and the Worker keeps the stored tint (ADDED_FIELDS) instead of a stale device writing "no tint" over it.
+ */
+export function keptAppearance(held?: Pick<WidgetRecord, 'appearance'> | null): Pick<WidgetRecord, 'appearance'> {
+  return held && held.appearance !== undefined ? { appearance: held.appearance } : {}
+}
+
+/**
+ * The row a switch writes. `held` keeps the first creation time, so switching again is an edit, not a new widget, and its
+ * appearance (C4, `keptAppearance`).
+ */
+export function projectWidgetRow(repo: string, isPrivate: boolean, active: boolean, now: string, held?: Pick<WidgetRecord, 'createdAt' | 'appearance'> | null): WidgetRecord {
   const name = repo.slice(repo.indexOf('/') + 1).slice(0, 80)
   return {
     id: projectWidgetId(repo), name, kind: 'project', active, lens: null, lineage: null,
-    project: { repo, private: isPrivate }, createdAt: held?.createdAt ?? now, updatedAt: now,
+    project: { repo, private: isPrivate }, ...keptAppearance(held), createdAt: held?.createdAt ?? now, updatedAt: now,
   }
 }

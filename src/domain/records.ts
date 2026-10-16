@@ -39,7 +39,7 @@ export const ADDED_FIELDS: Partial<Record<RecordKind, readonly string[]>> = {
   assessment: ['taskId'],
   question: ['taskId', 'kind'],
   run: ['taskIds', 'modelId', 'callId'], // modelId, callId: H5 (H5-MODELS §5)
-  widget: ['project'], // G2 (GITHUB-BRIDGE §5)
+  widget: ['project', 'appearance'], // project: G2 (GITHUB-BRIDGE §5); appearance: C4 (the card's tint)
 }
 
 /** Ids are lowercase uuids, uuid v5 derivations or short built-in names such as `builtin-daily-task-journal`. */
@@ -60,6 +60,18 @@ export interface WidgetProject {
   repo: string // `owner/name`, as GitHub spells it
   private: boolean
 }
+/**
+ * How a widget's card looks, chosen by the user (C4) and synced: the frost-glass tint. `tint` is a short id the app maps to
+ * a palette; an id this build does not know shows the default glass, so a tint added later never makes an older build
+ * reject the row.
+ *
+ * Rule for later: a new look setting is a new top-level ADDED_FIELD on the widget, never a key inside `appearance`. A build
+ * that doesn't know a nested key drops it on pull and pushes `appearance` without it, and the Worker restores only absent
+ * top-level keys, so the nested key would be erased.
+ */
+export interface WidgetAppearance {
+  tint: string
+}
 export interface WidgetRecord {
   id: string
   name: string
@@ -69,6 +81,8 @@ export interface WidgetRecord {
   lineage: string | null // the widget this one was cloned from
   /** A project widget's repo; null on every other kind. Absent on a row from before G2 (ADDED_FIELDS). */
   project?: WidgetProject | null
+  /** The card's look (C4); null = the default glass. Absent on a row from before C4 (ADDED_FIELDS). */
+  appearance?: WidgetAppearance | null
   createdAt: string
   updatedAt: string
 }
@@ -201,6 +215,8 @@ export const REPO_FULL_NAME = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\/[A-Za-z0-9._-
 export const isRepoFullName = (v: unknown): v is string => typeof v === 'string' && REPO_FULL_NAME.test(v) && !v.endsWith('/.') && !v.endsWith('/..')
 const repoName: Check = (v) => (isRepoFullName(v) ? ok(v) : bad('is not a GitHub owner/name'))
 const PROJECT = shape({ repo: repoName, private: bool })
+const TINT_ID: Check = (v) => (typeof v === 'string' && /^[a-z][a-z0-9-]{0,23}$/.test(v) ? ok(v) : bad('is not a tint id'))
+const APPEARANCE = shape({ tint: TINT_ID })
 const LENS = shape({ id: id, name: line(1, 80), version: int(1, 1000), shape: oneOf('markdown', 'checklist', 'table'), instruction: text(1, 2000) })
 
 const SPECS: Record<RecordKind, Record<string, Check>> = {
@@ -217,7 +233,7 @@ const SPECS: Record<RecordKind, Record<string, Check>> = {
   entryState: { state: oneOf('open', 'done', 'dropped'), followUpOn: nullable(date), by: oneOf('owner', 'confirmed-proposal'), updatedAt: dateTime },
   widget: {
     name: line(1, 80), kind: oneOf('system', 'prompt', 'project'), active: bool, lens: nullable(LENS), lineage: nullable(id),
-    project: nullable(PROJECT),
+    project: nullable(PROJECT), appearance: nullable(APPEARANCE),
     createdAt: dateTime, updatedAt: dateTime,
   },
   report: {

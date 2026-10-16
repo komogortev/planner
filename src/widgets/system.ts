@@ -5,6 +5,7 @@
 // writes a row just to state a default, so two devices opening the app cannot race on rows nobody chose. The first
 // toggle writes the row; after that the row's `active` wins on every device (last writer wins, like any record).
 import type { WidgetRecord } from '@/domain/records'
+import { keptAppearance } from './projects'
 
 
 export interface SystemWidget {
@@ -39,6 +40,6 @@ export function resolveSystemWidgets(rows: readonly HeldWidget[]): (SystemWidget
 }
 
 /** The row a toggle writes. `held` keeps the first creation time, so a second toggle is an edit, not a new widget. */
-export function systemWidgetRow(w: SystemWidget, active: boolean, now: string, held?: Pick<WidgetRecord, 'createdAt'> | null): WidgetRecord {
-  return { id: w.id, name: w.name, kind: 'system', active, lens: null, lineage: null, createdAt: held?.createdAt ?? now, updatedAt: now }
+export function systemWidgetRow(w: SystemWidget, active: boolean, now: string, held?: Pick<WidgetRecord, 'createdAt' | 'appearance'> | null): WidgetRecord {
+  return { id: w.id, name: w.name, kind: 'system', active, lens: null, lineage: null, ...keptAppearance(held), createdAt: held?.createdAt ?? now, updatedAt: now }
 }

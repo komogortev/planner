@@ -15,8 +15,8 @@ import type { CycleLock } from './lock'
 /** Measured limits (H1-S2-BACKEND.md, step 7): push ≤ 50 mutations and ≤ 100 KB, pull pages of 100. */
 export const PUSH_BATCH_MAX = 50
 export const PUSH_BATCH_BYTES = 100_000
-/** Bump to make every device pull from 0 once (G2, 2026-10-16: `project` widgets an older build dropped). */
-export const REPULL = 1
+/** Bump to make every device pull from 0 once. 1: G2 (`project` widgets an older build dropped). 2: C4 (`appearance` an older build stored without). */
+export const REPULL = 2
 export const PULL_PAGE = 100
 export const BACKOFF_FIRST_MS = 2_000
 export const BACKOFF_MAX_MS = 300_000
