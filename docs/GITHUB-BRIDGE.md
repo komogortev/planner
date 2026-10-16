@@ -1,9 +1,9 @@
 # GitHub bridge: project state in the planner, tasks out as issues (Design)
 
-**Status: G0 design, 2026-10-16. Proposed as D-121 ([DECISION-TREE.md](DECISION-TREE.md) §4).** The owner approved the plan
-and the recommended answers to Q1–Q6 (§9) on 2026-10-16. The D-121 record is still proposed until he reviews this
-document. If accepted, D-121 replaces D-119's GitHub Issues trial, which never started. The MCP design
-([MCP-FEEDBACK.md](MCP-FEEDBACK.md)) stays parked. No code until D-121 is accepted. Terms per [VOCABULARY.md](VOCABULARY.md),
+**Status: accepted (owner, 2026-10-16, D-121; [DECISION-TREE.md](DECISION-TREE.md) §4).** The plan and the
+recommended answers to Q1–Q6 (§9) were approved the same day. D-121 replaces D-119's GitHub Issues trial, which never
+started. The MCP design
+([MCP-FEEDBACK.md](MCP-FEEDBACK.md)) stays parked. G1 starts once restore-edit reconcile has merged (§10). Terms per [VOCABULARY.md](VOCABULARY.md),
 invariants per [ARCHITECTURE.md](ARCHITECTURE.md) (A1, A11, A13), positioning per D-120.
 
 ## 1. Goal
