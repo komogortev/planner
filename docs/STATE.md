@@ -3,9 +3,9 @@
 ## SNAPSHOT
 - **Phase/Last:** H1 built · HW S3 v2 live · H5 in real use. 2026-10-16: D-120 (open source, MIT); D-121 GitHub bridge G1–G2 live; bridge prep C1–C3 live: cards fold (`.planner.json` `brief`), New issue sends one issue (kinds = `.planner.json` `issues`, retry-safe, "Sent from koplanner" sign-off), loop back (bot line, linked PR, Ask Claude when the repo runs the Action). C4 (#165, #166): synced card tint per widget, one ⋯ menu on cards and Widgets rows, tiered project sections. **D-122 (10-16): full-scope alpha** ([ALPHA-TEST-PLAN.md](ALPHA-TEST-PLAN.md)); R1 restore-edit reconcile live (#169, A8). Rollback floor `80540b1`.
 - **Working:** prod = Worker `b0bee66` (`5157a181`), Pages `1cb8b3a`, D1 `0011`; smoke 17/17. `pnpm check` app 632 · Worker 280. **Verified on the phone (owner, 10-16):** GitHub connected, Planner card with real STATE, a real Send (#160), C4 tints and section styles (#166, after Check for updates).
-- **Broken:** **Summary** reads only open notes (v1 lens; owner only). A tint picked on a device that hasn't pulled a switch writes its on/off back (C4, accepted). **Not verified on a phone:** DEVICE-CHECKS 37–41; #148; D-105 on a real model; folded card and loop back (#158–#164). **Untested end to end:** the Claude Action answering an `@claude` issue (no repo has the workflow).
+- **Broken:** Summary v3 (#173): "Now on a later day" cannot tell a carry from another write on a later-day Task (no row history); a pre-v3 build that sees a Summary row mounts v1. A tint picked on a device that hasn't pulled a switch writes its on/off back (C4, accepted). **Not verified on a phone:** DEVICE-CHECKS 37–41; #148; D-105 on a real model; a Summary v3 brief; folded card and loop back (#158–#164). **Untested end to end:** the Claude Action answering an `@claude` issue (no repo has the workflow).
 - **Blocker:** none.
-- **Next:** R3 Summary v3 → R4 D-113 removal + R5 UI calibrations → R6 nightly export → R7 H5 S3-1 Morning schedule ([H5-S3-SCHEDULES.md](H5-S3-SCHEDULES.md), decided) → R8 G5 end to end → R10 notice; notifications re-enter after R10 (D-127); invite re-issued when the gate passes.
+- **Next:** R4 D-113 removal (now also v1 journal code) + R5 UI calibrations → R6 nightly export → R7 H5 S3-1 Morning schedule ([H5-S3-SCHEDULES.md](H5-S3-SCHEDULES.md), decided) → R8 G5 end to end → R10 notice; notifications re-enter after R10 (D-127); invite re-issued when the gate passes.
 ---
 
 ## Context
@@ -57,6 +57,8 @@
 ## Decision log
 
 Full log: PROJECT.md → Decisions log. Latest:
+
+- 2026-10-16 (R3, #173) — Summary v3: today's Tasks in four lists (done today · now on a later day · still open · dropped) derived on the device with no model call, and an on-request evening brief by the account's model (citations checked by `validateReport`, report `builtin-day-summary` v3). Listed for every account (lifts G2/#146). CodeReview 5, all confirmed: a reply checked after midnight showed as today's brief (refused now); "moved" missed pushed due dates and counted split parts (now `dayOf` > today, not created today, named "now on a later day"); a quote of a note with `<task` was dropped (fence passed to the validator); a stale pre-v3 build mounts v1 for a Summary row (accepted: no invitees yet). 10 guard mutations red. App 646 · Worker 280. Pages only.
 
 - 2026-10-16 (R2 decided, Schedule rename) — Owner answered D-123…D-130 ([H5-S3-SCHEDULES.md](H5-S3-SCHEDULES.md)): the device applies a scheduled reply on its next open; **Morning only** (Evening is a post-mortem layer, parked until alpha baseline data exists); the account's default model (a default mark in Settings → AI models; per-widget override parked); notifications deferred until R1–R10 are done (amends D-122 Q2); a failure is technical, 3 in a row pause, and a tick **skips** while a reply waits unstored (not opening the app is never a failure); two pause switches; one 30/24 h cap. D-138: the timed run is a **Schedule**; D-139: **Routine** now means a recurring personal item (done · cancel · silent, no snooze, no carry), parked until after alpha. Docs only.
 
