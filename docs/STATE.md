@@ -1,11 +1,11 @@
 # Personal Planner — STATE
 
 ## SNAPSHOT
-- **Phase/Last:** H1 built · HW S3 v2 live · H5 in real use. 2026-10-14 (road to alpha): gate A5–A7 (#138, #140, #141; Pages rollback floor `80540b1`). Alpha gap audit (#144–#146): no paste path without a model, strip/Today copy; Summary only for an account holding its record; layout A's bar wears the pocket cloth, its menu button catches taps left of the icon (#148). Vibe-code mode.
-- **Working:** prod = Pages `53d051c`, Worker `32b9ea8`, D1 `0010`; smoke 16/16. `pnpm check` app 600 · Worker 226.
-- **Broken:** **Summary** reads only open notes (v1 lens; listed only for the owner's account since #146). After a D1 restore, edits acknowledged after the restore point (Task done, answers) revert on every device (A7 finding, inferred from `engine.ts`). **Not verified on a phone:** DEVICE-CHECKS 37–41; the #148 menu tap fix; D-105 on a real model.
+- **Phase/Last:** H1 built · HW S3 v2 live · H5 in real use. 2026-10-16: D-120 positioning (personal tool, open source, MIT); D-121 GitHub bridge accepted, G1 live: Settings → Integrations connects GitHub with a fine-grained token, sealed on the Worker, never returned (#152). Alpha gate A5–A7 ✅ (Pages rollback floor `80540b1`). Vibe-code mode.
+- **Working:** prod = Pages `ab7f134`, Worker `ab7f134` (`e8ab191a`), D1 `0011`; smoke 17/17. `pnpm check` app 604 · Worker 240.
+- **Broken:** **Summary** reads only open notes (v1 lens; owner account only since #146). After a D1 restore, edits acknowledged after the restore point revert on every device (A7, inferred). **Not verified on a phone:** DEVICE-CHECKS 37–41; #148 menu tap; D-105 on a real model; **G1 with a real token** (login and expiry shown; the expiry header name is recalled).
 - **Blocker:** none.
-- **Next:** A2 tester notice (drafted privately; owner sends) → invites; tester invite expires 2026-10-24. Then: restore-edit reconcile (before the second invitee); Summary v3; copy-paste removal (D-113); H5 S3. Parked as before.
+- **Next:** owner connects GitHub on the phone (G1 check) → A2 tester notice → invites (tester invite expires 2026-10-24) → restore-edit reconcile (before the second invitee). GitHub bridge G2 (projects as a widget kind, one-time re-pull) after G1 is in use. Then Summary v3; copy-paste removal (D-113); H5 S3.
 ---
 
 ## Context
