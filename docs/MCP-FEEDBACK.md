@@ -1,7 +1,10 @@
 # Project items for coding agents: a marker and a remote MCP endpoint (Design)
 
-**Status: S0 design draft, 2026-10-14. Proposed as D-119 ([DECISION-TREE.md](DECISION-TREE.md) §4); nothing here is
-accepted.** No code until the owner accepts D-119 and the open questions in §9 are answered. This is a vision change
+**Status: PARKED (owner, 2026-10-15, D-119).** The planner stays capture + Journal/Today. Dev feedback goes to GitHub
+Issues in private repos for a two-week trial; this design stays unbuilt. **Re-entry:** 2026-10-29 trial read: the owner moved 5 or more dev items from the planner to an issue by hand, or says phone capture into Issues was too slow, or asks for project state inside the planner. None of these → retire the design with a line. On
+re-entry, §9's open questions are answered first, and S0 (§7) is step 0.
+
+Draft history: S0 design draft, 2026-10-14, proposed as D-119 ([DECISION-TREE.md](DECISION-TREE.md) §4). This is a vision change
 (§6) and a new external surface (§3), so vibe-code mode does not cover it. Terms per [VOCABULARY.md](VOCABULARY.md),
 invariants per [ARCHITECTURE.md](ARCHITECTURE.md) (A1, A4–A6, A11–A13), record protocol per
 [HW-HARNESS.md](HW-HARNESS.md) §5 and §11, auth per [H1-S2-BACKEND.md](H1-S2-BACKEND.md).
