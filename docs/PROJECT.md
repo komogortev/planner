@@ -18,6 +18,12 @@ changes records.
 
 The purpose in one line (owner, 2026-10-11): the way a team organises work in sprints, brought to a personal space — the daily loop is the whole vertical slice; wider horizons are parked drafts until it is validated (HW-HARNESS §10).
 
+**Positioning (owner, 2026-10-15, D-120):** the planner is the owner's own tool, driven to support his needs as fully as it
+can, and kept **open source and self-hostable as a portfolio project in the AI space**. There is no commercial build: the
+owner's use picks the next feature, not a market. Its role is **capture + Journal/Today**. Handing items to coding-agent
+sessions is out of scope while an existing tool is on trial (D-119). Others may use it (the alpha invite, or their own
+deployment), but nothing is built only for them.
+
 Vocabulary is fixed in [VOCABULARY.md](VOCABULARY.md); structure in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Doc map
@@ -160,6 +166,8 @@ resolved *before* its S1 code. H3–H5 design docs are written when their S0 sta
 | 2026-10-13 | **Feature layers and widget model (D-107 … D-111):** infrastructure → system features (sign-in, models, capture, sync) → core Journal + Questions → widgets. Today (was Daily) is the default system widget; Notes/Vault and a per-horizon Summary are suggested, not added; a custom widget is a clone whose lens feeds the Journal, which tags Tasks once, and widgets filter by tag | The owner works on processed Tasks, not on raw notes; one classification per run keeps model cost and disagreement down |
 | 2026-10-13 | **Financial domain deleted, no export (D-112)** (owner) | The data is outdated; the frozen code and the GitHub snapshot path cost upkeep and held a personal access token on the device |
 | 2026-10-13 | **One slice gate; copy-paste retired; alpha opens by invite (D-113 … D-116)** (owner): [SLICE-ACCEPTANCE.md](SLICE-ACCEPTANCE.md) replaces the H1, HW and H5 gates; one week for capture + sync, three days for the loop; invites wait on D-22 and the updated notice, the owner's acceptance runs alongside; source-note retention parked | Four gates written on different days against different designs; one held an item that could no longer pass (financial screens) and one a path no longer used (paste) |
+| 2026-10-15 | **Role settled: capture + Journal/Today; no agent bridge built yet (D-119 parked)** (owner) | A remote MCP endpoint for coding agents was designed ([MCP-FEEDBACK.md](MCP-FEEDBACK.md)); GitHub Issues in private repos already give phone capture, native reads in Claude Code and closing by PR, so they are trialled for two weeks before any build |
+| 2026-10-15 | **Positioning: personal tool, open source, AI-space portfolio; no commercial build (D-120)** (owner) | Role assessment: declared vision vs use vs effort, and the market. Voice-to-task and phone-to-Claude-Code capture are already sold (one voice-notes app ships a Claude Code MCP server); a self-hosted, bring-your-own-key journal-planner is a gap with a small, open-source-minded audience. The planner's value is the owner's own loop and a working showcase |
 
 ## Glossary
 
