@@ -93,6 +93,13 @@ record shrinks to `{ repo, private }`. Each invalid key falls back to its defaul
 ignored. `state` must be a plain repo path: no `..`, no leading `/`. This replaces the `statePath` field below and Q1's
 "path per project" setting.
 
+**C1, the folded card (2026-10-16, before G4).** A card opens folded: the snapshot fields named by `.planner.json`'s
+`brief` key (1–4 labels, ≤ 30 characters each; default `["Next"]`; matched case-insensitively against a `- **Label:**` item)
+and the last merge, each field cut at two lines. A field that isn't there is named on the card; with no field found, the
+snapshot's first line shows. **More** opens the full snapshot and merges, and the fold is remembered per card on the
+device. An app newer than the Worker reads a missing `brief` as the default. C2 (the G4 sheet, with per-repo issue kinds
+declared in `.planner.json`) and C3 (a thin G5) follow.
+
 **Built (2026-10-16, G2):**
 - **Records:** a widget kind `project` with an added field `project: { repo, private }`. The id is uuid5 of the
   lower-cased repo, so two devices switching on the same repo write one row.

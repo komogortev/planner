@@ -4,11 +4,13 @@ import { useOnline } from '@/composables/useOnline'
 import { storedToken } from '@/auth/signIn'
 import { IntegrationsError, projectState, type ProjectState } from '@/integrations/github'
 import type { ProjectWidget } from './projects'
-import { ageText, githubLink, snapshotBlocks } from './projectView'
+import { ageText, BRIEF_DEFAULT, briefBlocks, githubLink, snapshotBlocks } from './projectView'
 
 // A project widget (docs/GITHUB-BRIDGE.md §6, G2): the repo's STATE snapshot and recent merges as GitHub holds them, read
 // through the Worker with the user's own token. Read on mount and on Refresh only, never in the background. The last answer
 // is kept on this device, so the card shows it offline with its age. How it looks is the repo's `.planner.json`.
+// Folded by default (C1): the snapshot fields `.planner.json`'s `brief` names and the last merge; More opens the rest. The
+// fold is remembered per card on this device.
 const props = defineProps<{ project: ProjectWidget }>()
 const online = useOnline()
 const signedIn = storedToken() !== null
@@ -51,6 +53,18 @@ const snapshotError = computed(() => (state.value?.snapshot && 'error' in state.
 const merges = computed(() => (Array.isArray(state.value?.merges) ? state.value!.merges : []))
 const mergesError = computed(() => (state.value?.merges && !Array.isArray(state.value.merges) ? state.value.merges.error : null))
 const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+
+const openKey = computed(() => `planner.project.${props.project.id}.open`)
+function readOpen(): boolean {
+  try { return localStorage.getItem(openKey.value) === '1' } catch { return false }
+}
+const open = ref(readOpen())
+function toggle(): void {
+  open.value = !open.value
+  try { localStorage.setItem(openKey.value, open.value ? '1' : '0') } catch { /* stays for this visit */ }
+}
+const brief = computed(() => briefBlocks(blocks.value, state.value?.config.brief ?? BRIEF_DEFAULT))
+const lastMerge = computed(() => merges.value[0] ?? null)
 </script>
 
 <template>
@@ -70,9 +84,24 @@ const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month
     <p v-if="error" class="text-sm text-err mt-2" role="alert" data-test="project-error">{{ error }}</p>
     <p v-if="!state && !error" class="sub mt-2">{{ !signedIn || !online ? 'Sign in and go online to read this project.' : 'Reading GitHub…' }}</p>
 
-    <template v-if="state">
-      <p v-if="state.configError" class="text-xs text-warn mt-2" data-test="project-config-error">{{ state.configError }}</p>
+    <p v-if="state?.configError" class="text-xs text-warn mt-2" data-test="project-config-error">{{ state.configError }}</p>
 
+    <div v-if="state && !open" class="mt-2 grid gap-1.5" data-test="project-brief">
+      <p v-if="snapshotError" class="sub">{{ snapshotError }}</p>
+      <p v-for="(f, i) in brief.fields" :key="i" class="field">
+        <span v-if="f.label" class="lbl">{{ f.label }}</span>
+        <template v-for="(s, j) in f.segments" :key="j"><strong v-if="s.bold">{{ s.text }}</strong><template v-else>{{ s.text }}</template></template>
+      </p>
+      <p v-if="blocks.length > 0 && brief.missing.length > 0" class="text-xs text-slate-500" data-test="project-brief-missing">
+        No {{ brief.missing.join(', ') }} field in the snapshot.
+      </p>
+      <p v-if="lastMerge" class="merge sub" data-test="project-last-merge">
+        <span class="min-w-0 truncate">Last merged #{{ lastMerge.number }} {{ lastMerge.title }}</span>
+        <span class="shrink-0">{{ day(lastMerge.mergedAt) }}</span>
+      </p>
+    </div>
+
+    <template v-if="state && open">
       <div v-if="state.snapshot" class="mt-3" data-test="project-snapshot">
         <p v-if="snapshotError" class="sub">{{ snapshotError }}</p>
         <template v-else>
@@ -104,6 +133,10 @@ const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month
         Default layout: add a .planner.json to the repo to change it.
       </p>
     </template>
+
+    <button v-if="state" class="toggle" :aria-expanded="open" data-test="project-toggle" @click="toggle">
+      {{ open ? 'Less ▴' : 'More ▾' }}
+    </button>
   </section>
 </template>
 
@@ -113,6 +146,19 @@ const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month
 .blocks { display: grid; gap: 0.35rem; font-size: 0.85rem; line-height: 1.35; overflow-wrap: anywhere; }
 .blocks .item { padding-left: 0.9rem; position: relative; }
 .blocks .item::before { content: '•'; position: absolute; left: 0; color: rgb(var(--s-400)); }
+.field {
+  font-size: 0.85rem; line-height: 1.35; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.lbl {
+  font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+  color: rgb(var(--s-400)); margin-right: 0.4rem;
+}
+.toggle {
+  display: block; width: 100%; min-height: 2.75rem; margin-top: 0.5rem; margin-bottom: -0.5rem;
+  font-size: 0.78rem; color: rgb(var(--s-400)); background: transparent; border: 0;
+  border-top: 1px solid var(--glass-btn-edge);
+}
 .merges { display: grid; gap: 0.3rem; font-size: 0.85rem; }
 .merge { display: flex; justify-content: space-between; gap: 0.75rem; min-width: 0; }
 .merge a { text-decoration: underline; text-underline-offset: 2px; }
