@@ -3,7 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Personal planning + tracking PWA — commitments, intentions, market log",
+  "description": "Local-first capture PWA with an AI Journal that turns notes into Tasks and asks before it assumes",
+  "license": "MIT",
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build && node -e \"if(!process.env.CF_PAGES)require('fs').copyFileSync('dist/index.html','dist/404.html')\"",
