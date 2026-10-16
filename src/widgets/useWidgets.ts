@@ -5,7 +5,7 @@ import { db } from '@/db'
 import { writeRecords } from '@/db/records'
 import { useLiveQuery } from '@/composables/useLiveQuery'
 import { syncSoon } from '@/sync'
-import { pendingJournal } from '@/harness/loop'
+import { pendingSummary } from '@/harness/summaryRun'
 import { resolveSystemWidgets, SYSTEM_WIDGETS, systemWidgetRow, type HeldWidget, type SystemWidgetId } from './system'
 import { projectWidgetId, projectWidgetRow, resolveProjectWidgets } from './projects'
 import type { WidgetRecord } from '@/domain/records'
@@ -37,9 +37,6 @@ export async function setWidgetTint(id: string, tint: string | null): Promise<{ 
   const appearance = tint === null ? null : { tint }
   const sys = SYSTEM_WIDGETS.find((s) => s.id === id)
   let row: WidgetRecord
-  // A widget that exists only with its record (Summary) is not created by a colour pick: its card can show for a pending
-  // run on a device whose account doesn't list it, and a row would list it everywhere (needsRecord).
-  if (sys?.needsRecord && (!held || held.deletedAt)) return { ok: false, error: 'This widget is not on your list.' }
   // Known limit (C4, accepted): rows are replaced whole, so a pick on a device that hasn't pulled a switch made elsewhere
   // writes this device's `active` back. The Worker keeps the conflict revision.
   if (sys) row = { ...systemWidgetRow(sys, held?.active ?? sys.defaultActive, now, held), appearance }
@@ -65,7 +62,7 @@ export async function setWidgetActive(id: SystemWidgetId, active: boolean): Prom
   const w = SYSTEM_WIDGETS.find((s) => s.id === id)
   if (!w) return { ok: false, error: 'unknown widget' }
   // Unmounting the Summary card aborts its model call's follow (RunStep); the reply would then wait unseen.
-  if (id === 'system-summary' && !active && pendingJournal() !== null) return { ok: false, error: 'Summary has a run waiting. Finish or stop it first.' }
+  if (id === 'system-summary' && !active && pendingSummary() !== null) return { ok: false, error: 'Summary has a run waiting. Finish or stop it first.' }
   const held = await db.widgets.get(id)
   const r = await writeRecords(db, [{ recordKind: 'widget', row: { ...systemWidgetRow(w, active, new Date().toISOString(), held) } }], new Date().toISOString())
   if (!r.ok) return { ok: false, error: r.errors.join('; ') }

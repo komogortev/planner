@@ -1,6 +1,6 @@
 # Alpha test plan — full scope (2026-10-16)
 
-**Status: accepted (owner, 2026-10-16) with the recommended answers to Q1–Q4 and Q6 (D-122); Q5 open. R1 ✅ 2026-10-16 (A8, #169). R2 ✅ decided 2026-10-16: [H5-S3-SCHEDULES.md](H5-S3-SCHEDULES.md), D-123…D-130 (Morning schedule only; notifications deferred past R10, which amends Q2). *Routine* renamed to **Schedule** (D-138); *Routine* now names a recurring personal item, parked (D-139).** Owner, 2026-10-16: alpha starts only when every roadmap item up to and including
+**Status: accepted (owner, 2026-10-16) with the recommended answers to Q1–Q4 and Q6 (D-122); Q5 open. R1 ✅ 2026-10-16 (A8, #169). R3 ✅ 2026-10-16 (A9, #173). R2 ✅ decided 2026-10-16: [H5-S3-SCHEDULES.md](H5-S3-SCHEDULES.md), D-123…D-130 (Morning schedule only; notifications deferred past R10, which amends Q2). *Routine* renamed to **Schedule** (D-138); *Routine* now names a recurring personal item, parked (D-139).** Owner, 2026-10-16: alpha starts only when every roadmap item up to and including
 H5 S3 has landed, plus UI calibrations found along the way. This **supersedes D-114** ("the declared slice is enough to
 open alpha"). The change is D-122 in [DECISION-TREE.md](DECISION-TREE.md). [SLICE-ACCEPTANCE.md](SLICE-ACCEPTANCE.md) stays the one gate: §1 gains rows A8–A13 (§3 below). Terms per
 [VOCABULARY.md](VOCABULARY.md).
@@ -44,7 +44,7 @@ automated test, a DEVICE-CHECKS row the owner ran on the phone, or **gap**: not 
 | T12 | Proposals | A "Done? A note says…" proposal: read the buttons, try Correct… | Buttons name the outcome; Correct… is read by the next run | DEVICE-CHECKS 37 — **gap: not run on a phone** |
 | T13 | Today | Tasks from your notes show on Today; mark one done, push one to tomorrow | Done is gone tomorrow; pushed shows tomorrow; untouched stays, marked overdue | L3, L4 |
 | T14 | Closed mid-run | Start a run, close the app, reopen a minute later | The answer is there, no second run | DEVICE-CHECKS 35; L6 |
-| T15 | Summary | Open Summary at the end of a day | What got done, what moved to tomorrow, what is still open, what was dropped | **gap: Summary v3 not built; today hidden from testers (G2, #146)** |
+| T15 | Summary | Open Summary at the end of a day | What got done, what is now on a later day, what is still open, what was dropped; Write the evening brief adds a few lines from your model | `summaryLens.test.ts` (#173) — **gap: a real model brief not run on a phone** |
 | T16 | Runs without opening the app | Leave the app closed overnight with a model set | Today is ready in the morning; a pause switch stops it | **gap: H5 S3 designed (D-123…D-130), not built** |
 
 ### 1.4 Projects (optional, needs a GitHub token)

@@ -15,25 +15,24 @@ const byId = (id: string) => SYSTEM_WIDGETS.find((w) => w.id === id)!
 const active = (rows: Parameters<typeof resolveSystemWidgets>[0]) => Object.fromEntries(resolveSystemWidgets(rows).map((w) => [w.id, w.active]))
 
 describe('resolveSystemWidgets', () => {
-  it('no rows: Today on, Notes off (D-108…D-110), in Dashboard order; Summary not listed (G2)', () => {
-    expect(resolveSystemWidgets([]).map((w) => [w.name, w.active])).toEqual([['Today', true], ['Notes', false]])
+  it('no rows: Today on, Summary and Notes off (D-108…D-110), in Dashboard order', () => {
+    expect(resolveSystemWidgets([]).map((w) => [w.name, w.active])).toEqual([['Today', true], ['Summary', false], ['Notes', false]])
   })
 
   it('a row wins over the default, both ways', () => {
-    expect(active([{ id: 'system-today', active: false }, { id: 'system-notes', active: true }])).toEqual({ 'system-today': false, 'system-notes': true })
+    expect(active([{ id: 'system-today', active: false }, { id: 'system-notes', active: true }])).toEqual({ 'system-today': false, 'system-summary': false, 'system-notes': true })
   })
 
   it('a deleted row falls back to the default; a row for another id is ignored', () => {
-    expect(active([{ id: 'system-today', active: false, deletedAt: NOW }, { id: 'someone-else', active: true }])).toEqual({ 'system-today': true, 'system-notes': false })
+    expect(active([{ id: 'system-today', active: false, deletedAt: NOW }, { id: 'someone-else', active: true }])).toEqual({ 'system-today': true, 'system-summary': false, 'system-notes': false })
   })
 
-  it('Summary is listed, in its Dashboard place, only for an account holding its record, switched on or off (G2)', () => {
-    expect(resolveSystemWidgets([{ id: 'system-summary', active: false }]).map((w) => [w.name, w.active])).toEqual([['Today', true], ['Summary', false], ['Notes', false]])
+  it('Summary v3 is listed for every account and switches on with its row (D-122 Q3, R3; lifts G2)', () => {
     expect(active([{ id: 'system-summary', active: true }])).toEqual({ 'system-today': true, 'system-summary': true, 'system-notes': false })
   })
 
-  it('negative control: a deleted Summary record lists nothing, and an active row for another id does not list it', () => {
-    expect(active([{ id: 'system-summary', active: true, deletedAt: NOW }, { id: 'summary', active: true }])).toEqual({ 'system-today': true, 'system-notes': false })
+  it('a deleted Summary row falls back to off, and an active row for another id does not switch it on', () => {
+    expect(active([{ id: 'system-summary', active: true, deletedAt: NOW }, { id: 'summary', active: true }])).toEqual({ 'system-today': true, 'system-summary': false, 'system-notes': false })
   })
 })
 

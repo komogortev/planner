@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import DailyCard from '@/harness/DailyCard.vue'
-import JournalCard from '@/harness/JournalCard.vue'
+import SummaryCard from '@/harness/SummaryCard.vue'
 import QuestionsStrip from '@/harness/QuestionsStrip.vue'
 import { useLoop2 } from '@/harness/useLoop2'
 import NotesDialog from '@/notes/NotesDialog.vue'
 import { useWidgets } from '@/widgets/useWidgets'
 import ProjectCard from '@/widgets/ProjectCard.vue'
-import { pendingJournal } from '@/harness/loop'
+import { pendingSummary } from '@/harness/summaryRun'
 
 // Dashboard v2 (HW-HARNESS §11, S3 v2 slice S3): Daily on top (today's Tasks, editable summary, Coming up), the optional
 // written summary and the notes (input history) in their own scroll box, and the questions strip docked at the bottom
@@ -35,7 +35,7 @@ onBeforeUnmount(() => ro?.disconnect())
     <div class="cards" :class="{ 'cards-docked': stripH > 0 }" :style="{ '--strip-h': `${stripH}px` }" data-test="dashboard-cards">
       <DailyCard v-if="isActive('system-today')" :loop="loop" />
       <!-- A Summary run still waiting keeps its card (switched off on another device): unmounting would abort the call. -->
-      <JournalCard v-if="isActive('system-summary') || pendingJournal() !== null" />
+      <SummaryCard v-if="isActive('system-summary') || pendingSummary() !== null" />
       <NotesDialog v-if="isActive('system-notes')" :now="loop.now.value" />
       <ProjectCard v-for="p in projects.filter((x) => x.active)" :key="p.id" :project="p" />
       <p v-if="loaded && !widgets.some((w) => w.active) && !projects.some((p) => p.active)" class="none" data-test="dashboard-none">No widgets on. Switch one on in Widgets.</p>
