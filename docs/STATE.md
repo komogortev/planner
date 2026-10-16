@@ -5,7 +5,7 @@
 - **Working:** prod = Worker `b0bee66` (`5157a181`), Pages `dff8ba8`, D1 `0011`; smoke 17/17. `pnpm check` app 626 · Worker 280. **Verified on the phone (owner, 10-16):** GitHub connected, Planner card with real STATE, a real Send (#160), C4 tints and section styles (#166, after Check for updates).
 - **Broken:** **Summary** reads only open notes (v1 lens; owner only). After a D1 restore, edits acknowledged after the restore point revert (A7, inferred). A tint picked on a device that hasn't pulled a switch writes its on/off back (C4, accepted). **Not verified on a phone:** DEVICE-CHECKS 37–41; #148; D-105 on a real model; folded card and loop back (#158–#164). **Untested end to end:** the Claude Action answering an `@claude` issue (no repo has the workflow).
 - **Blocker:** none.
-- **Next:** owner calibrates cards and tints on the phone → A2 tester notice → invites (expires 2026-10-24) → restore-edit reconcile. Optional: add the Claude workflow to a repo to close the Action loop. Then Summary v3; D-113; H5 S3.
+- **Next:** full-scope alpha (owner 10-16, proposed D-122 supersedes D-114): every item through H5 S3 lands first, plan and gap in [ALPHA-TEST-PLAN.md](ALPHA-TEST-PLAN.md) — R1 restore-edit reconcile → R2 H5 S3 design → Summary v3 → D-113 removal + UI calibrations → nightly export → H5 S3 build → G5 end to end → notice; invite re-issued when the gate passes.
 ---
 
 ## Context
