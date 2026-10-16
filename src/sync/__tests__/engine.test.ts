@@ -552,6 +552,45 @@ describe('review findings', () => {
       expect(await a.db.outbox.count()).toBe(0)
     })
 
+    // A7 finding: a note removed after the restore point came back on every device, because the sweep took the server's
+    // restored (older, not removed) copy. Known positive: the restore really brings the note back on the server.
+    it('a note removed after the restore point stays removed (restore-edit reconcile)', async () => {
+      const a = device(server)
+      await captureEntry('one', a.db) // v1
+      await a.engine.run()
+      const e = (await a.db.entries.toArray())[0]!
+      const removed = { ...e, deletedAt: '2026-10-11T10:00:00.000Z', serverVersion: undefined }
+      await a.db.entries.update(e.id, { deletedAt: removed.deletedAt })
+      await a.db.outbox.add({ entityId: e.id, op: 'delete', baseVersion: 1, payload: removed as never, attempts: 0, lastError: null, queuedAt: '2026-10-11T10:00:00.000Z' })
+      await captureEntry('two', a.db)
+      await a.engine.run() // the removal is v2, "two" v3
+      server.restoreTo(1)
+      expect(server.rows.get(e.id)?.deletedAt).toBeNull()
+      await a.engine.run()
+      expect((await a.db.entries.get(e.id))!.deletedAt).toBe('2026-10-11T10:00:00.000Z')
+      expect(server.rows.get(e.id)?.deletedAt).toBe('2026-10-11T10:00:00.000Z')
+      expect(await a.db.outbox.count()).toBe(0)
+    })
+
+    // Review finding (A7): an applied push after a restore is numbered below the version the device held. Recording only a
+    // higher version left the old one in place, and the sweep that push started sent the row a second time.
+    it('an edit pushed after a restore records its new, lower version and is sent once', async () => {
+      const a = device(server)
+      for (const t of ['one', 'two', 'three']) await captureEntry(t, a.db)
+      await a.engine.run() // "three" is v3
+      const e = (await a.db.entries.orderBy('createdAt').toArray())[2]!
+      server.restoreTo(1) // "two" and "three" are lost; the counter is at 1
+      const edited = { ...e, body: 'three edited', serverVersion: undefined }
+      await a.db.entries.update(e.id, { body: 'three edited' })
+      await a.db.outbox.add({ entityId: e.id, op: 'upsert', baseVersion: 3, payload: edited as never, attempts: 0, lastError: null, queuedAt: '2026-10-11T10:00:00.000Z' })
+      server.requests.length = 0
+      await a.engine.run() // the edit is applied as v2, at or below the cursor: the sweep runs in the same cycle
+      const pushes = server.requests.filter((r) => r.path === '/sync/push').flatMap((r) => (r.body as { mutations: { entityId: string }[] }).mutations.map((m) => m.entityId))
+      expect(pushes.filter((id) => id === e.id)).toHaveLength(1)
+      expect((await a.db.entries.get(e.id))!.serverVersion).toBe(2)
+      expect(server.rows.get(e.id)?.body).toBe('three edited')
+    })
+
     // Negative control: a server that keeps saying its head is below the cursor cannot make the client loop.
     it('rewinds at most once per cycle, even if the server keeps claiming a low head across several pages', async () => {
       const a = device(server)

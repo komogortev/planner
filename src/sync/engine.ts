@@ -11,6 +11,7 @@ import type { Entry } from '@/domain/entry'
 import { cleanRecord, flatten, RECORD_KINDS, RECORD_TABLE, type RecordKind } from '@/domain/records'
 import { outboxKey, recordIdOf, recordTables } from '@/db/records'
 import type { CycleLock } from './lock'
+import { requeueRestored } from './sweep'
 
 /** Measured limits (H1-S2-BACKEND.md, step 7): push ≤ 50 mutations and ≤ 100 KB, pull pages of 100. */
 export const PUSH_BATCH_MAX = 50
@@ -75,7 +76,7 @@ type PushResult = { entityId: string; status: 'applied' | 'duplicate' | 'rejecte
 /** `head`: the account's newest version on the server (D-58). Absent from an older Worker. */
 type PullResponse = { changes: Entry[]; records?: RecordWire[]; cursor: number; more: boolean; head?: number }
 /** A record as the Worker sends it: `{ recordKind, id, ...fields, deletedAt, serverVersion }`. Absent from an older Worker. */
-type RecordWire = { recordKind: string; id: string; serverVersion: number } & Record<string, unknown>
+export type RecordWire = { recordKind: string; id: string; serverVersion: number } & Record<string, unknown>
 
 /**
  * `entityId` is the OUTBOX key (a record's is `kind/id`, so it cannot meet an entry's); `id` is the bare id; the mutation sent
@@ -347,7 +348,7 @@ export class SyncEngine {
           // legitimately carries an old version: it proves nothing.) The marker is written NOW: the sweep it starts is finished by
           // whichever cycle comes next, even if this one fails before the pull.
           if (r.status === 'applied' && typeof r.serverVersion === 'number' && r.serverVersion <= cursorAtStart) await this.markRewind(userId, gen)
-          await this.acknowledge(g, r.serverVersion, gen)
+          await this.acknowledge(g, r.serverVersion, r.status === 'applied', gen)
         } else if (r.status === 'rejected') {
           moved++ // the row leaves the pending set, so the loop moves on (D-27)
           await db.outbox.bulkUpdate(g.seqs.map((seq) => ({ key: seq, changes: { rejectedAt: new Date(this.now()).toISOString(), lastError: r.error ?? 'rejected by the server' } })))
@@ -361,8 +362,12 @@ export class SyncEngine {
     }
   }
 
-  /** The server has this change: drop its outbox rows, record the version, and re-base what was queued meanwhile. */
-  private async acknowledge(g: Group, serverVersion: number | undefined, gen: number): Promise<void> {
+  /**
+   * The server has this change: drop its outbox rows, record the version, and re-base what was queued meanwhile. An `applied`
+   * version is stamped even when it is lower than the one held: after a restore the counter restarts below it (D-58), and a
+   * stale high version would make the sweep send the row again (A7). A `duplicate` only ever raises it.
+   */
+  private async acknowledge(g: Group, serverVersion: number | undefined, applied: boolean, gen: number): Promise<void> {
     const { db } = this.d
     await db.transaction('rw', [db.entries, db.outbox, ...recordTables(db)], async () => {
       this.live(gen) // a wiped device must not get this account version stamped back onto it
@@ -371,10 +376,10 @@ export class SyncEngine {
       if (g.recordKind) {
         const table = db.table(RECORD_TABLE[g.recordKind])
         const row = await table.get(g.id)
-        if (row && (row.serverVersion === null || row.serverVersion < serverVersion)) await table.update(g.id, { serverVersion })
+        if (row && (applied || row.serverVersion === null || row.serverVersion < serverVersion)) await table.update(g.id, { serverVersion })
       } else {
         const entry = await db.entries.get(g.entityId)
-        if (entry && (entry.serverVersion === null || entry.serverVersion < serverVersion)) await db.entries.update(g.entityId, { serverVersion })
+        if (entry && (applied || entry.serverVersion === null || entry.serverVersion < serverVersion)) await db.entries.update(g.entityId, { serverVersion })
       }
       // An edit queued while this push was in flight was made on top of THIS version, not the older one it recorded.
       await db.outbox.where('entityId').equals(g.entityId).modify((row) => { row.baseVersion = serverVersion })
@@ -428,6 +433,7 @@ export class SyncEngine {
         // pushed, and the server decides then (§6.2). The cursor still moves past it.
         const queued = new Set((await db.outbox.toArray()).map((r) => r.entityId))
         this.live(gen) // the read waited for any clear queued ahead of this transaction; a reset it made must win
+        if (rewound && (await requeueRestored(db, page.changes, incoming, queued, new Date(this.now()).toISOString()))) this.again = true
         const apply = page.changes.filter((c) => typeof c?.id === 'string' && typeof c.body === 'string' && !queued.has(c.id))
         await db.entries.bulkPut(apply.map((c): Entry => ({
           id: c.id, body: c.body, createdAt: c.createdAt, occurredAt: c.occurredAt ?? null, categoryId: c.categoryId ?? null,

@@ -1,9 +1,8 @@
 # Alpha test plan — full scope (2026-10-16)
 
-**Status: draft for owner review.** Owner, 2026-10-16: alpha starts only when every roadmap item up to and including
+**Status: accepted (owner, 2026-10-16) with the recommended answers to Q1–Q4 and Q6 (D-122); Q5 open. R1 ✅ 2026-10-16 (A8).** Owner, 2026-10-16: alpha starts only when every roadmap item up to and including
 H5 S3 has landed, plus UI calibrations found along the way. This **supersedes D-114** ("the declared slice is enough to
-open alpha"). The change is proposed as D-122 and is recorded in [DECISION-TREE.md](DECISION-TREE.md) when the owner accepts
-this plan. [SLICE-ACCEPTANCE.md](SLICE-ACCEPTANCE.md) stays the one gate: §1 gains rows A8–A13 (§3 below). Terms per
+open alpha"). The change is D-122 in [DECISION-TREE.md](DECISION-TREE.md). [SLICE-ACCEPTANCE.md](SLICE-ACCEPTANCE.md) stays the one gate: §1 gains rows A8–A13 (§3 below). Terms per
 [VOCABULARY.md](VOCABULARY.md).
 
 **Consequence for the calendar.** The first tester's invite expires **2026-10-24**. H5 S3 alone has no design yet (its own

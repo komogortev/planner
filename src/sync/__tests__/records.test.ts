@@ -263,6 +263,84 @@ describe('the server went back in time (D-58)', () => {
   })
 })
 
+// A7 finding (RUNBOOK §"Before and after a D1 restore"): a restore puts a row the server still has back at an OLDER version.
+// The sweep used to take that row as the truth, so an edit acknowledged after the restore point (a Task done, an answer)
+// reverted on every device. A row the server returns below the version this device acknowledged for it is the restored copy:
+// the device's edit goes back up, based on the server's version.
+describe('restore-edit reconcile (D-58, A7)', () => {
+  const answered = { state: 'answered', answer: 'the corner shop', answeredAt: NOW }
+
+  // Known positive: the restore really rewinds the answer on the server, so "answered afterwards" cannot pass by accident.
+  it('an answer acknowledged after the restore point survives the restore, on this device and on the server', async () => {
+    const a = device(server)
+    await write(a, 'question', question({ id: 'q-edit' })) // v1 open
+    await captureEntry('a note', a.db) // v2
+    await a.engine.run()
+    await write(a, 'question', question({ id: 'q-edit', ...answered })) // v3 answered
+    await a.engine.run()
+    expect(server.seq).toBe(3)
+    server.restoreTo(2)
+    expect(server.records.get('question/q-edit')).toMatchObject({ state: 'open', version: 1 }) // the restored copy
+    server.requests.length = 0
+    await a.engine.run()
+    expect((await a.db.questions.get('q-edit'))!.state).toBe('answered')
+    expect(server.records.get('question/q-edit')).toMatchObject({ state: 'answered' })
+    const sent = server.requests.filter((r) => r.path === '/sync/push').flatMap((r) => (r.body as { mutations: { entityId: string; baseVersion: number | null }[] }).mutations)
+    expect(sent).toEqual([expect.objectContaining({ entityId: 'q-edit', baseVersion: 3 })]) // the version this device held: stale on the server, so it keeps a revision
+    expect(await a.db.outbox.count()).toBe(0)
+    expect((await a.db.syncMeta.toArray())[0]!.reconcile).toBeFalsy()
+  })
+
+  it('every device ends with the answer: one that had pulled it, and one that never saw it', async () => {
+    const a = device(server)
+    const b = device(server)
+    await write(a, 'question', question({ id: 'q-both' })) // v1
+    await captureEntry('a note', a.db) // v2
+    await a.engine.run()
+    await write(a, 'question', question({ id: 'q-both', ...answered })) // v3
+    await a.engine.run()
+    await b.engine.run() // b acknowledged v3 as well
+    server.restoreTo(2)
+    await b.engine.run() // b notices first and puts the answer back
+    await a.engine.run()
+    const c = device(server) // a device signed in after all of it
+    await c.engine.run()
+    for (const d of [a, b, c]) expect((await d.db.questions.get('q-both'))!.state).toBe('answered')
+  })
+
+  it('a Task marked done after the restore point stays done', async () => {
+    const a = device(server)
+    const st = { id: 'n-task', followUpOn: null, by: 'owner' as const }
+    await write(a, 'entryState', { ...st, state: 'open', updatedAt: NOW }) // v1
+    await captureEntry('a note', a.db) // v2
+    await a.engine.run()
+    await write(a, 'entryState', { ...st, state: 'done', updatedAt: '2026-10-11T19:00:00.000Z' }) // v3
+    await a.engine.run()
+    server.restoreTo(2)
+    await a.engine.run()
+    expect((await a.db.entryStates.get('n-task'))!.state).toBe('done')
+    expect(server.records.get('entryState/n-task')).toMatchObject({ state: 'done' })
+  })
+
+  // Negative control: the rule is "below what this device acknowledged", not "the device always wins". A row another device
+  // wrote after the restore, at a version above this device's, is newer and is taken.
+  it('a row the server holds at a version above this device’s is taken from the server', async () => {
+    const a = device(server)
+    const b = device(server)
+    await write(a, 'question', question({ id: 'q-other' })) // v1
+    await captureEntry('one', a.db) // v2
+    await captureEntry('two', a.db) // v3
+    await a.engine.run() // a: q-other at v1, cursor 3
+    server.restoreTo(1) // the notes are lost; q-other is untouched at v1
+    await b.engine.run() // b pulls q-other v1
+    await write(b, 'question', question({ id: 'q-other', state: 'answered', answer: 'from b', answeredAt: NOW })) // v2
+    await b.engine.run()
+    await a.engine.run() // head 2 < cursor 3: the sweep runs; q-other is at 2, above a's 1
+    expect((await a.db.questions.get('q-other'))!.answer).toBe('from b')
+    expect(server.records.get('question/q-other')).toMatchObject({ answer: 'from b' })
+  })
+})
+
 describe('writeRecords', () => {
   it('refuses a whole write when any record is invalid: nothing is stored, nothing is queued', async () => {
     const a = device(server)

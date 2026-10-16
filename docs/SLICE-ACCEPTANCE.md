@@ -11,7 +11,7 @@ Each item is **automated** (a named test proves it on every `pnpm check`, so CI 
 observes it), or both. An item marked automated is never dropped here without its test being dropped too, and a dropped
 test lowers the raise-only test-count floor explicitly in the same PR.
 
-## 1. Alpha gate — invites open when all are true (D-114)
+## 1. Alpha gate — invites open when all are true (D-114, widened by D-122)
 
 | # | Item | State |
 |---|---|---|
@@ -23,11 +23,17 @@ test lowers the raise-only test-count floor explicitly in the same PR.
 | A5 | `/log` gets its own low-limit binding (it shared the push per-IP limit, with no global cap on an anonymous D1 writer) | ✅ `RL_LOG_IP` 10/min per address, and a global cap of 200 reports per rolling 24 h read from the table itself (one row by key, no write when refused); `api/test/log.test.ts` "POST /log limits (A5)", each guard mutation-checked |
 | A6 | A build older than the device's data never runs on it (Pages rollback past a Dexie bump). Redefined 2026-10-14: Dexie 4 does not fail to load on a downgrade, it opens and patches the newer database, so the risk is a stale build writing newer data, not a broken screen | ✅ `src/db/staleBuild.ts`: checked before Dexie opens, the app mounts only "Please update the app", no sync; `src/db/__tests__/staleBuild.test.ts` (a newer database is reported and left at its version; same version and a schema patch open; no database is not created; a newer build still upgrades), each comparison mutation-checked; `databases()` polled with a 1.5 s ceiling (a Safari hang starts the app as before, never a blank screen); a window already open reloads through the check when another upgrades the database; Reopen asks the service worker for the update. Seen in the pane: stored 80 stays 80, cold start and an open window both land on the update screen. Rollback floor in RUNBOOK |
 | A7 | The restore path is known before testers depend on it: D1 Time Travel retention read on this account (the notice's `[N days]`), and RUNBOOK names what testers redo after a restore (model key, sign-in: server-only rows that devices cannot re-upload) | ✅ 2026-10-14: **7 days** (Free plan, Cloudflare docs); a bookmark resolves back to the creation day (2026-10-10), the limit itself measurable from 2026-10-18 (RUNBOOK). RUNBOOK §"Before and after a D1 restore": a read-only query counts what a restore to T would undo (run on prod: 1 session in the last day), and a table of what each count means for testers. **Found:** edits acknowledged after T to existing notes or records (Task done, answers) revert on every device. That is a sync gap, not this item; re-entry due (proposed: before the first invitee beyond the tester) |
+| A8 | Restore-edit reconcile (D-122): an edit acknowledged after the restore point T (a Task done, an answer, a removal) survives a restore to T on every device that holds it | ✅ `src/sync/sweep.ts`; `records.test.ts` "restore-edit reconcile" (answer, Task done, three devices, and the negative control: a newer server row is taken), `engine.test.ts` "a note removed after the restore point stays removed"; the fake server now restores old versions, as Time Travel does |
+| A9 | Summary v3, listed for every account (D-122 Q3) | open — R3 |
+| A10 | No paste path left in the code (D-113) | open — R4 |
+| A11 | The nightly export runs and covers the owner's account only (D-122 Q1) | open — R6 |
+| A12 | H5 S3: Today arrives on a day the app was not opened; a pause stops it; notifications (D-122 Q2); a second account's schedule never runs with the first's key | open — R2 design, R7 |
+| A13 | G5: one real issue → Action → PR → merge shown on a planner-repo card (D-122 Q4) | open — R8 |
 
 Also re-enters at alpha, owner's call and not a gate item: the nightly export cron (deferred 2026-10-11; its proposed
 re-entry is "before the first invitee beyond the tester"). Today's backup is each account's own export plus D1 Time Travel. Per invitee: one with an iPhone or iPad re-opens H1-S1-SPIKE step C (the installed-app sign-in return) before they sign in.
 
-The owner's own acceptance (§2, §3) runs **alongside** alpha, not before it (D-114 amends D-80's order). An invitee
+The owner's own acceptance (§2, §3) runs **alongside** alpha, not before it (D-114 amends D-80's order; D-122 keeps that). An invitee
 without a key has capture and sync only. Invites: `node api/scripts/invite.mjs create <email> --remote` (RUNBOOK); the
 first tester's invite expires 2026-10-24.
 
