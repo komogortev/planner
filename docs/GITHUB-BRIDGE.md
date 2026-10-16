@@ -112,6 +112,19 @@ planner repo has no Claude workflow) and "From a note". **Open:** two sends of o
 create returns) can both create, if Cloudflare keeps running a Worker after its client disconnects (not verified); a GitHub
 login renamed after connect makes the `creator` filter miss earlier sends (re-entry: a duplicate seen, or a rename).
 
+**C3, the loop back (2026-10-16, thin G5).** Each sent issue on the card (open, or closed in the last 7 days; open and
+closed are read apart so newer closed ones can't push an open one off) shows the first line of the last bot comment
+(`claude[bot]` first, any bot otherwise) and the last same-repo PR that cross-references it (open, closed, merged). The
+`/state` route says `claude: true | false | null`: true when a workflow uses `anthropics/claude-code-action` **and** has an
+issue trigger (a review-only workflow never answers an issue). The sheet then offers **Ask Claude to work on it** (adds
+`@claude please work on this issue.`); otherwise it shows set-up help (`/install-github-app`, or the workflow plus a
+`CLAUDE_CODE_OAUTH_TOKEN` secret). The planner never writes workflows. Every sent body ends with a visible sign-off,
+`_Sent from koplanner_` (owner, 2026-10-16), then the hidden request marker. A rate limit during these reads leaves those
+parts empty instead of failing the card. Worst case about 25 GitHub calls a read, under the Worker's 50. **Limits:** only
+the newest 100 comments and the first 100 timeline events are read; Claude's line can be missed past those. That the Action
+answers an issue opened with `@claude` in its body is recalled, not checked, until the first real run on a repo with the
+workflow.
+
 **Built (2026-10-16, G2):**
 - **Records:** a widget kind `project` with an added field `project: { repo, private }`. The id is uuid5 of the
   lower-cased repo, so two devices switching on the same repo write one row.

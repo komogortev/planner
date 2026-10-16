@@ -184,10 +184,81 @@ async function readConfig(token: string, repo: string): Promise<{ config: Projec
 export const ISSUES_SHOWN = 5
 /** How far back a retried send looks for its request id (newest first): far more than one person sends in a retry window. */
 const DEDUPE_SCAN = 50
-export interface SentIssue { number: number; title: string; url: string; createdAt: string; body?: string }
+/**
+ * An issue the planner sent. C3 adds the loop back: its state, the first line of the last bot comment (the Claude Action
+ * reports in one comment it keeps editing), and the last pull request in this repo that references it.
+ */
+export interface SentIssue {
+  number: number; title: string; url: string; createdAt: string; body?: string
+  state: 'open' | 'closed'; closedAt: string | null; comments?: number
+  bot?: string | null; pr?: { number: number; url: string; state: 'open' | 'closed' | 'merged' } | null
+}
+/** A closed sent issue stays on the card this long, then drops off (GITHUB-BRIDGE §8). */
+export const CLOSED_SHOWN_MS = 7 * 86_400_000
+/** Open ones, and closed ones from the last 7 days, newest first as GitHub listed them. */
+export const recentSent = (list: SentIssue[], now: number) =>
+  list.filter((i) => i.state === 'open' || (i.closedAt !== null && now - Date.parse(i.closedAt) <= CLOSED_SHOWN_MS))
+
+const BOT_LINE_MAX = 160
+/**
+ * The first readable line of the last comment a bot wrote: markdown marks, links, HTML comments and checkbox prefixes
+ * stripped. Null when no bot has commented. Text only: the card renders it as text.
+ */
+export function lastBotLine(comments: unknown): string | null {
+  if (!Array.isArray(comments)) return null
+  // Claude's own app comment first (another bot, e.g. a deploy preview, may comment later); any bot when there is none.
+  const newest = [...(comments as Record<string, unknown>[])].reverse().filter((c) => (c.user as { type?: unknown } | null)?.type === 'Bot' && typeof c.body === 'string')
+  const bot = newest.find((c) => (c.user as { login?: unknown }).login === 'claude[bot]') ?? newest[0]
+  if (!bot) return null
+  const line = (bot.body as string)
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .split(/\r?\n/)
+    .map((l) => l.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/<[^>]+>/g, '').replace(/^[\s>#*-]*(\[[ xX]\]\s*)?/, '').replace(/[*_`~]/g, '').trim())
+    .find((l) => l.length > 0)
+  if (!line) return null
+  return line.length > BOT_LINE_MAX ? `${line.slice(0, BOT_LINE_MAX - 1).trimEnd()}…` : line
+}
+
+/** The last pull request in this same repo that the issue's timeline says references it. */
+export function linkedPr(repo: string, timeline: unknown): SentIssue['pr'] {
+  if (!Array.isArray(timeline)) return null
+  let out: SentIssue['pr'] = null
+  for (const e of timeline as Record<string, unknown>[]) {
+    if (e.event !== 'cross-referenced') continue
+    const src = (e.source as { issue?: Record<string, unknown> } | null)?.issue
+    const pr = src?.pull_request as { merged_at?: unknown } | undefined
+    if (!src || !pr || typeof src.number !== 'number' || typeof src.html_url !== 'string') continue
+    // Another repo's PR is not this project's loop. GitHub names are case-insensitive.
+    if (!src.html_url.toLowerCase().startsWith(`https://github.com/${repo.toLowerCase()}/pull/`)) continue
+    out = { number: src.number, url: src.html_url, state: typeof pr.merged_at === 'string' ? 'merged' : src.state === 'closed' ? 'closed' : 'open' }
+  }
+  return out
+}
+
+/** Whether a workflow file runs the Claude Code Action (GITHUB-BRIDGE §7: the `@claude` toggle shows only then). */
+// A review-only workflow (triggered on pull_request) runs the action too, but never answers an issue: an issue trigger is
+// required as well.
+export const usesClaudeAction = (yaml: string) =>
+  /^\s*-?\s*uses:\s*['"]?anthropics\/claude-code-action@/m.test(yaml) && /\bissues\s*:|\bissue_comment\b|\bissues\b\s*[\],]/.test(yaml)
+const WORKFLOWS_READ = 8
 /** The issues list filtered to what the planner sent from this login. */
-const sentIssuesQuery = (login: string, state: 'open' | 'all', perPage = 20) =>
-  new URLSearchParams({ labels: PLANNER_LABEL, creator: login, state, sort: 'created', direction: 'desc', per_page: String(perPage) }).toString()
+const sentIssuesQuery = (login: string, state: 'open' | 'closed' | 'all', perPage = 20, since?: string) =>
+  new URLSearchParams({
+    labels: PLANNER_LABEL, creator: login, state, sort: 'created', direction: 'desc', per_page: String(perPage), ...(since ? { since } : {}),
+  }).toString()
+
+/**
+ * A decoration read (bot line, PR, workflow detection) that a rate limit must not turn into a failed card: the snapshot
+ * and merges already read still show. A 401 or a moved repo stays fatal.
+ */
+async function softly<T>(read: () => Promise<T>, fallback: T): Promise<T> {
+  try {
+    return await read()
+  } catch (err) {
+    if (err instanceof GithubRefused && err.status === 429) return fallback
+    throw err
+  }
+}
 /** GitHub's issue list as SentIssues: pull requests (which the issues API also lists) and malformed rows dropped. */
 function toSentIssues(repo: string, list: unknown, keepBody = false): SentIssue[] {
   if (!Array.isArray(list)) return []
@@ -196,9 +267,54 @@ function toSentIssues(repo: string, list: unknown, keepBody = false): SentIssue[
     .map((i) => ({
       number: i.number as number, title: (i.title as string).slice(0, 200), createdAt: i.created_at as string,
       url: typeof i.html_url === 'string' && i.html_url.startsWith('https://github.com/') ? i.html_url : `https://github.com/${repo}/issues/${i.number}`,
+      state: i.state === 'closed' ? 'closed' as const : 'open' as const,
+      closedAt: typeof i.closed_at === 'string' ? i.closed_at : null,
       ...(keepBody ? { body: typeof i.body === 'string' ? i.body : '' } : {}),
+      ...(typeof i.comments === 'number' ? { comments: i.comments } : {}),
     }))
 }
+
+/** One sent issue with its loop back read: the bot's last line (only when it has comments) and the linked PR. */
+async function withLoopBack(token: string, repo: string, i: SentIssue): Promise<SentIssue> {
+  const r = repoPath(repo)
+  let bot: string | null = null
+  const n = i.comments ?? 0
+  if (n > 0) {
+    // Comments come oldest first: the last page holds the newest.
+    const res = await gh(token, `/repos/${r}/issues/${i.number}/comments?per_page=100&page=${Math.ceil(n / 100)}`)
+    if (res.ok) bot = lastBotLine(await res.json().catch(() => []))
+  }
+  const tl = await gh(token, `/repos/${r}/issues/${i.number}/timeline?per_page=100`)
+  const pr = tl.ok ? linkedPr(repo, await tl.json().catch(() => [])) : null
+  const { comments: _c, ...rest } = i
+  return { ...rest, bot, pr }
+}
+
+/** Whether the repo has a workflow running the Claude Code Action; null when GitHub would not say. */
+async function claudeWorkflow(token: string, repo: string): Promise<boolean | null> {
+  const r = repoPath(repo)
+  const dir = await gh(token, `/repos/${r}/contents/.github/workflows`)
+  if (dir.status === 404) return false
+  if (!dir.ok) return null
+  const list = (await dir.json().catch(() => null)) as { name?: unknown; path?: unknown; type?: unknown }[] | null
+  if (!Array.isArray(list)) return null
+  const files = list
+    .filter((f) => f.type === 'file' && typeof f.path === 'string' && typeof f.name === 'string' && /\.ya?ml$/i.test(f.name) && safePath(f.path))
+    .slice(0, WORKFLOWS_READ)
+  for (const f of files) {
+    const res = await gh(token, `/repos/${r}/contents/${filePath(f.path as string)}`, 'application/vnd.github.raw+json')
+    const text = res.ok ? await boundedText(res) : null
+    if (text && usesClaudeAction(text)) return true
+  }
+  return false
+}
+/** The line that asks the Claude Code Action to work on an issue (its default trigger: `@claude` in a new issue's body). */
+export const CLAUDE_ASK = '@claude please work on this issue.'
+/** The visible sign-off on every sent issue, so a reader sees where it came from (owner, 2026-10-16). */
+export const SIGN_OFF = '_Sent from [koplanner](https://koplanner.pages.dev/)_'
+/** A sent issue's body: the user's text, the ask when chosen, the sign-off, and the request marker last. */
+export const issueBody = (text: string, askClaude: boolean, requestId: string) =>
+  [text, askClaude ? CLAUDE_ASK : '', SIGN_OFF, requestMarker(requestId)].filter((p) => p.length > 0).join('\n\n')
 /** The marker a sent issue's body ends with: a retried send finds it and answers with that issue instead of a second one. */
 export const requestMarker = (id: string) => `<!-- planner:${id} -->`
 const REQUEST_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
@@ -304,19 +420,37 @@ projectsApi.get('/state', async (c) => {
         merges = { error: `GitHub answered ${pr.status} for the pull requests` }
       }
     }
-    // 4. The open issues the planner sent from this login (C2): the card lists them under the form.
+    // 4. The issues the planner sent from this login (C2): open ones and those closed in the last 7 days, each with its
+    //    loop back (C3): the bot's last line and the linked pull request.
+    //    Open and recently closed are read apart, so many newer closed issues can't push an older open one off the page.
     let issues: SentIssue[] | { error: string } = []
-    const is = await gh(token, `/repos/${repoPath(repo)}/issues?${sentIssuesQuery(login, 'open')}`)
-    if (is.ok) issues = toSentIssues(repo, await is.json().catch(() => [])).slice(0, ISSUES_SHOWN)
-    else issues = { error: `GitHub answered ${is.status} for the issues` }
-    return c.json({ repo, config, configSource, configError, snapshot, merges, issues, fetchedAt: Date.now() })
+    const now = Date.now()
+    const open = await gh(token, `/repos/${repoPath(repo)}/issues?${sentIssuesQuery(login, 'open')}`)
+    if (open.ok) {
+      const since = new Date(now - CLOSED_SHOWN_MS).toISOString()
+      const closed = await softly(() => gh(token, `/repos/${repoPath(repo)}/issues?${sentIssuesQuery(login, 'closed', 20, since)}`), null)
+      const all = [...toSentIssues(repo, await open.json().catch(() => [])), ...(closed?.ok ? toSentIssues(repo, await closed.json().catch(() => [])) : [])]
+        .filter((i, at, list) => list.findIndex((x) => x.number === i.number) === at) // reopened between the reads: once
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      const shown = recentSent(all, now).slice(0, ISSUES_SHOWN)
+      issues = []
+      for (const i of shown) {
+        const { comments: _c, ...plain } = i
+        issues.push(await softly(() => withLoopBack(token, repo, i), { ...plain, bot: null, pr: null }))
+      }
+    } else {
+      issues = { error: `GitHub answered ${open.status} for the issues` }
+    }
+    // 5. Whether the repo runs the Claude Code Action: the New issue sheet offers "Ask Claude" only then (C3).
+    const claude = await softly(() => claudeWorkflow(token, repo), null)
+    return c.json({ repo, config, configSource, configError, snapshot, merges, issues, claude, fetchedAt: Date.now() })
   } catch (err) {
     if (err instanceof GithubRefused) return c.json({ error: err.message }, err.status as 409)
     throw err
   }
 })
 
-// ── POST /projects/issue { repo, title, body?, kind?, requestId } ─────────────────────────────────────────────────
+// ── POST /projects/issue { repo, title, body?, kind?, requestId, askClaude? } ─────────────────────────────────────────────────
 // Sends one issue to one of the account's projects (C2, GITHUB-BRIDGE §7). Only this route writes to GitHub, and only the
 // user's Send tap calls it. Order: input → ownership (404 before any GitHub call) → the repo's kinds → an earlier send of
 // the same request (a retry after a lost answer gets that issue back) → labels → the issue.
@@ -333,12 +467,13 @@ projectsApi.post('/issue', async (c) => {
   let input: Record<string, unknown> | null = null
   try { input = (await c.req.json()) as Record<string, unknown> } catch { /* answered below */ }
   if (typeof input !== 'object' || input === null || Array.isArray(input)) return c.json({ error: 'not JSON' }, 400)
-  const { repo, title, body, kind, requestId } = input
+  const { repo, title, body, kind, requestId, askClaude } = input
   if (!isRepoFullName(repo)) return c.json({ error: 'repo: owner/name' }, 400)
   if (typeof title !== 'string' || title.trim().length === 0 || title.trim().length > ISSUE_TITLE_MAX) return c.json({ error: `title: 1–${ISSUE_TITLE_MAX} characters` }, 400)
   if (body !== undefined && (typeof body !== 'string' || body.length > ISSUE_BODY_MAX)) return c.json({ error: `body: up to ${ISSUE_BODY_MAX} characters` }, 400)
   if (kind !== undefined && kind !== null && typeof kind !== 'string') return c.json({ error: 'kind: a name or null' }, 400)
   if (typeof requestId !== 'string' || !REQUEST_ID.test(requestId)) return c.json({ error: 'requestId: a uuid' }, 400)
+  if (askClaude !== undefined && typeof askClaude !== 'boolean') return c.json({ error: 'askClaude: true or false' }, 400)
   if (!(await ownsProject(c.env.DB, c.get('session').id, repo))) return c.json({ error: 'not a project of yours' }, 404)
   const account = await accountOr(c)
   if (account instanceof Response) return account
@@ -364,7 +499,7 @@ projectsApi.post('/issue', async (c) => {
     }
     const text = typeof body === 'string' ? body.trim() : ''
     const res = await gh(token, `/repos/${r}/issues`, undefined, {
-      title: title.trim(), body: text ? `${text}\n\n${requestMarker(requestId)}` : requestMarker(requestId), labels,
+      title: title.trim(), body: issueBody(text, askClaude === true, requestId), labels,
     })
     if (res.status >= 500) return c.json({ error: createUnsure(res.status) }, 502)
     if (res.status !== 201) return c.json({ error: sendRefusal(res.status) }, res.status === 403 || res.status === 404 || res.status === 410 ? 409 : 502)

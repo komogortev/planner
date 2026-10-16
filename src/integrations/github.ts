@@ -75,8 +75,10 @@ export interface ProjectState {
   configError: string | null
   snapshot: { found: boolean; text: string; path: string } | { error: string; path: string } | null
   merges: { number: number; title: string; mergedAt: string; url: string }[] | { error: string } | null
-  /** The open issues the planner sent (C2); absent from an older Worker. */
+  /** The issues the planner sent (C2; closed ones for 7 days, with their loop back since C3); absent from an older Worker. */
   issues?: SentIssue[] | { error: string }
+  /** Whether the repo runs the Claude Code Action (C3); null = GitHub would not say; absent from an older Worker. */
+  claude?: boolean | null
   fetchedAt: number
 }
 export const projectState = (repo: string, c?: Client) =>
@@ -84,8 +86,13 @@ export const projectState = (repo: string, c?: Client) =>
 
 // ── C2: sending an issue (docs/GITHUB-BRIDGE.md §7) ─────────────────────────────────────────────────────────────────
 export interface IssueKind { name: string; labels: string[] }
-export interface SentIssue { number: number; title: string; url: string; createdAt: string }
-export interface IssueDraft { repo: string; title: string; body: string; kind: string | null; requestId: string }
+export interface SentIssue {
+  number: number; title: string; url: string; createdAt: string
+  /** C3; absent from an older Worker or a C2-era cached card. */
+  state?: 'open' | 'closed'; closedAt?: string | null; bot?: string | null
+  pr?: { number: number; url: string; state: 'open' | 'closed' | 'merged' } | null
+}
+export interface IssueDraft { repo: string; title: string; body: string; kind: string | null; requestId: string; askClaude: boolean }
 /** Mirrors the Worker's limits (api/src/projects.ts), so the sheet refuses what the Worker would. */
 export const ISSUE_TITLE_MAX = 200
 export const ISSUE_BODY_MAX = 10_000

@@ -8,7 +8,9 @@ import { githubLink } from './projectView'
 // Q3). A public repo is named before Send (Q4). One request id per draft: a retry after a lost answer reuses it, and the
 // Worker answers with the issue that already landed instead of making a second. The id is renewed only after a success.
 // Modal like the menu sheet: scrim, Escape, Tab wraps, focus goes back to the button that opened it.
-const props = defineProps<{ repo: string; isPrivate: boolean; kinds: IssueKind[]; trigger: HTMLElement | null }>()
+// C3: "Ask Claude to work on it" shows only when the repo runs the Claude Code Action (`claude: true`); otherwise the sheet
+// offers set-up help. The planner never writes workflows or secrets.
+const props = defineProps<{ repo: string; isPrivate: boolean; kinds: IssueKind[]; claude: boolean | null; trigger: HTMLElement | null }>()
 const open = defineModel<boolean>('open', { required: true })
 const emit = defineEmits<{ sent: [issue: SentIssue] }>()
 const online = useOnline()
@@ -16,6 +18,8 @@ const online = useOnline()
 const title = ref('')
 const body = ref('')
 const kind = ref<string | null>(null)
+const askClaude = ref(false)
+const helpOpen = ref(false)
 const requestId = ref(crypto.randomUUID())
 const busy = ref(false)
 const error = ref<string | null>(null)
@@ -63,7 +67,7 @@ async function send(): Promise<void> {
   busy.value = true
   error.value = null
   try {
-    const out = await sendIssue({ repo: props.repo, title: title.value.trim(), body: body.value, kind: kind.value, requestId: requestId.value })
+    const out = await sendIssue({ repo: props.repo, title: title.value.trim(), body: body.value, kind: kind.value, requestId: requestId.value, askClaude: askClaude.value && props.claude === true })
     sent.value = out
     requestId.value = crypto.randomUUID()
     // An earlier try had landed: the fields may hold edits made since, which were not sent. Keep them, so the user decides
@@ -72,6 +76,7 @@ async function send(): Promise<void> {
       title.value = ''
       body.value = ''
       kind.value = null
+      askClaude.value = false
     }
     emit('sent', out.issue)
   } catch (err) {
@@ -121,6 +126,20 @@ async function send(): Promise<void> {
       />
       <label class="label" for="issue-body">Details <span class="sub">(optional)</span></label>
       <textarea id="issue-body" v-model="body" class="input" rows="5" :maxlength="ISSUE_BODY_MAX" data-test="issue-body" />
+      <label v-if="claude === true" class="ask" data-test="issue-ask-claude">
+        <input v-model="askClaude" type="checkbox" />
+        <span>Ask Claude to work on it <span class="sub">(adds an @claude line; Claude replies on the issue with its work, merging stays yours)</span></span>
+      </label>
+      <div v-else class="help">
+        <button type="button" class="link" :aria-expanded="helpOpen" data-test="issue-claude-help" @click="helpOpen = !helpOpen">
+          {{ claude === null ? 'Could not tell if Claude is set up here' : 'Set up Claude for this repo' }} {{ helpOpen ? '▴' : '▾' }}
+        </button>
+        <ol v-if="helpOpen" class="steps" data-test="issue-claude-steps">
+          <li>In Claude Code, inside this repo, run <code>/install-github-app</code>: it installs the Claude GitHub app and adds the workflow and its secret.</li>
+          <li>Or by hand: add <code>.github/workflows/claude.yml</code> using <code>anthropics/claude-code-action</code>, and a repo secret <code>CLAUDE_CODE_OAUTH_TOKEN</code> from <code>claude setup-token</code>.</li>
+          <li>Refresh this card: "Ask Claude to work on it" appears here. Only issues from people with write access start Claude.</li>
+        </ol>
+      </div>
       <p v-if="!isPrivate" class="text-xs text-warn" data-test="issue-public">{{ repo }} is public: this issue will be public.</p>
       <p v-if="error" class="text-sm text-err" role="alert" data-test="issue-error">{{ error }}</p>
       <div class="flex items-center gap-3">
@@ -150,6 +169,11 @@ async function send(): Promise<void> {
 }
 .chip.on { background: rgb(var(--s-100)); color: rgb(var(--s-900)); border-color: transparent; }
 .done { font-size: 0.85rem; }
+.ask { display: flex; gap: 0.5rem; align-items: flex-start; font-size: 0.85rem; min-height: 2.75rem; padding-top: 0.6rem; }
+.ask input { margin-top: 0.2rem; width: 1.1rem; height: 1.1rem; }
+.link { font-size: 0.8rem; text-decoration: underline; text-underline-offset: 2px; color: rgb(var(--s-300)); min-height: 2.75rem; text-align: left; }
+.steps { list-style: decimal; padding-left: 1.2rem; display: grid; gap: 0.35rem; font-size: 0.8rem; color: rgb(var(--s-300)); }
+.steps code { font-size: 0.75rem; overflow-wrap: anywhere; }
 .done a { text-decoration: underline; text-underline-offset: 2px; }
 .text-warn { color: var(--glass-warn); }
 .text-err { color: var(--glass-err); }
