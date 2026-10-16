@@ -1,11 +1,11 @@
 # Personal Planner — STATE
 
 ## SNAPSHOT
-- **Phase/Last:** H1 built · HW S3 v2 live · H5 in real use. 2026-10-16: D-120 positioning (personal tool, open source, MIT); D-121 GitHub bridge accepted, G1 live: Settings → Integrations connects GitHub with a fine-grained token, sealed on the Worker, never returned (#152). Alpha gate A5–A7 ✅ (Pages rollback floor `80540b1`). Vibe-code mode.
-- **Working:** prod = Pages `ab7f134`, Worker `ab7f134` (`e8ab191a`), D1 `0011`; smoke 17/17. `pnpm check` app 604 · Worker 240.
-- **Broken:** **Summary** reads only open notes (v1 lens; owner account only since #146). After a D1 restore, edits acknowledged after the restore point revert on every device (A7, inferred). **Not verified on a phone:** DEVICE-CHECKS 37–41; #148 menu tap; D-105 on a real model; **G1 with a real token** (login and expiry shown; the expiry header name is recalled).
+- **Phase/Last:** H1 built · HW S3 v2 live · H5 in real use. 2026-10-16: D-120 (personal tool, open source, MIT); D-121 GitHub bridge: G1 live (#152, owner connected, expiry read), G2 live (#154): repos switched on in Integrations show on the Dashboard with STATE snapshot + merges; card config = the repo's `.planner.json`; one-time re-pull (`REPULL`). Rollback floor `80540b1`.
+- **Working:** prod = Pages `ae90c22`, Worker `ae90c22` (`9bc59b9b`), D1 `0011`; smoke 17/17. `pnpm check` app 618 · Worker 254.
+- **Broken:** **Summary** reads only open notes (v1 lens; owner only). After a D1 restore, edits acknowledged after the restore point revert (A7, inferred). "Recently merged" reads the last 30 closed PRs. **Not verified on a phone:** DEVICE-CHECKS 37–41; #148 menu tap; D-105 on a real model; **G2 with the real token** (repo list, card, the one-time re-pull).
 - **Blocker:** none.
-- **Next:** owner connects GitHub on the phone (G1 check) → A2 tester notice → invites (tester invite expires 2026-10-24) → restore-edit reconcile (before the second invitee). GitHub bridge G2 (projects as a widget kind, one-time re-pull) after G1 is in use. Then Summary v3; copy-paste removal (D-113); H5 S3.
+- **Next:** owner switches on `komogortev/planner` on the phone (G2 check) → A2 tester notice → invites (expires 2026-10-24) → restore-edit reconcile. Bridge G4 (send an issue, explicit only) after G2 is in use. Then Summary v3; D-113; H5 S3.
 ---
 
 ## Context
