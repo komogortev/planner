@@ -157,7 +157,7 @@ undone by turning the executor switch back to `manual`.
 | **S1 Worker** ✅ built 2026-10-12 | `0009`; models CRUD with encrypted key; `/ai/calls` as a Workflow (D-91) with both adapters, D-85 cut-off handling, D-88/D-92/D-95 outcomes, cap (D-96); A13 coverage; validator accepts `model` (run gains `modelId`, `callId`) | key-never-returned test; second-account negative control; cut-off reply → `cut_off` and no reply kept; endpoint change clears key; a provider error echoing a fake key never appears in a response or log |
 | **S1 parser tests** ✅ | 06 A7: a reply cut off mid-string is refused by both parsers, nothing stored | the cut-off fixture fails before the test is trusted |
 | **S2 client** ✅ built 2026-10-12 | Settings → AI models (add, test, remove; "This device runs with", per device); Run with … on the run panel (Copy instead stays); a waiting call picked up after a reload; the run records `executor: 'model'` with its ids; DEVICE-CHECKS 33–36 | a run with a wrong key shows `key_rejected` and stores nothing |
-| **S3 routines** | Own design addendum at its S0: Worker-side compose and apply over `records`, cron, schedule rows (D-44), a global pause (A8), notification (D-16) | — |
+| **S3 routines** | Design addendum: [H5-S3-ROUTINES.md](H5-S3-ROUTINES.md) (2026-10-16; D-123…D-137, slices S3-0…S3-3). Amends §8's S3 column: the Worker composes and calls, the device checks and stores (D-123) | see the addendum |
 | H3 (optional) | Remote MCP for Claude clients, unchanged from D-20 and D-37 | — |
 
 ## 10. Open points
