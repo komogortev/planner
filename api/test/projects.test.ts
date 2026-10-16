@@ -193,13 +193,21 @@ describe('GET /projects/state', () => {
 
 describe('parseConfig', () => {
   it('takes each valid key, defaults each invalid one, and names what it ignored', () => {
-    expect(parseConfig('{"title":"P","state":"STATE.md","show":["merges"]}')).toEqual({ config: { title: 'P', state: 'STATE.md', show: ['merges'] }, error: null })
+    expect(parseConfig('{"title":"P","state":"STATE.md","show":["merges"]}')).toEqual({ config: { title: 'P', state: 'STATE.md', show: ['merges'], brief: ['Next'] }, error: null })
     expect(parseConfig('{"state":"../secrets","show":["issues"],"extra":1}')).toEqual({
       config: DEFAULT_CONFIG, error: '.planner.json: ignored state, show, extra',
     })
     for (const bad of ['/etc/passwd', 'a/../b', './x', 'a//b', 'x'.repeat(201)]) expect(parseConfig(JSON.stringify({ state: bad })).config.state, bad).toBe('docs/STATE.md')
     expect(parseConfig('not json')).toEqual({ config: DEFAULT_CONFIG, error: '.planner.json is not JSON' })
     expect(parseConfig('[]').error).toBe('.planner.json is not an object')
+  })
+
+  it('brief: 1–4 labels of up to 30 chars, trimmed and deduplicated; anything else falls back to ["Next"] and is named', () => {
+    expect(parseConfig('{"brief":[" Next ","Broken","Next"]}')).toEqual({ config: { ...DEFAULT_CONFIG, brief: ['Next', 'Broken'] }, error: null })
+    expect(parseConfig('{"brief":["Next","next"]}').config.brief).toEqual(['Next']) // the card matches labels case-insensitively
+    for (const bad of [[], ['a', 'b', 'c', 'd', 'e'], [''], ['  '], ['x'.repeat(31)], [1], 'Next', null]) {
+      expect(parseConfig(JSON.stringify({ brief: bad })), JSON.stringify(bad)).toEqual({ config: DEFAULT_CONFIG, error: '.planner.json: ignored brief' })
+    }
   })
 })
 

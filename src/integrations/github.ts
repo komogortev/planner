@@ -69,7 +69,8 @@ export const listRepos = async (c?: Client) => (await request<{ repos: RepoView[
 export type ShowPart = 'snapshot' | 'merges'
 export interface ProjectState {
   repo: string
-  config: { title: string | null; state: string; show: ShowPart[] }
+  /** `brief` is absent from a Worker older than C1; the card then uses BRIEF_DEFAULT. */
+  config: { title: string | null; state: string; show: ShowPart[]; brief?: string[] }
   configSource: 'file' | 'default'
   configError: string | null
   snapshot: { found: boolean; text: string; path: string } | { error: string; path: string } | null

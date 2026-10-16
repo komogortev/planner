@@ -2,7 +2,7 @@
 // it. Read-only. Every call uses the user's own stored token (integrations.ts) and the account from the session (A11);
 // a repo's state is served only when the repo is one of the account's own project widgets.
 //
-// How a card looks is the repo's own `.planner.json` (§5, amendment 2026-10-16): `{ title?, state?, show? }`. Absent or
+// How a card looks is the repo's own `.planner.json` (§5, amendment 2026-10-16): `{ title?, state?, show?, brief? }`. Absent or
 // unreadable → defaults, and the card says which. GitHub content is data: it is returned as text, never as markup.
 import { Hono } from 'hono'
 import { signedOutBody } from './account'
@@ -19,8 +19,11 @@ export const MERGES_SHOWN = 5
 export const CONFIG_PATH = '.planner.json'
 export const SHOW_PARTS = ['snapshot', 'merges'] as const
 export type ShowPart = (typeof SHOW_PARTS)[number]
-export interface ProjectConfig { title: string | null; state: string; show: ShowPart[] }
-export const DEFAULT_CONFIG: ProjectConfig = { title: null, state: 'docs/STATE.md', show: ['snapshot', 'merges'] }
+/** `brief`: the snapshot fields (their bold labels, e.g. "Next") the folded card shows, in order. */
+export interface ProjectConfig { title: string | null; state: string; show: ShowPart[]; brief: string[] }
+export const DEFAULT_CONFIG: ProjectConfig = { title: null, state: 'docs/STATE.md', show: ['snapshot', 'merges'], brief: ['Next'] }
+const BRIEF_MAX = 4
+const BRIEF_LABEL_MAX = 30
 
 /** A repo-relative file path: segments of safe characters, no `..`, no leading slash. */
 const SAFE_PATH = /^(?!\/)(?:[A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]+$/
@@ -52,8 +55,19 @@ export function parseConfig(raw: string): { config: ProjectConfig; error: string
     if (list && list.length > 0 && list.every((p) => (SHOW_PARTS as readonly unknown[]).includes(p))) show = [...new Set(list as ShowPart[])]
     else ignored.push('show')
   }
-  for (const k of Object.keys(c)) if (!['title', 'state', 'show'].includes(k)) ignored.push(k)
-  return { config: { title, state, show }, error: ignored.length ? `${CONFIG_PATH}: ignored ${ignored.join(', ')}` : null }
+  let brief = DEFAULT_CONFIG.brief
+  if ('brief' in c) {
+    const list = Array.isArray(c.brief) ? c.brief : null
+    const ok = (l: unknown) => typeof l === 'string' && l.trim().length > 0 && l.trim().length <= BRIEF_LABEL_MAX
+    if (list && list.length > 0 && list.length <= BRIEF_MAX && list.every(ok)) {
+      // The card matches labels case-insensitively, so "Next" and "next" are one field: the first spelling is kept.
+      const seen = new Set<string>()
+      brief = (list as string[]).map((l) => l.trim()).filter((l) => !seen.has(l.toLowerCase()) && !!seen.add(l.toLowerCase()))
+    }
+    else ignored.push('brief')
+  }
+  for (const k of Object.keys(c)) if (!['title', 'state', 'show', 'brief'].includes(k)) ignored.push(k)
+  return { config: { title, state, show, brief }, error: ignored.length ? `${CONFIG_PATH}: ignored ${ignored.join(', ')}` : null }
 }
 
 /**

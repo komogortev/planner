@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest'
 import { cleanRecord, flatten, restoreAbsent } from '@/domain/records'
 import { projectWidgetId, projectWidgetRow, resolveProjectWidgets } from '../projects'
-import { ageText, githubLink, segments, snapshotBlocks } from '../projectView'
+import { ageText, BRIEF_DEFAULT, briefBlocks, githubLink, segments, snapshotBlocks, snapshotFields } from '../projectView'
 
 const NOW = '2026-10-16T10:00:00.000Z'
 const errorsOf = (row: Record<string, unknown>) => {
@@ -83,6 +83,33 @@ describe('card text', () => {
     const blocks = snapshotBlocks('- <img src=x onerror=alert(1)> **<b>x</b>**')
     expect(blocks[0]!.segments.map((s) => s.text).join('')).toBe('<img src=x onerror=alert(1)> <b>x</b>')
     expect(Object.keys(blocks[0]!.segments[0]!)).toEqual(['text', 'bold'])
+  })
+
+  it('reads labelled fields: **Label:** and **Label**: both count; unlabelled and non-item lines are skipped', () => {
+    const blocks = snapshotBlocks('- **Phase/Last:** H1 · **G2** live\n- **Next**: G4\n- plain item\n**Broken:** a line, not an item\n- **bold** no colon')
+    expect(snapshotFields(blocks)).toEqual([
+      { label: 'Phase/Last', segments: [{ text: 'H1 · ', bold: false }, { text: 'G2', bold: true }, { text: ' live', bold: false }] },
+      { label: 'Next', segments: [{ text: 'G4', bold: false }] },
+    ])
+  })
+
+  it('** inside inline code is text, so it neither unpairs the line nor hides its label', () => {
+    expect(segments('**Next:** port `src/**/*.ts` now')).toEqual([{ text: 'Next:', bold: true }, { text: ' port src/**/*.ts now', bold: false }])
+    expect(snapshotFields(snapshotBlocks('- **Next:** port `src/**/*.ts`')).map((f) => f.label)).toEqual(['Next'])
+  })
+
+  it('the brief picks the named fields in brief order, case-insensitively, and names the missing ones', () => {
+    const blocks = snapshotBlocks('- **Phase:** H1\n- **Broken:** none\n- **Next:** G4')
+    expect(briefBlocks(blocks, ['next', 'Broken', 'Blocker'])).toEqual({
+      fields: [{ label: 'Next', segments: [{ text: 'G4', bold: false }] }, { label: 'Broken', segments: [{ text: 'none', bold: false }] }],
+      missing: ['Blocker'],
+    })
+  })
+
+  it('a snapshot with none of the brief fields still shows its first block; an empty one shows nothing', () => {
+    const blocks = snapshotBlocks('Shipping the editor.\n- more')
+    expect(briefBlocks(blocks, BRIEF_DEFAULT)).toEqual({ fields: [{ label: '', segments: [{ text: 'Shipping the editor.', bold: false }] }], missing: ['Next'] })
+    expect(briefBlocks([], BRIEF_DEFAULT)).toEqual({ fields: [], missing: ['Next'] })
   })
 
   it('ages and links', () => {
