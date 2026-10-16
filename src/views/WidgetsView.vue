@@ -1,13 +1,28 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { setWidgetActive, useWidgets } from '@/widgets/useWidgets'
+import { setProjectActive, setWidgetActive, useWidgets } from '@/widgets/useWidgets'
+import type { ProjectWidget } from '@/widgets/projects'
 import type { SystemWidgetId } from '@/widgets/system'
 
 // Page 3 of the pager (D-18): every widget, on the Dashboard or not (D-107…D-110). The system widgets are listed with a
 // switch; activation is per account (a `widget` record, synced). Custom widgets (D-111) come later: Create stays inert.
-const { widgets, loaded } = useWidgets()
+const { widgets, loaded, projects } = useWidgets()
 const busy = ref<string | null>(null)
 const error = ref<string | null>(null)
+
+async function toggleProject(p: ProjectWidget) {
+  if (busy.value) return
+  busy.value = p.id
+  error.value = null
+  try {
+    const r = await setProjectActive(p.repo, p.private, !p.active)
+    if (!r.ok) error.value = `Could not save: ${r.error}`
+  } catch (err) {
+    error.value = `Could not save: ${String(err)}`
+  } finally {
+    busy.value = null
+  }
+}
 
 async function toggle(id: SystemWidgetId, active: boolean) {
   if (busy.value) return
@@ -32,6 +47,18 @@ async function toggle(id: SystemWidgetId, active: boolean) {
         <button
           type="button" role="switch" class="switch" :class="{ 'switch-on': w.active }" :aria-checked="w.active" :aria-label="`Show ${w.name} on the Dashboard`"
           :disabled="!loaded || busy !== null" :data-test="`widget-toggle-${w.id}`" @click="toggle(w.id, !w.active)"
+        >
+          <span class="knob" />
+        </button>
+      </li>
+      <li v-for="p in projects" :key="p.id" class="card row" :data-test="`widget-project-${p.repo}`">
+        <div class="min-w-0">
+          <h3 class="font-semibold truncate">{{ p.repo }} <span class="sub">project</span></h3>
+          <p class="sub mt-1">Its STATE snapshot and recent merges, read from GitHub. Add or remove projects in Settings → Integrations.</p>
+        </div>
+        <button
+          type="button" role="switch" class="switch" :class="{ 'switch-on': p.active }" :aria-checked="p.active" :aria-label="`Show ${p.repo} on the Dashboard`"
+          :disabled="!loaded || busy !== null" :data-test="`widget-toggle-project-${p.repo}`" @click="toggleProject(p)"
         >
           <span class="knob" />
         </button>

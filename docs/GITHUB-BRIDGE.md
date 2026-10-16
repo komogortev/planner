@@ -85,6 +85,49 @@ follow-up migration, and Time Travel is not needed.
 
 ## 5. G2: projects (Q2: a widget kind)
 
+**Amendment (owner, 2026-10-16): the card's configuration lives in the repo.** A `.planner.json` at the repo root
+says how the card looks: `{ "title": "Planner", "state": "docs/STATE.md", "show": ["snapshot", "merges"] }`. Every key
+is optional; an absent file means the defaults (`docs/STATE.md`, both parts shown), and the card says so. A Claude session
+in the repo can write and commit it like any other file, so the planner has no configuration screen and the widget
+record shrinks to `{ repo, private }`. Each invalid key falls back to its default on its own, and the card names what was
+ignored. `state` must be a plain repo path: no `..`, no leading `/`. This replaces the `statePath` field below and Q1's
+"path per project" setting.
+
+**Built (2026-10-16, G2):**
+- **Records:** a widget kind `project` with an added field `project: { repo, private }`. The id is uuid5 of the
+  lower-cased repo, so two devices switching on the same repo write one row.
+- **Switching off sets `active: false` and never deletes the row.** The server keeps a deleted record deleted, so a
+  deleted id could never be switched back on.
+- **Integrations card:** "Show my repos" (one GitHub call per tap), with a switch per repo.
+- **Widgets page:** the same switch for each project.
+- **The one-time re-pull:** `REPULL = 1` in `sync/engine.ts` and `syncMeta.repull`. Every device pulls from 0 once and
+  marks it done after the last page, so an interrupted re-pull runs again.
+- **Worker routes** (G3's read-only part is in this slice):
+  - `GET /me/integrations/github/repos`;
+  - `GET /projects/state?repo=`, served only for the account's own project widgets. The same 404 covers "not yours"
+    and "none", and it answers before any GitHub call.
+- **Not built:** the ETag cache from §6. GitHub is read only when a card opens and on Refresh, which stays far under
+  5,000 an hour. Re-entry: a rate-limit message seen on a card.
+- **CodeReview:** one blocking finding, fixed. The re-pull hid a D-58 restore that landed during it: the check compared the
+  server's head with the re-pull's 0, not the stored cursor. Now it compares with the stored cursor, and a test fails on the old
+  comparison. Also fixed:
+  - cached card text is cleared at sign-out;
+  - one repo-name check is shared by the validator and the route;
+  - a moved repo says so;
+  - files over 1 MB are refused;
+  - the switches can't stay stuck after an error;
+  - `markRewind` keeps every field.
+  Left as advisories: "recently merged" reads the last 30 closed PRs, and an undecryptable token reads as "not connected".
+- **Tests:** app 604 → 618, Worker 240 → 254. Eight negative controls, all caught (the seventh-plus-one is the D-58
+  comparison):
+  - the project read without the account filter;
+  - the ownership check removed;
+  - an unsafe `state` path accepted;
+  - a foreign PR link passed through;
+  - the re-pull switched off;
+  - the project/kind rule dropped;
+  - any link accepted on the card.
+
 - **The Integrations card lists the repos the token reaches** (`GET /user/repos`, paged; the Worker returns `full_name`,
   `private`, `default_branch`). A switch beside each one creates or removes its project.
 - **A project is a widget:** `kind: 'project'` plus one field added later, `project: { repo, private, statePath }`.
@@ -157,7 +200,7 @@ one of B's own projects).
 
 | # | Question | Answer |
 |---|---|---|
-| Q1 | Where state comes from | `docs/STATE.md`'s snapshot by default; the path can be changed per project |
+| Q1 | Where state comes from | `docs/STATE.md`'s snapshot by default; the path is set in the repo's own `.planner.json` (amended 2026-10-16, §5) |
 | Q2 | What a project is | A widget kind (no Dexie bump), with the one-time re-pull from §5 |
 | Q3 | Issue creation | Online only |
 | Q4 | A private task about a public repo | Warn and let the user decide |
@@ -175,4 +218,4 @@ each after a few days of use of the one before. G6 and the MCP design stay parke
 | Term | Code name | Meaning | Not the same as | Status |
 |---|---|---|---|---|
 | **Integration** | D1 `integrations`, `IntegrationsCard` | An outside account connected by a pasted token, held encrypted on the Worker and never returned (GitHub first) | Model (also a pasted key, but for model calls) | G1 |
-| **Project** | widget `kind: 'project'`, field `project` | A GitHub repo the user connected, shown as a card with its state and the issues sent to it | Theme (parked); Category | G2 |
+| **Project** | widget `kind: 'project'`, field `project` | A GitHub repo the user connected, shown as a card with its state and the issues sent to it; how the card looks is the repo's `.planner.json` | Theme (parked); Category | G2 |

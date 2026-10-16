@@ -6,6 +6,7 @@ import QuestionsStrip from '@/harness/QuestionsStrip.vue'
 import { useLoop2 } from '@/harness/useLoop2'
 import NotesDialog from '@/notes/NotesDialog.vue'
 import { useWidgets } from '@/widgets/useWidgets'
+import ProjectCard from '@/widgets/ProjectCard.vue'
 import { pendingJournal } from '@/harness/loop'
 
 // Dashboard v2 (HW-HARNESS §11, S3 v2 slice S3): Daily on top (today's Tasks, editable summary, Coming up), the optional
@@ -17,7 +18,7 @@ import { pendingJournal } from '@/harness/loop'
 // edge and pads by its height, so the last card stops at the strip's top and anything scrolling past is hidden by the
 // strip — no shadow cut below it. With no strip the box runs into the band by --shadow-room, so shadows fall uncut.
 const loop = useLoop2()
-const { widgets, loaded, isActive } = useWidgets()
+const { widgets, loaded, isActive, projects } = useWidgets()
 const dock = ref<HTMLElement | null>(null)
 const stripH = ref(0)
 let ro: ResizeObserver | null = null
@@ -36,7 +37,8 @@ onBeforeUnmount(() => ro?.disconnect())
       <!-- A Summary run still waiting keeps its card (switched off on another device): unmounting would abort the call. -->
       <JournalCard v-if="isActive('system-summary') || pendingJournal() !== null" />
       <NotesDialog v-if="isActive('system-notes')" :now="loop.now.value" />
-      <p v-if="loaded && !widgets.some((w) => w.active)" class="none" data-test="dashboard-none">No widgets on. Switch one on in Widgets.</p>
+      <ProjectCard v-for="p in projects.filter((x) => x.active)" :key="p.id" :project="p" />
+      <p v-if="loaded && !widgets.some((w) => w.active) && !projects.some((p) => p.active)" class="none" data-test="dashboard-none">No widgets on. Switch one on in Widgets.</p>
     </div>
     <div ref="dock" class="dock" data-test="strip-dock">
       <QuestionsStrip :loop="loop" />

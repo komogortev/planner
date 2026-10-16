@@ -38,12 +38,12 @@ export class IntegrationsError extends Error {
 type Fetch = typeof fetch
 export interface Client { fetchImpl?: Fetch; apiUrl?: string; token?: string | null }
 
-async function request<T>(init: RequestInit, c: Client = {}): Promise<T> {
+async function request<T>(init: RequestInit, c: Client = {}, path = '/me/integrations/github'): Promise<T> {
   const token = c.token === undefined ? storedToken() : c.token
   if (!token) throw new IntegrationsError('Sign in first.', 401)
   let res: Response
   try {
-    res = await (c.fetchImpl ?? fetch)(`${c.apiUrl ?? API_URL}/me/integrations/github`, {
+    res = await (c.fetchImpl ?? fetch)(`${c.apiUrl ?? API_URL}${path}`, {
       ...init,
       headers: { Authorization: `Bearer ${token}`, ...(init.body ? { 'Content-Type': 'application/json' } : {}) },
     })
@@ -61,3 +61,20 @@ async function request<T>(init: RequestInit, c: Client = {}): Promise<T> {
 export const getGithub = (c?: Client) => request<GithubConnection>({ method: 'GET' }, c)
 export const connectGithub = (token: string, c?: Client) => request<GithubConnection>({ method: 'PUT', body: JSON.stringify({ token }) }, c)
 export const disconnectGithub = (c?: Client) => request<{ deleted: boolean }>({ method: 'DELETE' }, c)
+
+// ── G2: projects (docs/GITHUB-BRIDGE.md §5–6) ─────────────────────────────────────────────────────────────────────
+export interface RepoView { fullName: string; private: boolean; pushedAt: string | null }
+export const listRepos = async (c?: Client) => (await request<{ repos: RepoView[] }>({ method: 'GET' }, c, '/me/integrations/github/repos')).repos
+
+export type ShowPart = 'snapshot' | 'merges'
+export interface ProjectState {
+  repo: string
+  config: { title: string | null; state: string; show: ShowPart[] }
+  configSource: 'file' | 'default'
+  configError: string | null
+  snapshot: { found: boolean; text: string; path: string } | { error: string; path: string } | null
+  merges: { number: number; title: string; mergedAt: string; url: string }[] | { error: string } | null
+  fetchedAt: number
+}
+export const projectState = (repo: string, c?: Client) =>
+  request<ProjectState>({ method: 'GET' }, c, `/projects/state?repo=${encodeURIComponent(repo)}`)

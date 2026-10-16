@@ -5,7 +5,8 @@ import { PlannerDb } from '@/db'
 import { captureEntry } from '@/capture/capture'
 import { createCycleLock } from '../lock'
 import { fakeLocks } from './fakeLocks'
-import { type EngineDeps, backoffDelay, BACKOFF_MAX_MS, coalesce, PULL_PAGE, PUSH_BATCH_BYTES, PUSH_BATCH_MAX, SyncEngine, takeBatch } from '../engine'
+import { type EngineDeps, backoffDelay, BACKOFF_MAX_MS, coalesce, PULL_PAGE, PUSH_BATCH_BYTES, PUSH_BATCH_MAX, REPULL, SyncEngine, takeBatch } from '../engine'
+import { projectWidgetRow } from '@/widgets/projects'
 import { FakeServer } from './fakeServer'
 
 let n = 0
@@ -842,3 +843,69 @@ describe('no token', () => {
     expect(await a.db.outbox.count()).toBe(1)
   })
 })
+
+// G2 (GITHUB-BRIDGE §5): an older build drops a record it cannot validate (a `project` widget) and its cursor moves past it, so
+// after updating the device must pull from 0 once. The known positive is the device that already finished the re-pull: same
+// history, and it never gets the widget, so "the widget arrived" cannot pass by accident.
+describe('the one-time re-pull (REPULL)', () => {
+  const widget = () => ({ ...projectWidgetRow('komogortev/planner', false, true, '2026-10-16T10:00:00.000Z'), deletedAt: null })
+  async function olderBuildState(d: Device, repull?: number) {
+    server.seedRecord('widget', widget()) // version 1: the row the older build dropped
+    server.seed('n-1', 'a note') // version 2
+    await d.db.syncMeta.put({ userId: 'user-a', cursor: 2, lastPushAt: null, lastPullAt: null, ...(repull ? { repull } : {}) })
+  }
+  const pulls = () => server.requests.filter((r) => r.path.startsWith('/sync/pull')).map((r) => new URL(`https://x${r.path}`).searchParams.get('since'))
+
+  it('pulls from 0 once, stores what it had dropped, then resumes from its cursor', async () => {
+    const a = device(server)
+    await olderBuildState(a)
+    expect(await a.db.widgets.count()).toBe(0) // exercised: the widget is really missing on the device
+    await a.engine.run()
+    expect(pulls()).toEqual(['0'])
+    expect((await a.db.widgets.toArray()).map((w) => w.id)).toEqual([widget().id])
+    expect((await a.db.syncMeta.get('user-a'))).toMatchObject({ cursor: 2, repull: REPULL })
+    server.requests.length = 0
+    await a.engine.run()
+    expect(pulls()).toEqual(['2'])
+  })
+
+  it('a device that already finished it pulls from its cursor and never sees the dropped row', async () => {
+    const a = device(server)
+    await olderBuildState(a, REPULL)
+    await a.engine.run()
+    expect(pulls()).toEqual(['2'])
+    expect(await a.db.widgets.count()).toBe(0)
+  })
+
+  it('a restore that lands before the re-pull is still seen (D-58): the lost notes are put back', async () => {
+    const a = device(server)
+    for (const text of ['one', 'two', 'three']) await captureEntry(text, a.db)
+    await a.engine.run() // versions 1-3 acknowledged; this run also finished the re-pull
+    const meta = (await a.db.syncMeta.get('user-a'))!
+    await a.db.syncMeta.put({ ...meta, repull: undefined }) // as a device that updated to this build after the restore
+    server.restoreTo(1)
+    await a.engine.run()
+    expect([...server.rows.values()].map((r) => r.body).sort()).toEqual(['one', 'three', 'two']) // put back, not lost
+    expect((await a.db.syncMeta.get('user-a'))?.repull).toBe(REPULL)
+  })
+
+  it('an interrupted re-pull is not marked done, and runs again', async () => {
+    for (let i = 0; i < PULL_PAGE + 20; i++) server.seed(`s-${i}`, `old ${i}`)
+    const a = device(server)
+    await a.db.syncMeta.put({ userId: 'user-a', cursor: PULL_PAGE + 20, lastPushAt: null, lastPullAt: null })
+    let pages = 0
+    const engine = new SyncEngine({
+      db: a.db, fetch: (async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (String(input).includes('/sync/pull') && ++pages === 2) throw new TypeError('Failed to fetch') // the second page fails
+        return server.fetch(input, init)
+      }) as typeof fetch, apiUrl: 'https://api.test', token: () => 'tok-a', online: () => true, yieldNow: async () => {},
+    })
+    await engine.run()
+    expect((await a.db.syncMeta.get('user-a'))?.repull).toBeUndefined() // the first page alone does not finish it
+    server.requests.length = 0
+    await a.engine.run()
+    expect(pulls()[0]).toBe('0')
+    expect((await a.db.syncMeta.get('user-a'))?.repull).toBe(REPULL)
+  })
+})
+

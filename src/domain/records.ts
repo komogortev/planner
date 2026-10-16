@@ -3,7 +3,7 @@
 // entries. Environment-free: no Dexie, Vue, DOM or Workers APIs.
 //
 // Wire form of one record: `{ id, ...the kind's own fields, deletedAt }`. A mutation names the kind in `recordKind`
-// (distinct from the `kind` field some records carry themselves: a link's `closes | carries`, a widget's `system | prompt`).
+// (distinct from the `kind` field some records carry themselves: a link's `closes | carries`, a widget's `system | prompt | project`).
 // The validator drops unknown keys, never repairs a wrong one, and returns fields in a fixed order so equal content
 // serialises to equal text (the Worker compares text to tell a replay from an edit).
 import { cleanBody, isIsoDate, isIsoDateTime, isWellFormed } from './clean'
@@ -39,6 +39,7 @@ export const ADDED_FIELDS: Partial<Record<RecordKind, readonly string[]>> = {
   assessment: ['taskId'],
   question: ['taskId', 'kind'],
   run: ['taskIds', 'modelId', 'callId'], // modelId, callId: H5 (H5-MODELS §5)
+  widget: ['project'], // G2 (GITHUB-BRIDGE §5)
 }
 
 /** Ids are lowercase uuids, uuid v5 derivations or short built-in names such as `builtin-daily-task-journal`. */
@@ -54,13 +55,20 @@ export interface WidgetLens {
   shape: 'markdown' | 'checklist' | 'table'
   instruction: string
 }
+/** The GitHub repo a project widget shows (GITHUB-BRIDGE §5, G2). How the card looks is the repo's own `.planner.json`. */
+export interface WidgetProject {
+  repo: string // `owner/name`, as GitHub spells it
+  private: boolean
+}
 export interface WidgetRecord {
   id: string
   name: string
-  kind: 'system' | 'prompt'
+  kind: 'system' | 'prompt' | 'project'
   active: boolean
-  lens: WidgetLens | null // a prompt widget has one, a system widget does not
+  lens: WidgetLens | null // a prompt widget has one, a system or project widget does not
   lineage: string | null // the widget this one was cloned from
+  /** A project widget's repo; null on every other kind. Absent on a row from before G2 (ADDED_FIELDS). */
+  project?: WidgetProject | null
   createdAt: string
   updatedAt: string
 }
@@ -188,6 +196,11 @@ const listOf = (item: Check, max: number): Check => (v) => {
 
 // ── Kinds ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 
+/** GitHub's `owner/name`: an owner of 1–39 letters, digits or dashes; a repo name of letters, digits, `.`, `_`, `-`. */
+export const REPO_FULL_NAME = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})\/[A-Za-z0-9._-]{1,100}$/
+export const isRepoFullName = (v: unknown): v is string => typeof v === 'string' && REPO_FULL_NAME.test(v) && !v.endsWith('/.') && !v.endsWith('/..')
+const repoName: Check = (v) => (isRepoFullName(v) ? ok(v) : bad('is not a GitHub owner/name'))
+const PROJECT = shape({ repo: repoName, private: bool })
 const LENS = shape({ id: id, name: line(1, 80), version: int(1, 1000), shape: oneOf('markdown', 'checklist', 'table'), instruction: text(1, 2000) })
 
 const SPECS: Record<RecordKind, Record<string, Check>> = {
@@ -203,7 +216,8 @@ const SPECS: Record<RecordKind, Record<string, Check>> = {
   },
   entryState: { state: oneOf('open', 'done', 'dropped'), followUpOn: nullable(date), by: oneOf('owner', 'confirmed-proposal'), updatedAt: dateTime },
   widget: {
-    name: line(1, 80), kind: oneOf('system', 'prompt'), active: bool, lens: nullable(LENS), lineage: nullable(id),
+    name: line(1, 80), kind: oneOf('system', 'prompt', 'project'), active: bool, lens: nullable(LENS), lineage: nullable(id),
+    project: nullable(PROJECT),
     createdAt: dateTime, updatedAt: dateTime,
   },
   report: {
@@ -268,7 +282,11 @@ const RULES: Record<RecordKind, (f: Record<string, unknown>) => string | null> =
   },
   link: (f) => ((f.kind === 'carries') !== (f.onDate !== null) ? 'a carry has a date, a close does not' : null),
   entryState: (f) => (f.followUpOn !== null && f.state !== 'open' ? 'only an open note carries a follow-up date' : null),
-  widget: (f) => ((f.kind === 'prompt') !== (f.lens !== null) ? 'a prompt widget has a lens, a system widget does not' : null),
+  widget: (f) =>
+    (f.kind === 'prompt') !== (f.lens !== null) ? 'a prompt widget has a lens, the other kinds do not'
+      // An older build's row has no `project` key (absent): it is never a project widget, so absence passes for the others.
+      : (f.kind === 'project') !== (f.project != null) ? 'a project widget names its repo, the other kinds do not'
+      : null,
   report: () => null,
   run: (f) =>
     (f.stage === 'widget') !== (f.widgetId !== null) ? 'a widget run names its widget, a harness run does not'
