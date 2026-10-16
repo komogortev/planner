@@ -27,7 +27,7 @@ Entry ─────────────▶   Category · Theme · Tag ─�
 | A5 | **Audit.** Every tool call and every model call is listed with what it read and what it caused | audit table in D1 | H3 |
 | A6 | **No destructive tool.** No delete, no bulk overwrite, no accepting own proposals, nothing that sends | the registry: such tools are never registered | H3 |
 | A7 | **One model gate.** Every in-app model call goes through `callAI(featureId, …)`; model and effort resolve from settings | `callAI` | H5 |
-| A8 | **One scheduler, one notifier.** Background runs are registry entries with a global pause; notifications are capped per day and silent by default | `ROUTINES` (D-89), `sendNotification` | H5 |
+| A8 | **One scheduler, one notifier.** Background runs are registry entries with a global pause; notifications are capped per day and silent by default | `SCHEDULES` (D-89, renamed by D-138), `sendNotification` | H5 |
 | A9 | **Frozen schema versions.** One per-row migration function serves Dexie upgrade and snapshot restore | `src/db/migrations.ts` | shipped |
 | A10 | **Capture is atomic and never waits on the network.** An entry and its outbox row commit in one Dexie transaction | `src/stores/entries.ts` write path | H1 |
 | A11 | **Tenant isolation.** The backend takes `user_id` from the session only, never from a request body; every query passes through one data-access helper that requires it. **Amendment (H5, D-44, takes effect when H5 starts):** a scheduled run has no session, so its `user_id` may come from a schedule row created by that same user's own session; there is no cross-user system account | `api/src/db/` helper | H1 |
@@ -76,7 +76,7 @@ Changed 2026-10-09 (owner): entries live on a hosted backend, not in `data.json`
 | Mode | Who runs the model | Cost | Used for | Tier |
 |---|---|---|---|---|
 | **Outside** | Claude Code (desktop) or the Claude phone app, reaching the data through the backend's remote MCP endpoint | existing Claude subscription | curation sessions, on-demand lens runs | H2 trial (read-only), H3 |
-| **Inside** | the app, through the Worker's `/ai/calls` (the `callAI` gate, A7) with the model **the user registered** (D-78) | the user's own API key, billed per token by their provider; key encrypted on the Worker, write-only (D-79) | every declared run without a paste (S1–S2); routines with the app closed (S3) | H5, [H5-MODELS.md](H5-MODELS.md) |
+| **Inside** | the app, through the Worker's `/ai/calls` (the `callAI` gate, A7) with the model **the user registered** (D-78) | the user's own API key, billed per token by their provider; key encrypted on the Worker, write-only (D-79) | every declared run without a paste (S1–S2); schedules with the app closed (S3) | H5, [H5-MODELS.md](H5-MODELS.md) |
 
 **Since 2026-10-12 (D-78): bring your own model is the core path; copy-prompt stays as the free executor `manual`, and H3 is optional.** Earlier text, kept for its reasoning — first in-app executor (D-35, 2026-10-10): **copy-prompt**. A prompt widget's Run builds the prompt with the one composer, copies it, the owner pastes it into Claude and pastes the answer back, and the app checks citations against the slice before storing an immutable report. H3 (remote MCP) is built only on evidence that paste friction blocks lens use, for the owner's account only; H5 only when widgets go stale for lack of a manual run (D-37, D-42).
 

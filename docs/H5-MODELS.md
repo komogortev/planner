@@ -7,7 +7,7 @@ Terms per [VOCABULARY.md](VOCABULARY.md); invariants per [ARCHITECTURE.md](ARCHI
 
 ## 1. Goal
 
-The planner is a wrapper that runs declared actions (the harness, the Daily widget, later lenses and routines), checks
+The planner is a wrapper that runs declared actions (the harness, the Daily widget, later lenses and schedules), checks
 what comes back, stores it and tracks it over time. The model is replaceable. This tier lets each user **register the
 model they want** (Claude, GPT, Gemini or any OpenAI-compatible endpoint) and runs the declared actions through it with no
 copy and paste. Later (S3) the same actions run on a schedule with the app closed.
@@ -38,7 +38,7 @@ cannot call the first account's model (negative control).
 | D-86 | **Claude: code decides when a model runs, and a cap bounds it.** A Worker rate limit on the call route plus a daily call cap per user (default in §10 O3). It protects the user's own money from a client loop or a stolen session. The model never schedules itself (06 L8) | — |
 | D-87 | **Claude: the call row is the audit for model calls (A5).** It holds who, which model, which stage and run, how many notes, prompt bytes, the provider's token counts, the outcome and the duration. **No prompt text is stored.** The reply text is kept until the device stores the run or 7 days pass, then cleared | — |
 | D-88 | **Claude: provider error bodies are never passed through or logged.** They are mapped to a category (`key_rejected`, `rate_limited`, `model_not_found`, `model_unavailable` (D-92), `provider_down`, `bad_request`). Some providers echo part of the key in an error message | — |
-| D-89 | **Owner, 2026-10-12 (O1): the word is Routine** — a declared run (harness, a widget's run, a lens) bound to a time. `Routine`, table `routines`; ARCHITECTURE A8's scheduler registry is `ROUTINES` | VOCABULARY's 2026-10-09 rejection of *Routine* as a name for Lens |
+| D-89 | **Renamed to Schedule by D-138 (2026-10-16).** Was: **Owner, 2026-10-12 (O1): the word is Routine** — a declared run (harness, a widget's run, a lens) bound to a time. `Routine`, table `routines`; ARCHITECTURE A8's scheduler registry is `ROUTINES` | VOCABULARY's 2026-10-09 rejection of *Routine* as a name for Lens |
 | D-90 | **Owner, same (O6): D-22 (list own sessions, sign out everywhere) is built before any invitee can register a model** | D-22's re-entry "invitee #4" |
 | D-94 | **Claude (S1, 2026-10-12): the prompt sits in the call row only while the call runs**, cleared in the same write that records the outcome; the Workflow instance carries ids only (`userId`, `callId`), because Workflow state is kept up to 3 days on the free plan. Instance retention is set to 1 day (success) / 3 days (error) | Refines D-87 |
 | D-95 | **Claude (S1): three outcomes besides the provider's.** `refused` (Anthropic `stop_reason: refusal`, OpenAI `finish_reason: content_filter`) keeps no text; `no_key` (no key, a deleted model, or a key that no longer opens for this endpoint) makes no provider call; `lost` (pending past the step's 15-minute timeout) | Extends D-88 |
@@ -157,7 +157,7 @@ undone by turning the executor switch back to `manual`.
 | **S1 Worker** ✅ built 2026-10-12 | `0009`; models CRUD with encrypted key; `/ai/calls` as a Workflow (D-91) with both adapters, D-85 cut-off handling, D-88/D-92/D-95 outcomes, cap (D-96); A13 coverage; validator accepts `model` (run gains `modelId`, `callId`) | key-never-returned test; second-account negative control; cut-off reply → `cut_off` and no reply kept; endpoint change clears key; a provider error echoing a fake key never appears in a response or log |
 | **S1 parser tests** ✅ | 06 A7: a reply cut off mid-string is refused by both parsers, nothing stored | the cut-off fixture fails before the test is trusted |
 | **S2 client** ✅ built 2026-10-12 | Settings → AI models (add, test, remove; "This device runs with", per device); Run with … on the run panel (Copy instead stays); a waiting call picked up after a reload; the run records `executor: 'model'` with its ids; DEVICE-CHECKS 33–36 | a run with a wrong key shows `key_rejected` and stores nothing |
-| **S3 routines** | Design addendum: [H5-S3-ROUTINES.md](H5-S3-ROUTINES.md) (2026-10-16; D-123…D-137, slices S3-0…S3-3). Amends §8's S3 column: the Worker composes and calls, the device checks and stores (D-123) | see the addendum |
+| **S3 schedules** | Design addendum: [H5-S3-SCHEDULES.md](H5-S3-SCHEDULES.md) (2026-10-16; D-123…D-137 decided, Morning only; notifications deferred). Amends §8's S3 column: the Worker composes and calls, the device checks and stores (D-123) | see the addendum |
 | H3 (optional) | Remote MCP for Claude clients, unchanged from D-20 and D-37 | — |
 
 ## 10. Open points

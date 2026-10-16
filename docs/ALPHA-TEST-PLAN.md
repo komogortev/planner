@@ -1,6 +1,6 @@
 # Alpha test plan — full scope (2026-10-16)
 
-**Status: accepted (owner, 2026-10-16) with the recommended answers to Q1–Q4 and Q6 (D-122); Q5 open. R1 ✅ 2026-10-16 (A8, #169). R2 drafted: [H5-S3-ROUTINES.md](H5-S3-ROUTINES.md), decisions D-123…D-130 with the owner.** Owner, 2026-10-16: alpha starts only when every roadmap item up to and including
+**Status: accepted (owner, 2026-10-16) with the recommended answers to Q1–Q4 and Q6 (D-122); Q5 open. R1 ✅ 2026-10-16 (A8, #169). R2 ✅ decided 2026-10-16: [H5-S3-SCHEDULES.md](H5-S3-SCHEDULES.md), D-123…D-130 (Morning schedule only; notifications deferred past R10, which amends Q2). *Routine* renamed to **Schedule** (D-138); *Routine* now names a recurring personal item, parked (D-139).** Owner, 2026-10-16: alpha starts only when every roadmap item up to and including
 H5 S3 has landed, plus UI calibrations found along the way. This **supersedes D-114** ("the declared slice is enough to
 open alpha"). The change is D-122 in [DECISION-TREE.md](DECISION-TREE.md). [SLICE-ACCEPTANCE.md](SLICE-ACCEPTANCE.md) stays the one gate: §1 gains rows A8–A13 (§3 below). Terms per
 [VOCABULARY.md](VOCABULARY.md).
@@ -45,7 +45,7 @@ automated test, a DEVICE-CHECKS row the owner ran on the phone, or **gap**: not 
 | T13 | Today | Tasks from your notes show on Today; mark one done, push one to tomorrow | Done is gone tomorrow; pushed shows tomorrow; untouched stays, marked overdue | L3, L4 |
 | T14 | Closed mid-run | Start a run, close the app, reopen a minute later | The answer is there, no second run | DEVICE-CHECKS 35; L6 |
 | T15 | Summary | Open Summary at the end of a day | What got done, what moved to tomorrow, what is still open, what was dropped | **gap: Summary v3 not built; today hidden from testers (G2, #146)** |
-| T16 | Runs without opening the app | Leave the app closed overnight with a model set | Today is ready in the morning (and a notification, if on); a pause switch stops it | **gap: H5 S3 not designed or built** |
+| T16 | Runs without opening the app | Leave the app closed overnight with a model set | Today is ready in the morning; a pause switch stops it | **gap: H5 S3 designed (D-123…D-130), not built** |
 
 ### 1.4 Projects (optional, needs a GitHub token)
 
@@ -80,7 +80,7 @@ phone or need a secret or a call only the owner can make; Claude does the rest.
 | R4 | **D-113 removal**: the paste run path, `harness/clipboard.ts`, the paste-waiting state, Copy buttons and paste copy, the v1 `loop.ts` / `journal.ts` once R3 replaces them; the test floor is lowered explicitly in the same PR | 7 | S–M | Client, every account running a model. Wrong = a device with "paste" saved has no run path; a missed reference fails typecheck | Claude | R3 |
 | R5 | **UI calibrations** from the gap register: G8 Get feedback opens on the first question's input; G10 a run-through button only when changes wait; G11 auto-growing add-task box; G13 Widgets page styled like live widgets; G7 the "Journal" name (owner's call); G9 free-form input on an empty queue (**harness**: where the reply lands) | 7+ | S each | Client only, except G9 (harness) | Claude; G7, G9 owner call | R4 (same files) |
 | R6 | **Nightly export**: Worker cron writes the export to the private data repo (ARCHITECTURE §4, H1-ENTRIES §9) | 4 | S–M | Worker cron + a private repo. Wrong scope = a tester's notes in the owner's GitHub (a notice claim) | Claude; owner sets the repo token secret | — |
-| R7 | **H5 S3 build**, 2–3 PRs per R2: Worker compose/apply + cron + pause; then notification | 8 | L | **Worker, stored model keys, provider cost, runs with nobody watching.** The widest radius on the list | Claude | R2 decisions, R3 (the lens it runs) |
+| R7 | **H5 S3 build** = S3-1 per R2: account default model, Morning schedule, Worker compose + cron + pause, skip-while-waiting, device apply on open. Notification deferred (D-127) | 8 | L | **Worker, stored model keys, provider cost, runs with nobody watching.** The widest radius on the list | Claude | R2 ✅ (Morning runs the harness, so no longer R3) |
 | R8 | **G5 end to end**: the Claude workflow and a `CLAUDE_CODE_OAUTH_TOKEN` secret on one repo; one real issue → Action → PR → merge → card shows it; fixes from that run | 5 | S | The chosen repo and its Actions. The planner never writes workflows | Owner adds workflow + secret; Claude verifies and fixes | — |
 | R9 | **Phone checks** (owner): DEVICE-CHECKS 37–41, #148 menu tap, D-105 on a real model, folded card and loop back (#158–#164), then each slice above after its deploy | 2 | — | Owner's devices only | Owner | each deploy |
 | R10 | **Gate and notice**: SLICE-ACCEPTANCE §1 rows A8–A13; D-122; the notice rewritten for scheduled runs (notes sent with the app closed), the GitHub token, the export scope; facts table re-checked against the code; invite re-issued | 1 | S | Outward-facing: what testers are told. Owner sends | Claude drafts; owner sends | R1–R9 |
@@ -90,7 +90,7 @@ phone or need a secret or a call only the owner can make; Claude does the rest.
 | # | Question | Recommended | Alternative |
 |---|---|---|---|
 | Q1 | Nightly export scope | **Owner's account only** (Recommended): no tester notes leave Cloudflare; the notice keeps "export + Time Travel" as tester backup | Every account: tester notes in the owner's private repo; the notice must say so |
-| Q2 | H5 S3 for alpha: notifications in or out | **In** (Recommended), as the last S3 PR: "full scope" was the owner's call, and T16 is unclear without a signal that Today is ready | Out: Today waits on open, push follows alpha |
+| Q2 | H5 S3 for alpha: notifications in or out | **Amended (owner, 2026-10-16, D-127): a pre-alpha candidate entered only after R1–R10 are done.** Was: In, as the last S3 PR | Out: Today waits on open, push follows alpha |
 | Q3 | Summary v3 for testers | **Listed for every account** once v3 lands (Recommended): it is in scope and v1's reason to hide it is gone | Owner only until a week of his own use |
 | Q4 | G5 repo | **The planner repo** (Recommended): its card is already verified. The Action answers only users with write access (inferred from the action's defaults; checked on the run) | Another private repo |
 | Q5 | G7: name the loop "Journal" in the UI | Owner's call, no recommendation: naming | — |
@@ -104,10 +104,10 @@ phone or need a secret or a call only the owner can make; Claude does the rest.
 | A9 | Summary v3 listed for every account; lens test over done/pushed/open/dropped | R3 tests |
 | A10 | No paste path in the code (D-113) | R4; typecheck + floor |
 | A11 | Nightly export runs and covers the agreed scope | R6 test + one real run |
-| A12 | H5 S3: Today arrives on a day the app was not opened; pause stops it; a second account's schedule never runs with the first's key | R7 tests + phone |
+| A12 | H5 S3: Today arrives on a day the app was not opened; pause stops it; a tick skips while a reply waits; a second account's schedule never runs with the first's key | R7 tests + phone |
 | A13 | G5: one real issue → Action → PR → merge shown on a card | R8, on the phone |
 
 ## 4. Session order
 
 R1 first (largest blast radius, no dependency, closes the A7 finding). R2 next, so the H5 S3 decisions are with the owner
-while R3–R6 are built. R8 and R9 run on the owner's side in parallel. R7 after the R2 answers. R10 last.
+while R3–R6 are built. R8 and R9 run on the owner's side in parallel. R7 after the R2 answers (given 2026-10-16). R10 last; notifications (D-127) re-enter after it.
