@@ -69,13 +69,26 @@ export const listRepos = async (c?: Client) => (await request<{ repos: RepoView[
 export type ShowPart = 'snapshot' | 'merges'
 export interface ProjectState {
   repo: string
-  /** `brief` is absent from a Worker older than C1; the card then uses BRIEF_DEFAULT. */
-  config: { title: string | null; state: string; show: ShowPart[]; brief?: string[] }
+  /** `brief` (C1) and `issues` (C2) are absent from an older Worker; the card then uses the defaults. */
+  config: { title: string | null; state: string; show: ShowPart[]; brief?: string[]; issues?: IssueKind[] }
   configSource: 'file' | 'default'
   configError: string | null
   snapshot: { found: boolean; text: string; path: string } | { error: string; path: string } | null
   merges: { number: number; title: string; mergedAt: string; url: string }[] | { error: string } | null
+  /** The open issues the planner sent (C2); absent from an older Worker. */
+  issues?: SentIssue[] | { error: string }
   fetchedAt: number
 }
 export const projectState = (repo: string, c?: Client) =>
   request<ProjectState>({ method: 'GET' }, c, `/projects/state?repo=${encodeURIComponent(repo)}`)
+
+// ── C2: sending an issue (docs/GITHUB-BRIDGE.md §7) ─────────────────────────────────────────────────────────────────
+export interface IssueKind { name: string; labels: string[] }
+export interface SentIssue { number: number; title: string; url: string; createdAt: string }
+export interface IssueDraft { repo: string; title: string; body: string; kind: string | null; requestId: string }
+/** Mirrors the Worker's limits (api/src/projects.ts), so the sheet refuses what the Worker would. */
+export const ISSUE_TITLE_MAX = 200
+export const ISSUE_BODY_MAX = 10_000
+/** Online only (Q3): waits for GitHub's answer; nothing is queued. `created: false` = an earlier try of this request had landed. */
+export const sendIssue = (d: IssueDraft, c?: Client) =>
+  request<{ issue: SentIssue; created: boolean }>({ method: 'POST', body: JSON.stringify(d) }, c, '/projects/issue')

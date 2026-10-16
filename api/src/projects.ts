@@ -2,12 +2,13 @@
 // it. Read-only. Every call uses the user's own stored token (integrations.ts) and the account from the session (A11);
 // a repo's state is served only when the repo is one of the account's own project widgets.
 //
-// How a card looks is the repo's own `.planner.json` (§5, amendment 2026-10-16): `{ title?, state?, show?, brief? }`. Absent or
+// How a card looks is the repo's own `.planner.json` (§5, amendment 2026-10-16): `{ title?, state?, show?, brief?, issues? }`.
+// C2 (§7, G4): POST /projects/issue sends one issue, only on the user's tap, labelled `planner`. Absent or
 // unreadable → defaults, and the card says which. GitHub content is data: it is returned as text, never as markup.
 import { Hono } from 'hono'
 import { signedOutBody } from './account'
 import { authenticate, type AuthedSession } from './auth'
-import { GITHUB_API, githubHeaders, githubToken } from './integrations'
+import { GITHUB_API, githubAccount, githubHeaders } from './integrations'
 import { KeyBoxUnavailable } from './keyBox'
 import { isRepoFullName } from '../../src/domain/records'
 import type { Env } from './index'
@@ -19,11 +20,41 @@ export const MERGES_SHOWN = 5
 export const CONFIG_PATH = '.planner.json'
 export const SHOW_PARTS = ['snapshot', 'merges'] as const
 export type ShowPart = (typeof SHOW_PARTS)[number]
-/** `brief`: the snapshot fields (their bold labels, e.g. "Next") the folded card shows, in order. */
-export interface ProjectConfig { title: string | null; state: string; show: ShowPart[]; brief: string[] }
-export const DEFAULT_CONFIG: ProjectConfig = { title: null, state: 'docs/STATE.md', show: ['snapshot', 'merges'], brief: ['Next'] }
+/** An issue kind the card's New issue sheet offers (C2): a name and the GitHub labels it adds besides `planner`. */
+export interface IssueKind { name: string; labels: string[] }
+/**
+ * `brief`: the snapshot fields (their bold labels, e.g. "Next") the folded card shows, in order.
+ * `issues`: the kinds the New issue sheet offers; empty = a plain title and body.
+ */
+export interface ProjectConfig { title: string | null; state: string; show: ShowPart[]; brief: string[]; issues: IssueKind[] }
+export const DEFAULT_CONFIG: ProjectConfig = { title: null, state: 'docs/STATE.md', show: ['snapshot', 'merges'], brief: ['Next'], issues: [] }
 const BRIEF_MAX = 4
 const BRIEF_LABEL_MAX = 30
+const KINDS_MAX = 8
+const KIND_NAME_MAX = 24
+const KIND_LABELS_MAX = 3
+/** The label every issue the planner sends carries: how the card finds them again (GITHUB-BRIDGE §7). */
+export const PLANNER_LABEL = 'planner'
+/** A GitHub label name: up to 50 characters; no comma, since the issue-list filter splits on commas. */
+const isLabel = (l: unknown): l is string => typeof l === 'string' && l.trim().length > 0 && l.trim().length <= 50 && !l.includes(',')
+
+/** `issues` checked as a whole: any bad kind refuses the key (one typo must not silently drop one kind). */
+function parseKinds(v: unknown): IssueKind[] | null {
+  if (!Array.isArray(v) || v.length === 0 || v.length > KINDS_MAX) return null
+  const out: IssueKind[] = []
+  const seen = new Set<string>()
+  for (const k of v) {
+    if (typeof k !== 'object' || k === null || Array.isArray(k)) return null
+    const { name, labels, ...rest } = k as Record<string, unknown>
+    if (Object.keys(rest).length > 0) return null
+    if (typeof name !== 'string' || name.trim().length === 0 || name.trim().length > KIND_NAME_MAX) return null
+    if (seen.has(name.trim().toLowerCase())) return null
+    seen.add(name.trim().toLowerCase())
+    if (labels !== undefined && (!Array.isArray(labels) || labels.length > KIND_LABELS_MAX || !labels.every(isLabel))) return null
+    out.push({ name: name.trim(), labels: ((labels as string[] | undefined) ?? []).map((l) => l.trim()) })
+  }
+  return out
+}
 
 /** A repo-relative file path: segments of safe characters, no `..`, no leading slash. */
 const SAFE_PATH = /^(?!\/)(?:[A-Za-z0-9._-]+\/)*[A-Za-z0-9._-]+$/
@@ -66,8 +97,14 @@ export function parseConfig(raw: string): { config: ProjectConfig; error: string
     }
     else ignored.push('brief')
   }
-  for (const k of Object.keys(c)) if (!['title', 'state', 'show', 'brief'].includes(k)) ignored.push(k)
-  return { config: { title, state, show, brief }, error: ignored.length ? `${CONFIG_PATH}: ignored ${ignored.join(', ')}` : null }
+  let issues = DEFAULT_CONFIG.issues
+  if ('issues' in c) {
+    const kinds = parseKinds(c.issues)
+    if (kinds) issues = kinds
+    else ignored.push('issues')
+  }
+  for (const k of Object.keys(c)) if (!['title', 'state', 'show', 'brief', 'issues'].includes(k)) ignored.push(k)
+  return { config: { title, state, show, brief, issues }, error: ignored.length ? `${CONFIG_PATH}: ignored ${ignored.join(', ')}` : null }
 }
 
 /**
@@ -96,11 +133,13 @@ class GithubRefused extends Error {
 }
 
 /** One GitHub API call. 401 and rate limits end the whole read (thrown); any other status is the caller's to judge. */
-async function gh(token: string, path: string, accept?: string): Promise<Response> {
+async function gh(token: string, path: string, accept?: string, post?: unknown): Promise<Response> {
   let res: Response
   try {
     res = await fetch(`${GITHUB_API}${path}`, {
-      headers: { ...githubHeaders(token), ...(accept ? { Accept: accept } : {}) }, redirect: 'manual', signal: AbortSignal.timeout(TIMEOUT_MS),
+      ...(post === undefined ? {} : { method: 'POST', body: JSON.stringify(post) }),
+      headers: { ...githubHeaders(token), ...(accept ? { Accept: accept } : {}), ...(post === undefined ? {} : { 'Content-Type': 'application/json' }) },
+      redirect: 'manual', signal: AbortSignal.timeout(TIMEOUT_MS),
     })
   } catch {
     throw new GithubRefused('GitHub did not answer. Try again.', 502)
@@ -111,6 +150,11 @@ async function gh(token: string, path: string, accept?: string): Promise<Respons
     const reset = Number(res.headers.get('x-ratelimit-reset'))
     const at = Number.isFinite(reset) && reset > 0 ? new Date(reset * 1000).toISOString().slice(11, 16) : null
     throw new GithubRefused(`GitHub's limit is reached${at ? `; try again after ${at} UTC` : ''}.`, 429)
+  }
+  // A secondary limit (GitHub's abuse guard, easier to hit when creating) is a 403/429 carrying retry-after: a pause, not a
+  // missing permission.
+  if ((res.status === 403 || res.status === 429) && res.headers.get('retry-after') !== null) {
+    throw new GithubRefused('GitHub is limiting requests for a moment. Try again in a minute.', 429)
   }
   return res
 }
@@ -127,12 +171,46 @@ async function boundedText(res: Response): Promise<string | null> {
 const repoPath = (repo: string) => repo.split('/').map(encodeURIComponent).join('/')
 const filePath = (p: string) => p.split('/').map(encodeURIComponent).join('/')
 
+/** The repo's `.planner.json`, read and checked; absent → the defaults. */
+async function readConfig(token: string, repo: string): Promise<{ config: ProjectConfig; configSource: 'file' | 'default'; configError: string | null }> {
+  const cfg = await gh(token, `/repos/${repoPath(repo)}/contents/${CONFIG_PATH}`, 'application/vnd.github.raw+json')
+  if (cfg.ok) {
+    const parsed = parseConfig((await boundedText(cfg)) ?? 'too large')
+    return { config: parsed.config, configSource: 'file', configError: parsed.error }
+  }
+  return { config: DEFAULT_CONFIG, configSource: 'default', configError: cfg.status === 404 ? null : `${CONFIG_PATH}: GitHub answered ${cfg.status}` }
+}
+
+export const ISSUES_SHOWN = 5
+/** How far back a retried send looks for its request id (newest first): far more than one person sends in a retry window. */
+const DEDUPE_SCAN = 50
+export interface SentIssue { number: number; title: string; url: string; createdAt: string; body?: string }
+/** The issues list filtered to what the planner sent from this login. */
+const sentIssuesQuery = (login: string, state: 'open' | 'all', perPage = 20) =>
+  new URLSearchParams({ labels: PLANNER_LABEL, creator: login, state, sort: 'created', direction: 'desc', per_page: String(perPage) }).toString()
+/** GitHub's issue list as SentIssues: pull requests (which the issues API also lists) and malformed rows dropped. */
+function toSentIssues(repo: string, list: unknown, keepBody = false): SentIssue[] {
+  if (!Array.isArray(list)) return []
+  return (list as Record<string, unknown>[])
+    .filter((i) => !('pull_request' in i) && typeof i.number === 'number' && typeof i.title === 'string' && typeof i.created_at === 'string')
+    .map((i) => ({
+      number: i.number as number, title: (i.title as string).slice(0, 200), createdAt: i.created_at as string,
+      url: typeof i.html_url === 'string' && i.html_url.startsWith('https://github.com/') ? i.html_url : `https://github.com/${repo}/issues/${i.number}`,
+      ...(keepBody ? { body: typeof i.body === 'string' ? i.body : '' } : {}),
+    }))
+}
+/** The marker a sent issue's body ends with: a retried send finds it and answers with that issue instead of a second one. */
+export const requestMarker = (id: string) => `<!-- planner:${id} -->`
+const REQUEST_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+export const ISSUE_TITLE_MAX = 200
+export const ISSUE_BODY_MAX = 10_000
+
 type Vars = { session: AuthedSession }
 
-/** The user's token, or a ready response saying why there is none. */
-async function tokenOr(c: { env: Env; get: (k: 'session') => AuthedSession; json: (b: unknown, s: number) => Response }): Promise<string | Response> {
+/** The user's token and GitHub login, or a ready response saying why there is none. */
+async function accountOr(c: { env: Env; get: (k: 'session') => AuthedSession; json: (b: unknown, s: number) => Response }): Promise<{ token: string; login: string } | Response> {
   try {
-    const t = await githubToken(c.env, c.get('session').id)
+    const t = await githubAccount(c.env, c.get('session').id)
     return t ?? c.json({ error: 'GitHub is not connected. Connect it in Settings → Integrations.' }, 409)
   } catch (err) {
     if (err instanceof KeyBoxUnavailable) { console.error(`projects: ${err.message}`); return c.json({ error: 'not configured' }, 503) }
@@ -151,8 +229,9 @@ const authed = async (c: any, next: () => Promise<void>) => {
 export const reposApi = new Hono<{ Bindings: Env; Variables: Vars }>()
 reposApi.use('*', authed)
 reposApi.get('/', async (c) => {
-  const token = await tokenOr(c)
-  if (token instanceof Response) return token
+  const account = await accountOr(c)
+  if (account instanceof Response) return account
+  const { token } = account
   const repos: { fullName: string; private: boolean; pushedAt: string | null }[] = []
   try {
     for (let page = 1; page <= REPO_PAGES; page++) {
@@ -192,22 +271,12 @@ projectsApi.get('/state', async (c) => {
   if (!isRepoFullName(repo)) return c.json({ error: 'repo: owner/name' }, 400)
   // The same answer for "not yours" and "no such project": the route never confirms what another account holds.
   if (!(await ownsProject(c.env.DB, c.get('session').id, repo))) return c.json({ error: 'not a project of yours' }, 404)
-  const token = await tokenOr(c)
-  if (token instanceof Response) return token
+  const account = await accountOr(c)
+  if (account instanceof Response) return account
+  const { token, login } = account
   try {
     // 1. The repo's own card config.
-    let config = DEFAULT_CONFIG
-    let configSource: 'file' | 'default' = 'default'
-    let configError: string | null = null
-    const cfg = await gh(token, `/repos/${repoPath(repo)}/contents/${CONFIG_PATH}`, 'application/vnd.github.raw+json')
-    if (cfg.ok) {
-      const parsed = parseConfig((await boundedText(cfg)) ?? 'too large')
-      config = parsed.config
-      configError = parsed.error
-      configSource = 'file'
-    } else if (cfg.status !== 404) {
-      configError = `${CONFIG_PATH}: GitHub answered ${cfg.status}`
-    }
+    const { config, configSource, configError } = await readConfig(token, repo)
     // 2. The STATE snapshot.
     let snapshot: { found: boolean; text: string; path: string } | { error: string; path: string } | null = null
     if (config.show.includes('snapshot')) {
@@ -235,8 +304,75 @@ projectsApi.get('/state', async (c) => {
         merges = { error: `GitHub answered ${pr.status} for the pull requests` }
       }
     }
-    return c.json({ repo, config, configSource, configError, snapshot, merges, fetchedAt: Date.now() })
+    // 4. The open issues the planner sent from this login (C2): the card lists them under the form.
+    let issues: SentIssue[] | { error: string } = []
+    const is = await gh(token, `/repos/${repoPath(repo)}/issues?${sentIssuesQuery(login, 'open')}`)
+    if (is.ok) issues = toSentIssues(repo, await is.json().catch(() => [])).slice(0, ISSUES_SHOWN)
+    else issues = { error: `GitHub answered ${is.status} for the issues` }
+    return c.json({ repo, config, configSource, configError, snapshot, merges, issues, fetchedAt: Date.now() })
   } catch (err) {
+    if (err instanceof GithubRefused) return c.json({ error: err.message }, err.status as 409)
+    throw err
+  }
+})
+
+// ── POST /projects/issue { repo, title, body?, kind?, requestId } ─────────────────────────────────────────────────
+// Sends one issue to one of the account's projects (C2, GITHUB-BRIDGE §7). Only this route writes to GitHub, and only the
+// user's Send tap calls it. Order: input → ownership (404 before any GitHub call) → the repo's kinds → an earlier send of
+// the same request (a retry after a lost answer gets that issue back) → labels → the issue.
+// "No issue was sent", not "nothing": a label made just before a refused create stays in the repo.
+const sendRefusal = (status: number) =>
+  status === 403 ? 'GitHub refused: the token needs Issues: Read and write on this repo. Edit the token on GitHub. No issue was sent.'
+    : status === 404 ? 'GitHub cannot see this repo with the stored token. No issue was sent.'
+      : status === 410 ? 'Issues are turned off for this repo. No issue was sent.'
+        : `GitHub answered ${status}. No issue was sent.`
+/** A 5xx on the create itself may come after GitHub wrote the issue: the retry (same request id) finds it, never doubles it. */
+const createUnsure = (status: number) => `GitHub answered ${status}. It may have been sent: Send again checks rather than sending twice.`
+
+projectsApi.post('/issue', async (c) => {
+  let input: Record<string, unknown> | null = null
+  try { input = (await c.req.json()) as Record<string, unknown> } catch { /* answered below */ }
+  if (typeof input !== 'object' || input === null || Array.isArray(input)) return c.json({ error: 'not JSON' }, 400)
+  const { repo, title, body, kind, requestId } = input
+  if (!isRepoFullName(repo)) return c.json({ error: 'repo: owner/name' }, 400)
+  if (typeof title !== 'string' || title.trim().length === 0 || title.trim().length > ISSUE_TITLE_MAX) return c.json({ error: `title: 1–${ISSUE_TITLE_MAX} characters` }, 400)
+  if (body !== undefined && (typeof body !== 'string' || body.length > ISSUE_BODY_MAX)) return c.json({ error: `body: up to ${ISSUE_BODY_MAX} characters` }, 400)
+  if (kind !== undefined && kind !== null && typeof kind !== 'string') return c.json({ error: 'kind: a name or null' }, 400)
+  if (typeof requestId !== 'string' || !REQUEST_ID.test(requestId)) return c.json({ error: 'requestId: a uuid' }, 400)
+  if (!(await ownsProject(c.env.DB, c.get('session').id, repo))) return c.json({ error: 'not a project of yours' }, 404)
+  const account = await accountOr(c)
+  if (account instanceof Response) return account
+  const { token, login } = account
+  const r = repoPath(repo)
+  try {
+    let labels = [PLANNER_LABEL]
+    if (typeof kind === 'string') {
+      const { config } = await readConfig(token, repo)
+      const k = config.issues.find((x) => x.name.toLowerCase() === kind.trim().toLowerCase())
+      if (!k) return c.json({ error: `"${kind.slice(0, 40)}" is not an issue kind in ${CONFIG_PATH}. Refresh the card. Nothing was sent.` }, 409)
+      labels = [...new Set([PLANNER_LABEL, ...k.labels])]
+    }
+    // An earlier send of this request: when this check cannot run, nothing is sent (a blind create could duplicate).
+    const prior = await gh(token, `/repos/${r}/issues?${sentIssuesQuery(login, 'all', DEDUPE_SCAN)}`)
+    if (!prior.ok) return c.json({ error: sendRefusal(prior.status) }, prior.status === 403 || prior.status === 404 || prior.status === 410 ? 409 : 502)
+    const hit = toSentIssues(repo, await prior.json().catch(() => []), true).find((i) => i.body?.includes(requestMarker(requestId)))
+    if (hit) { const { body: _b, ...issue } = hit; return c.json({ issue, created: false }) }
+    // Labels: 201 made it, 422 means it is there already.
+    for (const name of labels) {
+      const res = await gh(token, `/repos/${r}/labels`, undefined, { name })
+      if (res.status !== 201 && res.status !== 422) return c.json({ error: sendRefusal(res.status) }, res.status === 403 || res.status === 404 ? 409 : 502)
+    }
+    const text = typeof body === 'string' ? body.trim() : ''
+    const res = await gh(token, `/repos/${r}/issues`, undefined, {
+      title: title.trim(), body: text ? `${text}\n\n${requestMarker(requestId)}` : requestMarker(requestId), labels,
+    })
+    if (res.status >= 500) return c.json({ error: createUnsure(res.status) }, 502)
+    if (res.status !== 201) return c.json({ error: sendRefusal(res.status) }, res.status === 403 || res.status === 404 || res.status === 410 ? 409 : 502)
+    const [issue] = toSentIssues(repo, [await res.json().catch(() => null)])
+    if (!issue) return c.json({ error: 'GitHub made the issue but sent no details. Refresh the card to see it.' }, 502)
+    return c.json({ issue, created: true }, 201)
+  } catch (err) {
+    // A timeout may hide a created issue: the message says "Try again", and the retry finds it by its request id.
     if (err instanceof GithubRefused) return c.json({ error: err.message }, err.status as 409)
     throw err
   }

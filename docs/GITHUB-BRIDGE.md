@@ -100,6 +100,18 @@ snapshot's first line shows. **More** opens the full snapshot and merges, and th
 device. An app newer than the Worker reads a missing `brief` as the default. C2 (the G4 sheet, with per-repo issue kinds
 declared in `.planner.json`) and C3 (a thin G5) follow.
 
+**C2, the New issue sheet (2026-10-16, G4's core).** `.planner.json` gains `issues`: `[{ "name": "Bug", "labels": ["bug"] }]`,
+1–8 kinds (name ≤ 24, ≤ 3 labels each, no commas); one bad kind refuses the whole key and the card names it. **New issue** on
+a card opens a sheet: kind chips (none = plain), title, details, the public-repo line, Send. `POST /projects/issue` checks
+the input and ownership (404 before any GitHub call), resolves the kind's labels from the repo's own config, looks for the
+request id among this login's 50 newest `planner` issues (an earlier landing is answered with `created: false`; a list it
+can't read sends nothing), makes the labels, then the issue. A 5xx on the create says "may have been sent", since Send again
+is safe; a secondary rate limit (403/429 with `retry-after`) says "try again in a minute", not "fix the token". The card
+lists the open issues the planner sent (the G3 part). **Deferred to C3:** the `@claude` toggle (workflow detection; the
+planner repo has no Claude workflow) and "From a note". **Open:** two sends of one id racing (a retry before the first
+create returns) can both create, if Cloudflare keeps running a Worker after its client disconnects (not verified); a GitHub
+login renamed after connect makes the `creator` filter miss earlier sends (re-entry: a duplicate seen, or a rename).
+
 **Built (2026-10-16, G2):**
 - **Records:** a widget kind `project` with an added field `project: { repo, private }`. The id is uuid5 of the
   lower-cased repo, so two devices switching on the same repo write one row.
