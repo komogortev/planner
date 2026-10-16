@@ -1,11 +1,11 @@
 # Personal Planner — STATE
 
 ## SNAPSHOT
-- **Phase/Last:** H1 built · HW S3 v2 live · H5 in real use. 2026-10-16: D-120 (personal tool, open source, MIT); D-121 GitHub bridge: G1 live (#152, owner connected, expiry read), G2 live (#154): repos switched on in Integrations show on the Dashboard with STATE snapshot + merges; card config = the repo's `.planner.json`; one-time re-pull (`REPULL`). Rollback floor `80540b1`.
-- **Working:** prod = Pages `7548445` (config-only after `ae90c22`), Worker `ae90c22` (`9bc59b9b`), D1 `0011`; smoke 17/17. `pnpm check` app 618 · Worker 254. **Verified on the phone (owner, 10-16):** GitHub connected, repo list, Planner card with real STATE.
-- **Broken:** **Summary** reads only open notes (v1 lens; owner only). After a D1 restore, edits acknowledged after the restore point revert (A7, inferred). "Recently merged" reads the last 30 closed PRs. **Not verified on a phone:** DEVICE-CHECKS 37–41; #148 menu tap; D-105 on a real model; the card title from `.planner.json` (#156, needs a Refresh).
+- **Phase/Last:** H1 built · HW S3 v2 live · H5 in real use. 2026-10-16: D-120 (personal tool, open source, MIT); D-121 GitHub bridge: G1 live (#152, owner connected, expiry read), G2 live (#154): repos switched on in Integrations show on the Dashboard with STATE snapshot + merges; card config = the repo's `.planner.json`; one-time re-pull (`REPULL`). C1 live (#158): project cards open folded (`.planner.json` `brief`, default Next; More expands). Rollback floor `80540b1`.
+- **Working:** prod = Pages + Worker `2832597` (`c906a566`), D1 `0011`; smoke 17/17. `pnpm check` app 622 · Worker 255. **Verified on the phone (owner, 10-16):** GitHub connected, repo list, Planner card with real STATE.
+- **Broken:** **Summary** reads only open notes (v1 lens; owner only). After a D1 restore, edits acknowledged after the restore point revert (A7, inferred). "Recently merged" reads the last 30 closed PRs. **Not verified on a phone:** DEVICE-CHECKS 37–41; #148 menu tap; D-105 on a real model; the card title from `.planner.json` (#156, needs a Refresh); the folded card (#158).
 - **Blocker:** none.
-- **Next:** owner calibrates the Planner card while testing → A2 tester notice → invites (expires 2026-10-24) → restore-edit reconcile. Bridge G4 (send an issue from a project card, explicit only) after G2 is in use. Then Summary v3; D-113; H5 S3.
+- **Next:** owner calibrates the Planner card while testing → A2 tester notice → invites (expires 2026-10-24) → restore-edit reconcile. Bridge prep C2 (G4 sheet: send an issue from a card, explicit only; issue kinds from `.planner.json`), then C3 (thin G5). Then Summary v3; D-113; H5 S3.
 ---
 
 ## Context
@@ -57,6 +57,8 @@
 ## Decision log
 
 Full log: PROJECT.md → Decisions log. Latest:
+
+- 2026-10-16 (bridge prep C1–C3) — Owner narrowed the next bridge step to client-side means of starting GitHub work plus card polish (cards dumped the whole snapshot, had no brief view, no task form). Gap: G4/G5 had no code. Lineup C1 card fold → C2 issue sheet (G4) → C3 thin G5, as prep for G4. Issue kinds come from each repo's `.planner.json` (recommended over parsing ISSUE_TEMPLATE forms). Found: the planner repo has no `claude-code-action` workflow, so the G4 `@claude` toggle stays hidden there until one is added. C1 shipped (#158); the first Worker deploy run exited 1 with no reproduced cause, two reruns clean (one data point).
 
 - 2026-10-14 (alpha gap audit) — The slice walked at 375 px against SLICE-ACCEPTANCE; gaps G1–G7 recorded privately. Built: an account with no model never meets the paste path (it is told to add one; a device that could not read its models says so, never "add a model"; paste stays where a device picked it or a pasted run waits), the strip's resting line names what waits, Today's empty state points at the strip or the recorder, widget/models copy matches the app (#144). Summary is listed only for an account holding a `system-summary` record (owner's choice over a Worker owner flag; re-entry: Summary v3) (#146). Owner request: layout A's top bar wears the sign-in pocket's cloth with a stitched seam (#145). Open: G7, whether the UI names the Journal (owner's call).
 
