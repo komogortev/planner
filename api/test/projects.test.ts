@@ -4,7 +4,7 @@ import { env } from 'cloudflare:test'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createSession } from '../src/auth'
 import { pushRecords } from '../src/records'
-import { cutSnapshot, DEFAULT_CONFIG, parseConfig } from '../src/projects'
+import { CLAUDE_ASK, cutSnapshot, DEFAULT_CONFIG, issueBody, lastBotLine, linkedPr, parseConfig, recentSent, SIGN_OFF, usesClaudeAction, type SentIssue } from '../src/projects'
 import { projectWidgetRow } from '../../src/widgets/projects'
 import app from '../src/index'
 
@@ -112,8 +112,9 @@ describe('GET /projects/state', () => {
     expect(JSON.stringify(out)).not.toContain(TOKEN)
     expect(ghCalls(spy)).toEqual([
       '/repos/komogortev/planner/contents/.planner.json', '/repos/komogortev/planner/contents/docs/STATE.md', '/repos/komogortev/planner/pulls',
-      '/repos/komogortev/planner/issues',
+      '/repos/komogortev/planner/issues', '/repos/komogortev/planner/issues', '/repos/komogortev/planner/contents/.github/workflows',
     ])
+    expect(out.claude).toBe(false) // no workflows folder
     expect(out.issues).toEqual([]) // the stub has no issues: the list is empty, not an error
   })
 
@@ -230,7 +231,7 @@ describe('parseConfig issues (C2)', () => {
 })
 
 describe('GET /projects/state: the issues the planner sent (C2)', () => {
-  it('lists open planner-labelled issues by this login, newest first, without pull requests', async () => {
+  it('lists planner-labelled issues by this login, newest first, without pull requests', async () => {
     const a = await connected('a@example.com')
     await addProject(a.id, 'komogortev/planner')
     const spy = github(file('docs/STATE.md', STATE), pulls([]), (u) => (u.pathname.endsWith('/issues') ? Response.json([
@@ -240,8 +241,8 @@ describe('GET /projects/state: the issues the planner sent (C2)', () => {
     ]) : undefined))
     const out = (await (await call(a.token, '/projects/state?repo=komogortev/planner')).json()) as Record<string, unknown>
     expect(out.issues).toEqual([
-      { number: 8, title: 'Fix the card', createdAt: NOW, url: 'https://github.com/komogortev/planner/issues/8' },
-      { number: 7, title: 'foreign link', createdAt: NOW, url: 'https://github.com/komogortev/planner/issues/7' },
+      { number: 8, title: 'Fix the card', createdAt: NOW, url: 'https://github.com/komogortev/planner/issues/8', state: 'open', closedAt: null, bot: null, pr: null },
+      { number: 7, title: 'foreign link', createdAt: NOW, url: 'https://github.com/komogortev/planner/issues/7', state: 'open', closedAt: null, bot: null, pr: null },
     ])
     const q = new URL(String(spy.mock.calls.find(([u]) => String(u).includes('/issues'))![0])).searchParams
     expect([q.get('labels'), q.get('creator'), q.get('state')]).toEqual(['planner', 'octo', 'open'])
@@ -281,11 +282,11 @@ describe('POST /projects/issue (C2)', () => {
     const res = await send(a.token, { kind: 'bug' })
     expect(res.status).toBe(201)
     const out = await res.json()
-    expect(out).toEqual({ issue: { number: 12, title: 'Fix the card', createdAt: NOW, url: 'https://github.com/komogortev/planner/issues/12' }, created: true })
+    expect(out).toEqual({ issue: { number: 12, title: 'Fix the card', createdAt: NOW, url: 'https://github.com/komogortev/planner/issues/12', state: 'open', closedAt: null }, created: true })
     expect(JSON.stringify(out)).not.toContain(TOKEN)
     expect(sent.filter((s) => s.path.endsWith('/labels')).map((s) => s.body?.name)).toEqual(['planner', 'bug'])
     expect(creates(sent)).toEqual([{ method: 'POST', path: '/repos/komogortev/planner/issues', body: {
-      title: 'Fix the card', body: `Steps\n\n<!-- planner:${RID} -->`, labels: ['planner', 'bug'],
+      title: 'Fix the card', body: `Steps\n\n${SIGN_OFF}\n\n<!-- planner:${RID} -->`, labels: ['planner', 'bug'],
     } }])
   })
 
@@ -295,7 +296,7 @@ describe('POST /projects/issue (C2)', () => {
     const sent = githubWrite({ existing: [{ number: 12, title: 'Fix the card', created_at: NOW, body: `Steps\n\n<!-- planner:${RID} -->`, html_url: 'https://github.com/komogortev/planner/issues/12' }] })
     const res = await send(a.token)
     expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ issue: { number: 12, title: 'Fix the card', createdAt: NOW, url: 'https://github.com/komogortev/planner/issues/12' }, created: false })
+    expect(await res.json()).toEqual({ issue: { number: 12, title: 'Fix the card', createdAt: NOW, url: 'https://github.com/komogortev/planner/issues/12', state: 'open', closedAt: null }, created: false })
     expect(creates(sent)).toEqual([])
     // Known positive for the same stub: another request id does create.
     const other = await send(a.token, { requestId: '1b6c3f0e-6a51-4d0c-9a3b-2f1e5d7c8a90' })
@@ -359,6 +360,160 @@ describe('POST /projects/issue (C2)', () => {
     const res = await send(a.token)
     expect(res.status).toBe(409)
     expect(((await res.json()) as { error: string }).error).toMatch(/Issues: Read and write/)
+  })
+})
+
+describe('C3 loop back: pure parts', () => {
+  const sent = (n: number, state: 'open' | 'closed', closedAt: string | null): SentIssue => ({ number: n, title: 't', url: 'u', createdAt: NOW, state, closedAt })
+
+  it('keeps open issues and those closed in the last 7 days', () => {
+    const now = Date.parse(NOW)
+    const out = recentSent([sent(1, 'open', null), sent(2, 'closed', new Date(now - 6 * 86_400_000).toISOString()), sent(3, 'closed', new Date(now - 8 * 86_400_000).toISOString()), sent(4, 'closed', null)], now)
+    expect(out.map((i) => i.number)).toEqual([1, 2])
+  })
+
+  it("reads the last bot comment's first readable line, ignoring people and markup", () => {
+    expect(lastBotLine([
+      { user: { type: 'Bot' }, body: 'old bot line' },
+      { user: { type: 'User' }, body: 'a person, later' },
+      { user: { type: 'Bot' }, body: '<!-- sticky -->\n\n**Claude finished [@octo](https://github.com/octo)\'s task** in 2m\n- [x] Read the issue' },
+    ])).toBe("Claude finished @octo's task in 2m")
+    expect(lastBotLine([{ user: { type: 'Bot' }, body: '- [ ] Read the issue <img src=x onerror=alert(1)>' }])).toBe('Read the issue')
+    expect(lastBotLine([{ user: { type: 'User' }, body: 'only people' }])).toBeNull()
+    expect(lastBotLine([{ user: { type: 'Bot' }, body: 'x'.repeat(300) }])!.length).toBe(160)
+    expect(lastBotLine('nope')).toBeNull()
+  })
+
+  it("links the last same-repo PR that references the issue, with its state; another repo's PR is ignored", () => {
+    const xref = (n: number, url: string, state: string, merged: string | null) => ({ event: 'cross-referenced', source: { issue: { number: n, html_url: url, state, pull_request: { merged_at: merged } } } })
+    expect(linkedPr('komogortev/planner', [
+      xref(20, 'https://github.com/komogortev/planner/pull/20', 'closed', null),
+      { event: 'labeled' },
+      xref(21, 'https://github.com/komogortev/planner/pull/21', 'closed', NOW),
+      xref(99, 'https://github.com/other/repo/pull/99', 'open', null),
+      { event: 'cross-referenced', source: { issue: { number: 5, html_url: 'https://github.com/komogortev/planner/issues/5', state: 'open' } } }, // an issue, not a PR
+    ])).toEqual({ number: 21, url: 'https://github.com/komogortev/planner/pull/21', state: 'merged' })
+    expect(linkedPr('komogortev/planner', [xref(22, 'https://github.com/komogortev/planner/pull/22', 'open', null)])).toMatchObject({ state: 'open' })
+    expect(linkedPr('komogortev/planner', [])).toBeNull()
+  })
+
+  it('spots the Claude Code Action in a workflow, and only as a `uses:` step', () => {
+    expect(usesClaudeAction('on:\n  issues:\n    types: [opened]\njobs:\n  claude:\n    steps:\n      - uses: anthropics/claude-code-action@v1\n')).toBe(true)
+    expect(usesClaudeAction("on: [issue_comment]\n      - name: x\n        uses: 'anthropics/claude-code-action@beta'")).toBe(true)
+    expect(usesClaudeAction('# we might add anthropics/claude-code-action@v1 later\n- uses: actions/checkout@v4')).toBe(false)
+  })
+
+  it('a body ends with the sign-off then the marker; the ask comes before the sign-off when chosen', () => {
+    expect(issueBody('Steps', false, 'r')).toBe(`Steps\n\n${SIGN_OFF}\n\n<!-- planner:r -->`)
+    expect(issueBody('', true, 'r')).toBe(`${CLAUDE_ASK}\n\n${SIGN_OFF}\n\n<!-- planner:r -->`)
+  })
+})
+
+describe('C3 loop back: routes', () => {
+  async function owner() {
+    const a = await connected('a@example.com')
+    await addProject(a.id, 'komogortev/planner')
+    return a
+  }
+  const issue = (n: number, extra: Record<string, unknown> = {}) => ({ number: n, title: `i${n}`, created_at: NOW, state: 'open', closed_at: null, comments: 0, html_url: `https://github.com/komogortev/planner/issues/${n}`, ...extra })
+
+  it('each sent issue carries its bot line and linked PR; comments are read only when there are some', async () => {
+    const a = await owner()
+    const spy = github(file('docs/STATE.md', STATE), pulls([]), (u) => {
+      if (u.pathname.endsWith('/planner/issues')) return Response.json([issue(8, { comments: 2 }), issue(7)])
+      if (u.pathname.endsWith('/issues/8/comments')) return Response.json([{ user: { type: 'User' }, body: 'hi' }, { user: { type: 'Bot' }, body: 'Claude finished the task' }])
+      if (u.pathname.endsWith('/issues/8/timeline')) return Response.json([{ event: 'cross-referenced', source: { issue: { number: 30, html_url: 'https://github.com/komogortev/planner/pull/30', state: 'open', pull_request: { merged_at: null } } } }])
+      if (u.pathname.endsWith('/issues/7/timeline')) return Response.json([])
+      return undefined
+    })
+    const out = (await (await call(a.token, '/projects/state?repo=komogortev/planner')).json()) as { issues: unknown[] }
+    expect(out.issues).toEqual([
+      { number: 8, title: 'i8', createdAt: NOW, url: 'https://github.com/komogortev/planner/issues/8', state: 'open', closedAt: null, bot: 'Claude finished the task', pr: { number: 30, url: 'https://github.com/komogortev/planner/pull/30', state: 'open' } },
+      { number: 7, title: 'i7', createdAt: NOW, url: 'https://github.com/komogortev/planner/issues/7', state: 'open', closedAt: null, bot: null, pr: null },
+    ])
+    expect(ghCalls(spy).filter((p) => p.endsWith('/comments'))).toEqual(['/repos/komogortev/planner/issues/8/comments'])
+    expect(JSON.stringify(out)).not.toContain('"comments"')
+  })
+
+  it('claude: true with a Claude workflow, false without, null when GitHub will not list the folder', async () => {
+    const a = await owner()
+    const dir = (status = 200) => (u: URL) => (u.pathname.endsWith('/contents/.github/workflows')
+      ? Response.json(status === 200 ? [{ type: 'file', name: 'ci.yml', path: '.github/workflows/ci.yml' }, { type: 'file', name: 'claude.yml', path: '.github/workflows/claude.yml' }] : {}, { status })
+      : undefined)
+    const ci = file('.github/workflows/ci.yml', '- uses: actions/checkout@v4')
+    const claudeYml = file('.github/workflows/claude.yml', 'on:\n  issue_comment:\njobs:\n  c:\n    steps:\n      - uses: anthropics/claude-code-action@v1')
+    github(dir(), ci, claudeYml)
+    expect(((await (await call(a.token, '/projects/state?repo=komogortev/planner')).json()) as { claude: unknown }).claude).toBe(true)
+    vi.restoreAllMocks()
+    github(dir(), ci)
+    expect(((await (await call(a.token, '/projects/state?repo=komogortev/planner')).json()) as { claude: unknown }).claude).toBe(false)
+    vi.restoreAllMocks()
+    github(dir(403))
+    expect(((await (await call(a.token, '/projects/state?repo=komogortev/planner')).json()) as { claude: unknown }).claude).toBeNull()
+  })
+
+  it('an older open issue still shows when 20 newer ones are closed: open and recently closed are read apart', async () => {
+    const a = await owner()
+    const spy = github(file('docs/STATE.md', STATE), pulls([]), (u) => {
+      if (!u.pathname.endsWith('/planner/issues')) return undefined
+      return Response.json(u.searchParams.get('state') === 'open' ? [issue(3)] : [issue(9, { state: 'closed', closed_at: NOW, created_at: '2026-10-16T11:00:00.000Z' })])
+    })
+    const out = (await (await call(a.token, '/projects/state?repo=komogortev/planner')).json()) as { issues: { number: number }[] }
+    expect(out.issues.map((i) => i.number)).toEqual([9, 3])
+    const closed = spy.mock.calls.map(([u]) => new URL(String(u))).find((u) => u.pathname.endsWith('/planner/issues') && u.searchParams.get('state') === 'closed')!
+    expect(closed.searchParams.get('since')).toBeTruthy()
+  })
+
+  it('a rate limit while reading the loop back degrades those parts instead of failing the card', async () => {
+    const a = await owner()
+    const limited = () => Response.json({ message: 'secondary rate limit' }, { status: 403, headers: { 'retry-after': '30' } })
+    github(file('docs/STATE.md', STATE), pulls([]), (u) => {
+      if (u.pathname.endsWith('/planner/issues')) return Response.json([issue(8, { comments: 1 })])
+      if (u.pathname.includes('/issues/8/') || u.pathname.endsWith('/contents/.github/workflows')) return limited()
+      return undefined
+    })
+    const res = await call(a.token, '/projects/state?repo=komogortev/planner')
+    expect(res.status).toBe(200)
+    const out = (await res.json()) as { snapshot: unknown; issues: { bot: unknown; pr: unknown }[]; claude: unknown }
+    expect(out.snapshot).toMatchObject({ found: true })
+    expect(out.issues[0]).toMatchObject({ bot: null, pr: null })
+    expect(out.claude).toBeNull()
+  })
+
+  it("prefers Claude's comment over a later one from another bot", () => {
+    expect(lastBotLine([
+      { user: { type: 'Bot', login: 'claude[bot]' }, body: 'Claude finished the task' },
+      { user: { type: 'Bot', login: 'vercel[bot]' }, body: 'Preview deployed' },
+    ])).toBe('Claude finished the task')
+    expect(lastBotLine([{ user: { type: 'Bot', login: 'github-actions[bot]' }, body: 'Working on it' }])).toBe('Working on it') // no Claude app: any bot
+  })
+
+  it('a review-only Claude workflow does not count: the issue trigger is needed', () => {
+    expect(usesClaudeAction('on:\n  pull_request:\n    types: [opened]\njobs:\n  r:\n    steps:\n      - uses: anthropics/claude-code-action@v1')).toBe(false)
+    expect(usesClaudeAction('on:\n  issues:\n    types: [opened]\njobs:\n  c:\n    steps:\n      - uses: anthropics/claude-code-action@v1')).toBe(true)
+  })
+
+  it("matches a PR link to the project whatever the repo name's case", () => {
+    const ev = { event: 'cross-referenced', source: { issue: { number: 4, html_url: 'https://github.com/Komogortev/Planner/pull/4', state: 'open', pull_request: { merged_at: null } } } }
+    expect(linkedPr('komogortev/planner', [ev])).toMatchObject({ number: 4 })
+  })
+
+  it('askClaude adds the ask line; a non-boolean is refused before GitHub', async () => {
+    const a = await owner()
+    let posted: Record<string, unknown> | null = null
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const u = new URL(String(input))
+      if (u.pathname === '/user') return Response.json({ login: 'octo' })
+      if (u.pathname.endsWith('/labels')) return Response.json({}, { status: 422 })
+      if (u.pathname.endsWith('/issues') && init?.method === 'POST') { posted = JSON.parse(String(init.body)); return Response.json(issue(40), { status: 201 }) }
+      if (u.pathname.endsWith('/issues')) return Response.json([])
+      return Response.json({}, { status: 404 })
+    })
+    const body = (extra: Record<string, unknown>) => JSON.stringify({ repo: 'komogortev/planner', title: 'Do it', requestId: '0b6c3f0e-6a51-4d0c-9a3b-2f1e5d7c8a90', ...extra })
+    expect((await call(a.token, '/projects/issue', { method: 'POST', body: body({ askClaude: 'yes' }) })).status).toBe(400)
+    expect(posted).toBeNull()
+    expect((await call(a.token, '/projects/issue', { method: 'POST', body: body({ askClaude: true }) })).status).toBe(201)
+    expect(posted!.body).toBe(`${CLAUDE_ASK}\n\n${SIGN_OFF}\n\n<!-- planner:0b6c3f0e-6a51-4d0c-9a3b-2f1e5d7c8a90 -->`)
   })
 })
 

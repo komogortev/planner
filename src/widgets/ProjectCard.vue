@@ -70,6 +70,8 @@ const lastMerge = computed(() => merges.value[0] ?? null)
 
 const issues = computed(() => (Array.isArray(state.value?.issues) ? state.value!.issues : []))
 const issuesError = computed(() => (state.value?.issues && !Array.isArray(state.value.issues) ? state.value.issues.error : null))
+/** The folded line's word for where a sent issue stands: its PR's state once there is one, else the issue's own. */
+const issueStatus = (i: SentIssue) => (i.pr ? `PR ${i.pr.state}` : i.state === 'closed' ? 'closed' : day(i.createdAt))
 const sheetOpen = ref(false)
 const newIssueBtn = ref<HTMLButtonElement | null>(null)
 /** A sent issue joins the card at once; the next Refresh reads the list from GitHub again. */
@@ -115,7 +117,7 @@ function onSent(issue: SentIssue): void {
       </p>
       <p v-if="issues[0]" class="merge sub" data-test="project-last-issue">
         <span class="min-w-0 truncate">Sent #{{ issues[0].number }} {{ issues[0].title }}</span>
-        <span v-if="issues.length > 1" class="shrink-0">+{{ issues.length - 1 }} open</span>
+        <span class="shrink-0">{{ issueStatus(issues[0]) }}<template v-if="issues.length > 1"> · +{{ issues.length - 1 }}</template></span>
       </p>
     </div>
 
@@ -148,13 +150,19 @@ function onSent(issue: SentIssue): void {
       </div>
 
       <div v-if="issues.length > 0 || issuesError" class="mt-3" data-test="project-issues">
-        <h4 class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">Sent from the planner, open</h4>
+        <h4 class="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">Sent from the planner</h4>
         <p v-if="issuesError" class="sub">{{ issuesError }}</p>
         <ul v-else class="merges">
-          <li v-for="i in issues" :key="i.number" class="merge">
-            <a v-if="githubLink(i.url)" :href="githubLink(i.url)!" target="_blank" rel="noopener noreferrer" class="min-w-0 truncate">#{{ i.number }} {{ i.title }}</a>
-            <span v-else class="min-w-0 truncate">#{{ i.number }} {{ i.title }}</span>
-            <span class="sub shrink-0">{{ day(i.createdAt) }}</span>
+          <li v-for="i in issues" :key="i.number" class="sent" :data-test="`project-issue-${i.number}`">
+            <div class="merge">
+              <a v-if="githubLink(i.url)" :href="githubLink(i.url)!" target="_blank" rel="noopener noreferrer" class="min-w-0 truncate">#{{ i.number }} {{ i.title }}</a>
+              <span v-else class="min-w-0 truncate">#{{ i.number }} {{ i.title }}</span>
+              <span class="sub shrink-0">{{ i.state === 'closed' ? 'closed' : day(i.createdAt) }}</span>
+            </div>
+            <p v-if="i.bot" class="sub truncate" data-test="project-issue-bot">{{ i.bot }}</p>
+            <p v-if="i.pr" class="sub" data-test="project-issue-pr">
+              <a v-if="githubLink(i.pr.url)" :href="githubLink(i.pr.url)!" target="_blank" rel="noopener noreferrer">PR #{{ i.pr.number }}</a> {{ i.pr.state }}
+            </p>
           </li>
         </ul>
       </div>
@@ -171,7 +179,7 @@ function onSent(issue: SentIssue): void {
       </button>
     </div>
     <IssueSheet
-      v-if="state" v-model:open="sheetOpen" :repo="project.repo" :is-private="project.private" :kinds="state.config.issues ?? []"
+      v-if="state" v-model:open="sheetOpen" :repo="project.repo" :is-private="project.private" :kinds="state.config.issues ?? []" :claude="state.claude ?? null"
       :trigger="newIssueBtn" @sent="onSent"
     />
   </section>
@@ -198,6 +206,8 @@ function onSent(issue: SentIssue): void {
 .toggle { min-height: 2.75rem; font-size: 0.78rem; color: rgb(var(--s-400)); background: transparent; border: 0; }
 .toggle + .toggle { border-left: 1px solid var(--glass-btn-edge); }
 .toggle:disabled { opacity: 0.5; }
+.sent { display: grid; gap: 0.1rem; min-width: 0; }
+.sent a { text-decoration: underline; text-underline-offset: 2px; }
 .merges { display: grid; gap: 0.3rem; font-size: 0.85rem; }
 .merge { display: flex; justify-content: space-between; gap: 0.75rem; min-width: 0; }
 .merge a { text-decoration: underline; text-underline-offset: 2px; }
