@@ -1,9 +1,9 @@
 // Per-device state of model runs (H5-MODELS §5): which registered model this device runs with, and the call a run is
 // waiting on. localStorage, like the pending run header (src/harness/pending.ts): synchronous, per device, ids only — never
-// a prompt or a reply. Per device: a device can run with a different model, or with copy and paste. A device that never
-// chose follows the account's only model (D-102), which lifted the per-device O5 gate (H5-MODELS §10): every device the
-// owner uses already ran the build that accepts a model run.
+// a prompt or a reply. Per device: a device can run with a different model. A device that never chose follows the account's
+// first model (D-102). Copy and paste is retired as a path (D-113): every run goes through a registered model.
 import { ref } from 'vue'
+import { clearPending, pendingRun } from '@/harness/pending'
 
 const MODEL_KEY = 'planner.run.model'
 const CALL_KEY = { harness: 'planner.run.call.harness', widget: 'planner.run.call.widget' } as const
@@ -13,9 +13,9 @@ export type RunStage = keyof typeof CALL_KEY
 export interface WaitingCall { callId: string; modelId: string; runId: string }
 /** How a stored run's reply arrived when a registered model produced it: recorded on the run (`executor: 'model'`). */
 export interface ModelVia { modelId: string; callId: string }
-/** The run record's executor fields: a paste leaves the H5 keys out, a model run names both (records.ts rule). */
-export const executorFields = (via?: ModelVia) =>
-  via ? { executor: 'model' as const, modelId: via.modelId, callId: via.callId } : { executor: 'copy-prompt' as const }
+/** The run record's executor fields: a model run names its model and call (records.ts rule). Rows from before D-113 may
+ *  still say `copy-prompt`; the shared validator keeps reading them, nothing writes one. */
+export const executorFields = (via: ModelVia) => ({ executor: 'model' as const, modelId: via.modelId, callId: via.callId })
 
 function read(key: string): string | null {
   try {
@@ -29,16 +29,18 @@ function write(key: string, value: string | null): void {
     if (value === null) localStorage.removeItem(key)
     else localStorage.setItem(key, value)
   } catch {
-    // blocked storage: the choice is not remembered, runs fall back to copy and paste
+    // blocked storage: the choice is not remembered; the account's model is adopted again on the next load
   }
 }
 
 export interface RunModel { id: string; label: string }
-/** Stored when the owner picks "Copy and paste" on this device: an explicit choice, unlike no value at all (D-102). */
-const MANUAL = 'manual'
+/** What a device that picked "Copy and paste" stored before D-113. Read once and removed, so the device adopts the account's
+ *  model like one that never chose (`adoptAccountModel` asks only while nothing is stored). */
+const RETIRED_MANUAL = 'manual'
 function readRunModel(): RunModel | null {
   const raw = read(MODEL_KEY)
-  if (!raw || raw === MANUAL) return null
+  if (raw === RETIRED_MANUAL) write(MODEL_KEY, null)
+  if (!raw || raw === RETIRED_MANUAL) return null
   try {
     const m = JSON.parse(raw) as Record<string, unknown>
     return typeof m.id === 'string' && typeof m.label === 'string' ? { id: m.id, label: m.label } : null
@@ -47,21 +49,17 @@ function readRunModel(): RunModel | null {
   }
 }
 
-/** The model this device runs with (its label kept for the Run button), or null for copy and paste. Reactive: Settings and
- *  the run panel share it. */
+/** The model this device runs with (its label kept for the Run button), or null when none is chosen yet. Reactive: Settings
+ *  and the run panel share it. */
 export const runModel = ref<RunModel | null>(readRunModel())
-/** "Copy and paste" was picked on this device (Settings): the only way a run without a model offers the paste path. */
-export const pasteChosen = ref(read(MODEL_KEY) === MANUAL)
-/** The owner's choice on this device: a model, or null for "Copy and paste". Either one is remembered as chosen. */
-export function setRunModel(m: RunModel | null): void {
+/** The owner's choice on this device, remembered. */
+export function setRunModel(m: RunModel): void {
   runModel.value = m
-  pasteChosen.value = m === null
-  write(MODEL_KEY, m ? JSON.stringify(m) : MANUAL)
+  write(MODEL_KEY, JSON.stringify(m))
 }
 /** No choice on this device: it follows the account (`reconcileRunModel`). Also the remove path for the chosen model. */
 export function unsetRunModel(): void {
   runModel.value = null
-  pasteChosen.value = false
   write(MODEL_KEY, null)
 }
 
@@ -70,30 +68,22 @@ export function unsetRunModel(): void {
 export const modelsKnown = ref(false)
 
 /** How a run starts on this device. `unknown`: no model chosen here and the account's models not read yet. */
-export type RunPath = 'model' | 'paste' | 'needs-model' | 'unknown'
-/**
- * The run path (D-113, alpha gap G1): with a model, the model. Without one, copy and paste only where it was picked on
- * this device ("Copy and paste" in Settings, offered only once the account has a model) or where a pasted run is already
- * waiting for its reply — so an account with no model (an invitee without a key) never meets the paste path; it is told
- * to add a model instead.
- */
-export function runPath(model: RunModel | null, chosePaste: boolean, waiting: boolean, known: boolean): RunPath {
+export type RunPath = 'model' | 'needs-model' | 'unknown'
+/** The run path (D-113): with a model, the model; without one, the step says to add a model (or that it could not check). */
+export function runPath(model: RunModel | null, known: boolean): RunPath {
   if (model) return 'model'
-  if (chosePaste || waiting) return 'paste'
   return known ? 'needs-model' : 'unknown'
 }
 
 /**
  * Lines this device's choice up with the account's models (D-102). A chosen model that is gone, or lost its key, is
  * unset. A device that never chose runs with the account's first model that has a key (the oldest): a model added on
- * the desktop is offered on the phone too, and in the home-screen app, which keeps its own storage. Since D-113 (copy and
- * paste retired as a path) this holds for several models too (owner, 2026-10-13: the model is on by default; before, several
- * models meant copy and paste until a pick). "Copy and paste" picked here is left alone.
+ * the desktop is offered on the phone too, and in the home-screen app, which keeps its own storage. This holds for several
+ * models too (D-113: the model is on by default).
  */
 export function reconcileRunModel(models: readonly { id: string; label: string; hasKey: boolean }[]): void {
   const usable = models.filter((m) => m.hasKey)
   modelsKnown.value = true
-  if (read(MODEL_KEY) === MANUAL) return
   const cur = runModel.value
   const still = cur && usable.find((m) => m.id === cur.id)
   if (cur && !still) unsetRunModel()
@@ -115,7 +105,9 @@ let generation = 0
  * (`modelsKnown` false): the panel says it could not check, and the next panel or Try again asks again.
  */
 export function adoptAccountModel(list: () => Promise<readonly { id: string; label: string; hasKey: boolean }[]>): Promise<void> {
-  if (asked || read(MODEL_KEY) !== null) return Promise.resolve()
+  // A usable choice stops the ask, not any stored value: a 'manual' written back by an older build in another window, or a
+  // value that does not parse, must not leave Try again doing nothing (CodeReview R4-2).
+  if (asked || runModel.value !== null) return Promise.resolve()
   const gen = generation
   adopting ??= list()
     .then((models) => {
@@ -154,13 +146,36 @@ export function clearEnded(stage?: RunStage): void {
 }
 
 /**
- * Whether a waiting run should open its panel on arrival: yes — the owner is coming back with a reply to paste
- * (calibration 2026-10-12), or a model call for it is still running — unless a model call for this very run already ended
- * without a reply, when nothing is coming back and an open panel is only in the way.
+ * Whether a waiting run should open its panel on arrival: yes while its model call may still answer, unless the call for
+ * this very run already ended without a reply, when nothing is coming back and an open panel is only in the way.
  */
 export function opensOnArrival(stage: RunStage, waitingRunId: string | null): boolean {
   if (waitingRunId === null) return false
   return read(ENDED_KEY[stage]) !== waitingRunId
+}
+
+/**
+ * A composed run is worth keeping only while a model call for it may still answer (D-113: no reply can be pasted any more).
+ * Run once at start-up, before any panel reads its header: a header with no waiting call for its run (a copied prompt from
+ * before D-113, a compose whose call never started, a call that ended) is cleared, so no panel shows a run that cannot
+ * finish. A header composed in the last `STARTING_MS` is kept even without its call: another window may be between saving it
+ * and saving the call that `startCall` returns (CodeReview R4-1). Returns the stages cleared.
+ */
+export const STARTING_MS = 120_000
+export function dropStrandedRuns(now: number = Date.now()): RunStage[] {
+  const dropped: RunStage[] = []
+  for (const stage of Object.keys(CALL_KEY) as RunStage[]) {
+    const run = pendingRun(stage)
+    if (run === null) continue
+    const runId = run.runId
+    const call = loadWaitingCall(stage)
+    if (call?.runId === runId && read(ENDED_KEY[stage]) !== runId) continue
+    const composed = run.composedAt === null ? NaN : Date.parse(run.composedAt)
+    if (!call && composed <= now && now - composed < STARTING_MS) continue
+    clearPending(stage)
+    dropped.push(stage)
+  }
+  return dropped
 }
 
 /** Sign-out and account deletion wipe the account's data on this device (D-50): the model choice and waiting calls too. */

@@ -12,7 +12,7 @@ import type { Outcome } from './loop'
 import { addTask2, editTask2, previewSummary, saveSummary, setTaskState2 } from './loop2'
 import type { Loop2 } from './useLoop2'
 
-// Daily (HW-HARNESS §11, D-69/D-71): the open Tasks whose day has come, computed on the device — no paste. Each Task:
+// Daily (HW-HARNESS §11, D-69/D-71): the open Tasks whose day has come, computed on the device, no model call. Each Task:
 // done · tomorrow · drop, shown on the row tapped (D-104: buttons on every row read as "waiting for you"), and a second
 // tap on the open row's text edits it (owner text from then on; it enters the next run). The header's + opens the card
 // on its add box. "Edit summary" opens the list as text: a changed line edits its Task, a new line adds one, and a removed line

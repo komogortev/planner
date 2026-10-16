@@ -11,7 +11,7 @@ import { onMounted, ref } from 'vue'
  * app looks each time it goes to the BACKGROUND: the new build installs while he is away, and `autoUpdate` reloads into
  * it the moment he is back, before he types. Not on return and not on a timer: under `autoUpdate` a check while he is
  * using the app reloads it seconds later and drops whatever he is typing (only the capture draft survives a reload;
- * an answer or a pasted reply does not). Cost: a deploy reaches the phone one leave-and-return later. Mounted once
+ * a half-typed answer does not). Cost: a deploy reaches the phone one leave-and-return later. Mounted once
  * (UpdateBanner in App.vue); nothing to tear down.
  */
 export function watchForUpdates(

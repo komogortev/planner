@@ -1,5 +1,5 @@
 // Deterministic ids for harness rows (HW-HARNESS.md §3, "Idempotency"). A row's id is derived from its natural key, so
-// the same pasted result applied twice — on one device or on two — produces the same ids and sync merges them.
+// the same result applied twice — on one device or on two — produces the same ids and sync merges them.
 // RFC 4122 §4.3 (version 5, SHA-1). Synchronous and environment-free: the Worker and the app both import it.
 
 const rotl = (x: number, n: number) => ((x << n) | (x >>> (32 - n))) >>> 0

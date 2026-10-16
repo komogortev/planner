@@ -10,6 +10,7 @@ import { composedToday, composeSummary, dayBuckets, fenceSummary, isSummaryHeade
 import type { Task } from '@/domain/tasks'
 import { uuid } from '@/utils/uuid'
 import { deviceZone, PendingStorageError, type Composed, type Outcome } from './loop'
+import { NO_MODEL_REPLY } from './loop2'
 import { clearPending, loadPending, savePending } from './pending'
 
 // No language setting exists yet (§9 point 4): the model answers in the language the owner wrote in.
@@ -50,10 +51,11 @@ export async function applySummaryReply(text: string, opts: { store: boolean; no
   const known = new Set((await db.reports.toArray()).map((r) => r.id))
   const v = validateReport(text, header, await db.entries.toArray(), now, known, fenceSummary)
   if (!v.ok) return v
-  const report: Report = { ...v.value, executor: executorFields(opts.via).executor }
+  const report: Report = { ...v.value, executor: 'model' }
   const rec = cleanRecord('report', { ...report, deletedAt: null })
   if (!rec.ok) return { ok: false, error: `This summary cannot be stored: ${rec.errors.slice(0, 2).join('; ')}` }
   if (!opts.store) return { ok: true, value: { report, written: 0 } }
+  if (!opts.via) return { ok: false, error: NO_MODEL_REPLY }
   const run: RunRecord = {
     id: header.runId,
     stage: 'widget',

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Entry } from '../entry'
-import { answerQuestion, applyHarness, confirmLink, dismissQuestion, rejectLink, setNoteState } from '../harness'
-import { JOURNAL_LENS, validateReport, type JournalHeader } from '../journal'
+import { answerQuestion, dismissQuestion, setNoteState } from '../harness'
+import { validateReport, type JournalHeader } from '../journal'
 import { applyHarness2 } from '../harness2Reply'
 import { ADDED_FIELDS, cleanRecord, flatten, isRecordKind, RECORD_DATA_MAX_BYTES, RECORD_KINDS, RECORD_TABLE, restoreAbsent } from '../records'
 import { answerRemoval, removalQuestion } from '../summary'
@@ -24,54 +24,43 @@ const errorsOf = (kind: string, input: unknown) => {
   return r.ok ? [] : r.errors
 }
 
-describe('the S1 → S2 contract: every record the domain produces passes the validator unchanged', () => {
+describe('rows from harness v1 and the v1 journal still pass the validator unchanged (D-113: kept readable, never written)', () => {
   const entries = [note('n1', '2026-10-10T09:00:00.000Z', 'buy coffee'), note('n2', '2026-10-11T08:00:00.000Z', 'had a good coffee')]
-  const data = { entries, assessments: [], questions: [], links: [], states: [] }
-  const applied = applyHarness(
-    {
-      assessments: [
-        { entryId: 'n2', questions: [{ text: 'Which shop?' }], closes: [{ entryId: 'n1', evidence: 'had a good coffee' }], followUp: { entryId: 'n2', on: '2026-10-12' } },
-      ],
-    },
-    { runId: 'run-1', toAssessIds: ['n2'], contextIds: ['n1'], composedAt: NOW }, data, NOW, 'UTC',
-  )
+  const assessment = { id: 'a-1', entryId: 'n2', harnessVersion: 1, runId: 'run-1', at: NOW }
+  const question = { id: 'q-1', entryId: 'n2', text: 'Which shop?', state: 'open' as const, answer: null, createdAt: NOW, answeredAt: null, runId: 'run-1' }
+  const closes = { id: 'l-1', fromEntryId: 'n2', toEntryId: 'n1', kind: 'closes', onDate: null, state: 'proposed', evidence: 'had a good coffee', runId: 'run-1' }
+  const carries = { id: 'l-2', fromEntryId: 'n2', toEntryId: 'n2', kind: 'carries', onDate: '2026-10-12', state: 'proposed', evidence: '', runId: 'run-1' }
 
-  it('assessment, question, closes and carries links as the harness proposes them', () => {
-    expect(applied.assessments).toHaveLength(1)
-    expect(applied.questions).toHaveLength(1)
-    expect(applied.links.map((l) => l.kind).sort()).toEqual(['carries', 'closes'])
-    for (const a of applied.assessments) expect(flatten(must('assessment', withDeleted(a)))).toEqual(withDeleted(a))
-    for (const q of applied.questions) expect(flatten(must('question', withDeleted(q)))).toEqual(withDeleted(q))
-    for (const l of applied.links) expect(flatten(must('link', withDeleted(l)))).toEqual(withDeleted(l))
-  })
-
-  it('every state a question and a link can reach through the owner’s transitions', () => {
-    const q = applied.questions[0]!
-    const answered = answerQuestion(q, 'The corner one', NOW)
-    const dismissed = dismissQuestion(q)
-    if (!answered.ok || !dismissed.ok) throw new Error('transition failed')
-    for (const r of [answered.value, dismissed.value]) expect(flatten(must('question', withDeleted(r)))).toEqual(withDeleted(r))
-    for (const l of applied.links) {
-      const rejected = rejectLink(l)
-      const confirmed = confirmLink(l, [], NOW)
-      if (!rejected.ok || !confirmed.ok) throw new Error('transition failed')
-      expect(flatten(must('link', withDeleted(rejected.value)))).toEqual(withDeleted(rejected.value))
-      expect(flatten(must('link', withDeleted(confirmed.value.link)))).toEqual(withDeleted(confirmed.value.link))
-      if (confirmed.value.state) expect(flatten(must('entryState', withDeleted(confirmed.value.state)))).toEqual(withDeleted(confirmed.value.state))
+  it('assessment, question, closes and carries links, in every state a link reached', () => {
+    expect(flatten(must('assessment', withDeleted(assessment)))).toEqual(withDeleted(assessment))
+    expect(flatten(must('question', withDeleted(question)))).toEqual(withDeleted(question))
+    for (const l of [closes, carries]) for (const state of ['proposed', 'confirmed', 'rejected']) {
+      const row = withDeleted({ ...l, state })
+      expect(flatten(must('link', row))).toEqual(row)
     }
   })
 
-  it('entry states set by the owner', () => {
-    for (const s of [setNoteState('n1', 'done', NOW), setNoteState('n1', 'dropped', NOW), setNoteState('n1', 'open', NOW, '2026-10-20'), setNoteState('n1', 'open', NOW)])
+  it('every state a question reaches through the owner’s transitions', () => {
+    const answered = answerQuestion(question, 'The corner one', NOW)
+    const dismissed = dismissQuestion(question)
+    if (!answered.ok || !dismissed.ok) throw new Error('transition failed')
+    for (const r of [answered.value, dismissed.value]) expect(flatten(must('question', withDeleted(r)))).toEqual(withDeleted(r))
+  })
+
+  it('entry states set by the owner, and by a confirmed v1 proposal', () => {
+    const byProposal = { id: 'n1', state: 'done', followUpOn: null, by: 'confirmed-proposal', updatedAt: NOW }
+    for (const s of [setNoteState('n1', 'done', NOW), setNoteState('n1', 'dropped', NOW), setNoteState('n1', 'open', NOW, '2026-10-20'), setNoteState('n1', 'open', NOW), byProposal])
       expect(flatten(must('entryState', withDeleted(s)))).toEqual(withDeleted(s))
   })
 
-  it('a journal report, and the built-in widget that holds the journal lens', () => {
-    const run: JournalHeader = { runId: 'run-1', stage: 'widget', widgetId: JOURNAL_LENS.id, lensVersion: 1, composedAt: NOW, entryIds: ['n1', 'n2'], truncated: 0 }
+  it('a v1 journal report and the built-in widget row that held the journal lens', () => {
+    const run: JournalHeader = { runId: 'run-1', stage: 'widget', widgetId: 'builtin-daily-task-journal', lensVersion: 1, composedAt: NOW, entryIds: ['n1', 'n2'], truncated: 0 }
     const r = validateReport(JSON.stringify({ body: '- [ ] Buy coffee', citations: [{ entryId: 'n1', quote: 'buy coffee' }] }), run, entries, NOW)
     if (!r.ok) throw new Error(r.error)
-    expect(flatten(must('report', withDeleted(r.value)))).toEqual(withDeleted(r.value))
-    const widget = { id: 'builtin-daily-task-journal', name: JOURNAL_LENS.name, kind: 'prompt', active: true, lens: JOURNAL_LENS, lineage: null, createdAt: NOW, updatedAt: NOW }
+    const old = { ...r.value, executor: 'copy-prompt' as const }
+    expect(flatten(must('report', withDeleted(old)))).toEqual(withDeleted(old))
+    const lens = { id: 'builtin-daily-task-journal', name: 'Daily task journal', version: 2, shape: 'checklist', instruction: 'List what the owner committed to do today.' }
+    const widget = { id: 'builtin-daily-task-journal', name: lens.name, kind: 'prompt', active: true, lens, lineage: null, createdAt: NOW, updatedAt: NOW }
     expect(flatten(must('widget', withDeleted(widget)))).toEqual(withDeleted(widget))
   })
 })
