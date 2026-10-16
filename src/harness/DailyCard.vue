@@ -114,7 +114,19 @@ async function saveEdit(t: Task) {
 }
 
 const newText = ref('')
-const addInput = ref<HTMLInputElement | null>(null)
+const addInput = ref<HTMLTextAreaElement | null>(null)
+/** G11 (owner, 2026-10-14): the add box grows with its text. A Task is one line, so Enter adds it rather than breaking it. */
+function growAdd(): void {
+  const el = addInput.value
+  if (!el) return
+  el.style.height = 'auto'
+  el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px` // scrollHeight leaves out the border
+}
+function onAddKey(e: KeyboardEvent): void {
+  if (e.key !== 'Enter' || e.isComposing) return
+  e.preventDefault()
+  void add()
+}
 /** Open: every task and the add box. Close: back to three lines. */
 function toggle() {
   expanded.value = !expanded.value
@@ -123,11 +135,14 @@ function toggle() {
 async function startAdd() {
   expanded.value = true
   await nextTick()
+  growAdd() // a text kept from before the card was folded shows whole (CodeReview R5-9)
   addInput.value?.focus()
 }
 async function add() {
   if (newText.value.trim() && (await act(() => addTask2(newText.value)))) {
     newText.value = ''
+    await nextTick()
+    growAdd() // back to one line
     expanded.value = true // a new Task sorts last: collapsed, it would land in the hidden part and the tap would look lost
   }
 }
@@ -202,13 +217,13 @@ async function saveIt() {
       <p v-if="undo" class="sub mt-1" data-test="daily-undo-line">
         {{ undo.label }}: “{{ undo.task.text }}” · <button type="button" class="link" data-test="daily-undo" @click="undoLast">Undo</button>
       </p>
-      <!-- Empty (alpha gap G6): with notes waiting, point at the strip below; with none, at the recorder — a first-run account
-           has no strip yet, so "Get feedback" named a control that was not on screen. -->
+      <!-- Empty (alpha gap G6): with notes waiting, point at the strip below; with none, at the recorder or the Journal strip,
+           which is always shown since G9. -->
       <p v-if="!tasks.length && props.loop.work.value.notes" class="sub mt-1" data-test="daily-empty">Nothing for today yet. Your notes are waiting: Get feedback below turns them into Tasks, or add one with +.</p>
-      <p v-else-if="!tasks.length" class="sub mt-1" data-test="daily-empty">Nothing for today. Write what's on your mind on the <RouterLink to="/" class="link" data-test="daily-empty-record">recorder</RouterLink>; feedback turns your notes into Tasks. Or add one with +.</p>
+      <p v-else-if="!tasks.length" class="sub mt-1" data-test="daily-empty">Nothing for today. Write what's on your mind on the <RouterLink to="/" class="link" data-test="daily-empty-record">recorder</RouterLink> or in the Journal below; feedback turns your notes into Tasks. Or add one with +.</p>
       <!-- D-106: the add box belongs to the open (expanded) card; the short view is today's list only. -->
-      <div v-if="expanded" class="flex gap-1.5 mt-2">
-        <input ref="addInput" v-model="newText" class="input in" placeholder="+ task" aria-label="New task" data-test="daily-add-input" @keydown.enter="add" />
+      <div v-if="expanded" class="flex gap-1.5 mt-2 items-end">
+        <textarea ref="addInput" v-model="newText" rows="1" class="input in grow" placeholder="+ task" aria-label="New task" data-test="daily-add-input" @keydown="onAddKey" @input="growAdd" />
         <button type="button" class="btn-ghost btn-xs" :disabled="busy || !newText.trim()" data-test="daily-add" @click="add">Add</button>
       </div>
       <!-- No row when nothing is hidden: adding starts from the header's + (it opens the card). -->
@@ -244,6 +259,7 @@ async function saveIt() {
 .due { font-size: 0.75rem; color: var(--glass-warn); }
 .acts { display: flex; gap: 0.25rem; flex-shrink: 0; }
 .in { padding: 0.3rem 0.6rem; font-size: 0.85rem; flex: 1; }
+.grow { resize: none; overflow: hidden; line-height: 1.35; } /* G11: height follows the text (growAdd) */
 .plan { font-size: 0.8rem; margin-top: 0.5rem; padding-left: 1rem; list-style: disc; display: flex; flex-direction: column; gap: 0.15rem; }
 .btn-xs { padding: 0.3rem 0.65rem; font-size: 0.78rem; border-radius: 0.6rem; }
 .btn-icon { padding: 0.3rem 0.45rem; } /* with the 20px glyph: the same height as Refresh and ⋯ beside it */

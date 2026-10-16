@@ -16,7 +16,7 @@ import { pendingSummary } from '@/harness/summaryRun'
 //
 // The strip sits over the bottom of the cards' box, which is measured: while it shows, the box ends at the strip's bottom
 // edge and pads by its height, so the last card stops at the strip's top and anything scrolling past is hidden by the
-// strip — no shadow cut below it. With no strip the box runs into the band by --shadow-room, so shadows fall uncut.
+// strip — no shadow cut below it. The strip is always shown since G9; `stripH` is 0 only before its first measure.
 const loop = useLoop2()
 const { widgets, loaded, isActive, projects } = useWidgets()
 const dock = ref<HTMLElement | null>(null)

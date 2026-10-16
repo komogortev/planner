@@ -1,6 +1,6 @@
 # Alpha test plan — full scope (2026-10-16)
 
-**Status: accepted (owner, 2026-10-16) with the recommended answers to Q1–Q4 and Q6 (D-122); Q5 open. R1 ✅ 2026-10-16 (A8, #169). R3 ✅ 2026-10-16 (A9, #173). R4 ✅ 2026-10-16 (A10, #174). R2 ✅ decided 2026-10-16: [H5-S3-SCHEDULES.md](H5-S3-SCHEDULES.md), D-123…D-130 (Morning schedule only; notifications deferred past R10, which amends Q2). *Routine* renamed to **Schedule** (D-138); *Routine* now names a recurring personal item, parked (D-139).** Owner, 2026-10-16: alpha starts only when every roadmap item up to and including
+**Status: accepted (owner, 2026-10-16) with the recommended answers to Q1–Q4 and Q6 (D-122); Q5 answered 2026-10-16 (D-140). R1 ✅ 2026-10-16 (A8, #169). R3 ✅ 2026-10-16 (A9, #173). R4 ✅ 2026-10-16 (A10, #174). R5 ✅ 2026-10-16 (G7–G11, G13; #175). R2 ✅ decided 2026-10-16: [H5-S3-SCHEDULES.md](H5-S3-SCHEDULES.md), D-123…D-130 (Morning schedule only; notifications deferred past R10, which amends Q2). *Routine* renamed to **Schedule** (D-138); *Routine* now names a recurring personal item, parked (D-139).** Owner, 2026-10-16: alpha starts only when every roadmap item up to and including
 H5 S3 has landed, plus UI calibrations found along the way. This **supersedes D-114** ("the declared slice is enough to
 open alpha"). The change is D-122 in [DECISION-TREE.md](DECISION-TREE.md). [SLICE-ACCEPTANCE.md](SLICE-ACCEPTANCE.md) stays the one gate: §1 gains rows A8–A13 (§3 below). Terms per
 [VOCABULARY.md](VOCABULARY.md).
@@ -93,8 +93,8 @@ phone or need a secret or a call only the owner can make; Claude does the rest.
 | Q2 | H5 S3 for alpha: notifications in or out | **Amended (owner, 2026-10-16, D-127): a pre-alpha candidate entered only after R1–R10 are done.** Was: In, as the last S3 PR | Out: Today waits on open, push follows alpha |
 | Q3 | Summary v3 for testers | **Listed for every account** once v3 lands (Recommended): it is in scope and v1's reason to hide it is gone | Owner only until a week of his own use |
 | Q4 | G5 repo | **The planner repo** (Recommended): its card is already verified. The Action answers only users with write access (inferred from the action's defaults; checked on the run) | Another private repo |
-| Q5 | G7: name the loop "Journal" in the UI | Owner's call, no recommendation: naming | — |
-| Q6 | G9: where an empty-queue reply lands | **A new note the next run reads** (Recommended): no routing guess, nothing attached to the wrong Task | An answer attached to a chosen note or Task |
+| Q5 | G7: name the loop "Journal" in the UI | **Answered (owner, 2026-10-16, D-140): the strip is titled Journal** ("Journal · 2 questions · 3 changes"); Today and Get feedback keep their names | Keep the app's words, or Journal everywhere |
+| Q6 | G9: where an empty-queue reply lands | **A new note the next run reads** (Recommended; confirmed by the owner 2026-10-16): no routing guess, nothing attached to the wrong Task | An answer attached to a chosen note or Task |
 
 ## 3. Gate rows added to SLICE-ACCEPTANCE §1 (on acceptance)
 

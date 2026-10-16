@@ -47,6 +47,10 @@ const onYes = () => proposal.value && act(() => confirmProposal2(proposal.value!
 const onNo = () => proposal.value && act(() => rejectProposal2(proposal.value!))
 const actions = computed(() => (proposal.value ? proposalActions(proposal.value) : null))
 const correcting = ref(false)
+// G8: the strip focuses the first item when Get feedback opens it — the answer box, or for a proposal its first button.
+const answerBox = ref<HTMLInputElement | null>(null)
+const firstAction = ref<HTMLButtonElement | null>(null)
+defineExpose({ focus: () => (answerBox.value ?? firstAction.value)?.focus({ preventScroll: true }) })
 const onCorrect = () => {
   const p = proposal.value
   if (p && text.value.trim()) void act(() => correctProposal2(p, label.value, text.value))
@@ -65,7 +69,7 @@ const onCorrect = () => {
         <button type="button" class="btn-ghost btn-xs" :disabled="busy" data-test="strip-removal-keep" @click="onRemoval('keep')">{{ REMOVAL_ANSWERS.keep }}</button>
       </div>
       <div class="flex gap-1.5 mt-1.5">
-        <input v-model="text" class="input in" :aria-label="`Answer: ${item.question.text}`" :placeholder="item.question.kind === 'removal' ? 'Or say something else' : 'Answer'" data-test="strip-answer" @keydown.enter="onAnswer" />
+        <input ref="answerBox" v-model="text" class="input in" :aria-label="`Answer: ${item.question.text}`" :placeholder="item.question.kind === 'removal' ? 'Or say something else' : 'Answer'" data-test="strip-answer" @keydown.enter="onAnswer" />
         <button type="button" class="btn-ghost btn-xs" :disabled="busy || !text.trim()" data-test="strip-answer-submit" @click="onAnswer">Answer</button>
         <button type="button" class="btn-ghost btn-xs" :disabled="busy" data-test="strip-skip" @click="onSkip">Skip</button>
       </div>
@@ -73,7 +77,7 @@ const onCorrect = () => {
     <template v-else>
       <p class="ask" data-test="strip-proposal">{{ label }}</p>
       <div class="flex flex-wrap gap-1.5 mt-1.5">
-        <button type="button" class="btn-ghost btn-xs" :disabled="busy" data-test="strip-yes" @click="onYes">{{ actions?.yes }}</button>
+        <button ref="firstAction" type="button" class="btn-ghost btn-xs" :disabled="busy" data-test="strip-yes" @click="onYes">{{ actions?.yes }}</button>
         <button type="button" class="btn-ghost btn-xs" :disabled="busy" data-test="strip-no" @click="onNo">{{ actions?.no }}</button>
         <button type="button" class="btn-ghost btn-xs" :disabled="busy" :aria-expanded="correcting" data-test="strip-correct" @click="correcting = !correcting">Correct…</button>
       </div>
