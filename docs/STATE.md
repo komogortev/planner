@@ -1,11 +1,11 @@
 # Personal Planner — STATE
 
 ## SNAPSHOT
-- **Phase/Last:** H1 built · HW S3 v2 live · H5 in real use · GitHub bridge G1–G2 + C1–C4 live. **D-122 full-scope alpha** ([ALPHA-TEST-PLAN.md](ALPHA-TEST-PLAN.md)), 2026-10-16: R1 restore-edit reconcile (#169) · R2 schedules decided, Morning only (D-123…D-130, D-138 Schedule rename, D-139 Routine parked) · R3 Summary v3 (#173) · R4 copy-paste retired, v1 code removed (#174, D-113) · R5 Journal strip + calibrations (#175, D-140). Rollback floor `80540b1`.
-- **Working:** prod = Worker `b0bee66` (`5157a181`), Pages `174de0e`, D1 `0011`; smoke 17/17. `pnpm check` app 574 · Worker 280 (gate floor 854). **Verified on the phone (owner, 10-16):** GitHub connected, Planner card with real STATE, a real Send (#160), C4 tints (#166).
-- **Broken:** Summary v3 (#173): "Now on a later day" cannot tell a carry from another write on a later-day Task (no row history); a pre-v3 build that sees a Summary row mounts v1. A tint picked on a device that hasn't pulled a switch writes its on/off back (C4, accepted). **Not verified on a phone:** DEVICE-CHECKS 37–41; #148; D-105 on a real model; a Summary v3 brief; R5 focus and keyboard (iOS Get feedback, Android IME Enter in the growing boxes); folded card and loop back (#158–#164). **Untested end to end:** the Claude Action answering an `@claude` issue (no repo has the workflow).
+- **Phase/Last:** H1 built · HW S3 v2 live · H5 in real use · GitHub bridge G1–G2 + C1–C4 live. **D-122 full-scope alpha** ([ALPHA-TEST-PLAN.md](ALPHA-TEST-PLAN.md)), 2026-10-16: R1 (#169) · R2 decided, Morning only (D-123…D-130, D-138, D-139) · R3 Summary v3 (#173) · R4 copy-paste retired (#174) · R5 Journal strip (#175, D-140) · **R6 nightly export built + deployed (#177)**. Rollback floor `80540b1`.
+- **Working:** prod = Worker `d55e31d` (`fda40839`, cron `17 7 * * *`), Pages `d55e31d`, D1 `0011`; smoke 17/17. `pnpm check` app 574 · Worker 293. **Phone (owner, 10-16):** GitHub connected, real STATE card, a real Send (#160), C4 tints (#166).
+- **Broken:** R6 exports nothing yet: `EXPORT_GITHUB_TOKEN` + `EXPORT_ACCOUNT_EMAIL` unset (each night logs `export.not-configured`); the clipboard secret command's success path is unverified. Summary v3 can't tell a carry from another later-day write; a pre-v3 build mounts v1 for a Summary row. C4 tint write-back (accepted). **Not on a phone:** DEVICE-CHECKS 37–41, #148, D-105, a v3 brief, R5 focus/IME, #158–#164. **Untested:** `@claude` Action end to end.
 - **Blocker:** none.
-- **Next:** R6 nightly export → R7 H5 S3-1 Morning schedule ([H5-S3-SCHEDULES.md](H5-S3-SCHEDULES.md), decided) → R8 G5 end to end → R10 notice; notifications re-enter after R10 (D-127); invite re-issued when the gate passes.
+- **Next:** owner sets the two R6 secrets (RUNBOOK §Nightly export) → first 07:17 UTC run closes A11 → R7 H5 S3-1 Morning schedule → R8 G5 → R10 notice.
 ---
 
 ## Context
@@ -44,7 +44,7 @@
   - *Small, low*: delete-account's dialog does not mention an unsent draft (deliberate, typed-confirmed); `isBlank` (trim) and the capture cleaner (control characters) disagree about "empty" for a box of only control characters; a device clear that keeps the token is not announced to the other window; CSP — arrives with `_headers` in ORIGIN-MOVE phase 1.
 
 - **Version badge in prod** — decided 2026-10-11 (owner): stays. **Superseded 2026-10-12 (owner): removed** — Settings → App info → Version is enough now, and the bottom band is kept free of anything but the nav.
-- **Nightly export cron — deferred 2026-10-11 (owner).** Backup today = the per-account export in Settings + D1 Time Travel. Design on file in the session record: monthly JSON files into the private `planner-data` repo, Worker secret for a repo-scoped token (owner enters it), failures to `error_log`. Re-entry (proposed, unconfirmed): before the first invitee beyond the tester, or when the owner asks.
+- **Nightly export cron — built 2026-10-16 (R6, #177); was deferred 2026-10-11 (owner).** Backup today = the per-account export in Settings + D1 Time Travel. Design on file in the session record: monthly JSON files into the private `planner-data` repo, Worker secret for a repo-scoped token (owner enters it), failures to `error_log`. Re-entry (proposed, unconfirmed): before the first invitee beyond the tester, or when the owner asks.
 - **Invitee data rights (H1-ENTRIES §12 Q6) — closed:** export and delete-account are built (D-48, D-49). What invitees
   still wait on is the alpha gate, [SLICE-ACCEPTANCE.md](SLICE-ACCEPTANCE.md) §1 (D-22, the updated notice, the `/log`
   limit). The first tester's invite expires 2026-10-24. Invites for non-Gmail addresses cannot be redeemed through
@@ -57,6 +57,8 @@
 ## Decision log
 
 Full log: PROJECT.md → Decisions log. Latest:
+
+- 2026-10-16 (R6, #177) — Nightly export: a Worker cron writes one account (`EXPORT_ACCOUNT_EMAIL`, D-122 Q1) to `planner-data` as one Git Data API commit: `export/entries/<YYYY-MM>.json` with revisions, `records.json`, `account.json`, `meta.json`; content = `exportPage` format 1 without `exportedAt`. Why one commit with local blob shas: an unchanged night sends nothing, only changed files upload (free-plan CPU), and history becomes the change log. Not forced: a moved branch is a 422, retried next night. CodeReview 7 (CPU, mid-export duplicates, subtree listing, branch encoding, order tiebreak, test gaps), all fixed; 12 guard mutations red. Worker 280 → 293. Secrets not set yet; A11 open.
 
 - 2026-10-16 (R5, #175) — UI calibrations from the gap register. G7 (D-140): the strip is titled Journal. G8: Get feedback opens on the first question with its input focused; after an answer the next one is focused. G9 (D-140): with nothing to answer, a free box keeps what is typed as a note; the strip is always shown. G10: the detail view offers Run through only while changes wait. G11: Today's add box grows with its text, Enter adds. G13: Widgets rows laid out like the live cards, the inert Create card is a line. CodeReview 10, all fixed: focus follows the queue only after the owner tapped in this opening (no keyboard on arrival or on a sync), never onto the free box; one free box kept mounted (text survives questions arriving and view switches); text typed during a save stays; the add box re-grows on reopen; the Widgets switch's tap area clears the description. Verified in the pane at 375 px (focus moves, arrival leaves focus alone, free text survives, notes saved with their outbox row). No component tests exist in this repo; app 574 · Worker 280 unchanged. Pages only.
 
