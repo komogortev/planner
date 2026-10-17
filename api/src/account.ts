@@ -14,12 +14,14 @@ import type { Env } from './index'
  * Children first, `users` last (foreign keys). `delete` uses the numbered parameter ?1 = the account id. `exported`
  * says where the table's content reaches the export (sessions never do: they hold only token hashes).
  */
-export const ACCOUNT_TABLES: readonly { table: string; delete: string; exported: 'entries' | 'revisions' | 'records' | 'recordRevisions' | 'models' | 'aiCalls' | 'integrations' | 'account' | 'identities' | 'no' }[] = [
+export const ACCOUNT_TABLES: readonly { table: string; delete: string; exported: 'entries' | 'revisions' | 'records' | 'recordRevisions' | 'models' | 'aiCalls' | 'integrations' | 'schedules' | 'account' | 'identities' | 'no' }[] = [
   { table: 'entry_revisions', delete: 'DELETE FROM entry_revisions WHERE user_id = ?1', exported: 'revisions' },
   { table: 'entries', delete: 'DELETE FROM entries WHERE user_id = ?1', exported: 'entries' },
   // The harness and widget records (0008): the owner's answers and instructions are theirs, so they export and delete too.
   { table: 'record_revisions', delete: 'DELETE FROM record_revisions WHERE user_id = ?1', exported: 'recordRevisions' },
   { table: 'records', delete: 'DELETE FROM records WHERE user_id = ?1', exported: 'records' },
+  // H5 S3-1 (0012): the account's Morning schedule and pause state are part of its export and deletion boundary.
+  { table: 'schedules', delete: 'DELETE FROM schedules WHERE user_id = ?1', exported: 'schedules' },
   // H5 (0009): registered models (exported without the key columns) and the model calls with their replies.
   { table: 'ai_calls', delete: 'DELETE FROM ai_calls WHERE user_id = ?1', exported: 'aiCalls' },
   { table: 'models', delete: 'DELETE FROM models WHERE user_id = ?1', exported: 'models' },
@@ -84,7 +86,10 @@ export async function exportPage(db: D1Database, s: Pick<AuthedSession, 'id'>, s
   const integrations = first
     ? (await db.prepare('SELECT * FROM integrations WHERE user_id = ? ORDER BY provider').bind(s.id).all<IntegrationRow>()).results.map(integrationView)
     : undefined
-  return { format: EXPORT_FORMAT, exportedAt: Date.now(), ...(first ? { account, identities, models, aiCalls, integrations } : {}), entries: page.changes, revisions, records, recordRevisions, cursor: page.cursor, more: page.more }
+  const schedules = first
+    ? (await db.prepare('SELECT id, kind, hour, zone, enabled, paused_reason AS pausedReason, fail_count AS failCount, last_day AS lastDay, last_call_id AS lastCallId, created_at AS createdAt, updated_at AS updatedAt FROM schedules WHERE user_id = ? ORDER BY kind').bind(s.id).all()).results
+    : undefined
+  return { format: EXPORT_FORMAT, exportedAt: Date.now(), ...(first ? { account, identities, models, aiCalls, integrations, schedules } : {}), entries: page.changes, revisions, records, recordRevisions, cursor: page.cursor, more: page.more }
 }
 
 /** Deletes every row of the account in one batch, after remembering its session tokens so its devices can be told. */

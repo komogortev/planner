@@ -14,13 +14,26 @@ export const MODELS_PER_USER = 10
 export interface ModelRow {
   user_id: string; id: string; label: string; format: string; base_url: string; model: string; max_tokens: number
   key_ct: string | null; key_iv: string | null; key_hint: string | null; key_version: number | null; created_at: number; updated_at: number
+  is_default?: number
 }
 
 /** The device's view of a model: everything but the key. The one function every response goes through. */
 export const modelView = (r: ModelRow) => ({
   id: r.id, label: r.label, format: r.format, baseUrl: r.base_url, model: r.model, maxTokens: r.max_tokens,
-  hasKey: r.key_ct !== null, keyHint: r.key_hint, createdAt: r.created_at, updatedAt: r.updated_at,
+  hasKey: r.key_ct !== null, keyHint: r.key_hint, isDefault: r.is_default === 1, createdAt: r.created_at, updatedAt: r.updated_at,
 })
+
+/** Keep one usable account default. A device's explicit local choice remains independent (D-126). */
+async function ensureDefaultModel(db: D1Database, userId: string): Promise<void> {
+  await db.batch([
+    db.prepare('UPDATE models SET is_default = 0 WHERE user_id = ? AND is_default = 1 AND key_ct IS NULL').bind(userId),
+    db.prepare(
+      `UPDATE models SET is_default = 1 WHERE user_id = ? AND id = (
+         SELECT id FROM models WHERE user_id = ? AND key_ct IS NOT NULL ORDER BY created_at, id LIMIT 1
+       ) AND NOT EXISTS (SELECT 1 FROM models WHERE user_id = ? AND is_default = 1)`,
+    ).bind(userId, userId, userId),
+  ])
+}
 
 export const getModel = (db: D1Database, userId: string, id: string) =>
   db.prepare('SELECT * FROM models WHERE user_id = ? AND id = ?').bind(userId, id).first<ModelRow>()
@@ -38,6 +51,27 @@ modelsApi.use('*', async (c, next) => {
 modelsApi.get('/', async (c) => {
   const { results } = await c.env.DB.prepare('SELECT * FROM models WHERE user_id = ? ORDER BY created_at').bind(c.get('session').id).all<ModelRow>()
   return c.json({ models: results.map(modelView) })
+})
+
+// PUT /me/models/default { modelId } — a schedule has no device, so it follows this account-level choice (D-126).
+modelsApi.put('/default', async (c) => {
+  const userId = c.get('session').id
+  let body: unknown
+  try { body = await c.req.json() } catch { return c.json({ error: 'not JSON' }, 400) }
+  const modelId = (body as { modelId?: unknown } | null)?.modelId
+  if (typeof modelId !== 'string' || !MODEL_ID.test(modelId)) return c.json({ error: 'modelId: invalid' }, 400)
+  const model = await getModel(c.env.DB, userId, modelId)
+  if (!model) return c.json({ error: 'not found' }, 404)
+  if (model.key_ct === null) return c.json({ error: 'model has no key' }, 409)
+  const results = await c.env.DB.batch([
+    c.env.DB.prepare('UPDATE models SET is_default = 0 WHERE user_id = ? AND is_default = 1').bind(userId),
+    c.env.DB.prepare('UPDATE models SET is_default = 1 WHERE user_id = ? AND id = ? AND key_ct IS NOT NULL').bind(userId, modelId),
+  ])
+  if (!results[1]?.meta.changes) {
+    await ensureDefaultModel(c.env.DB, userId)
+    return c.json({ error: 'not found' }, 404)
+  }
+  return c.json({ defaultModelId: modelId })
 })
 
 // PUT /me/models/:id { label, format, baseUrl, model, maxTokens, key? } — create or replace. Without `key`, the stored key
@@ -82,11 +116,14 @@ modelsApi.put('/:id', async (c) => {
     ).bind(...args, MODELS_PER_USER).run()
     if (!r.meta.changes) return c.json({ error: `at most ${MODELS_PER_USER} models` }, 409)
   }
+  await ensureDefaultModel(c.env.DB, userId)
   return c.json(modelView((await getModel(c.env.DB, userId, id))!))
 })
 
 modelsApi.delete('/:id', async (c) => {
-  const r = await c.env.DB.prepare('DELETE FROM models WHERE user_id = ? AND id = ?').bind(c.get('session').id, c.req.param('id')).run()
+  const userId = c.get('session').id
+  const r = await c.env.DB.prepare('DELETE FROM models WHERE user_id = ? AND id = ?').bind(userId, c.req.param('id')).run()
+  await ensureDefaultModel(c.env.DB, userId)
   return r.meta.changes ? c.json({ deleted: true }) : c.json({ error: 'not found' }, 404)
 })
 

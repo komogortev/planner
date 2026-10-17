@@ -77,8 +77,8 @@ export async function buildFiles(db: D1Database, userId: string, pageSize = PULL
   for (;;) {
     const page = await exportPage(db, { id: userId }, since, pageSize)
     if (since === 0) {
-      const { account: a, identities, models, aiCalls, integrations } = page
-      account = { account: a, identities, models, aiCalls, integrations }
+      const { account: a, identities, models, aiCalls, integrations, schedules } = page
+      account = { account: a, identities, models, aiCalls, integrations, schedules }
     }
     for (const e of page.entries as Entry[]) put(entries, e.id, { entry: e, revisions: [] })
     for (const r of page.revisions) entries.get(r.id)?.revisions.push(r)

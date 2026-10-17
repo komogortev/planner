@@ -7,6 +7,7 @@ import { appOrigins, appUrls } from './config'
 import { logApi } from './log'
 import { modelsApi } from './models'
 import { runNightlyExport } from './nightlyExport'
+import { runSchedules, schedulesApi } from './schedules'
 import { sessionsApi } from './sessions'
 import { integrationsApi } from './integrations'
 import { projectsApi, reposApi } from './projects'
@@ -38,7 +39,12 @@ export interface Env {
   EXPORT_REPO?: string
   EXPORT_GITHUB_TOKEN?: string
   EXPORT_ACCOUNT_EMAIL?: string
+  // H5 S3-1 (src/schedules.ts): the operator's brake, `true` stops every account's schedules (D-129). A var, not a secret.
+  SCHEDULES_PAUSED?: string
 }
+
+/** Must equal the schedule tick in wrangler.toml. */
+export const SCHEDULE_CRON = '5 * * * *'
 
 const app = new Hono<{ Bindings: Env }>()
 
@@ -71,6 +77,7 @@ app.route('/auth', auth)
 app.route('/sync', sync)
 app.route('/entries', entriesApi)
 app.route('/me/models', modelsApi)
+app.route('/me/schedules', schedulesApi)
 app.route('/me/sessions', sessionsApi)
 app.route('/me/integrations/github/repos', reposApi) // before /me/integrations: the more specific mount first
 app.route('/me/integrations', integrationsApi)
@@ -86,9 +93,9 @@ app.get('/me', async (c) => {
 
 export default {
   fetch: app.fetch,
-  // The nightly export (wrangler.toml [triggers]); the only cron, so no dispatch on the schedule.
-  scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
-    ctx.waitUntil(runNightlyExport(env))
+  // wrangler.toml [triggers]: the hourly schedule tick (D-132) and the nightly export (R6).
+  scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil(controller.cron === SCHEDULE_CRON ? runSchedules(env) : runNightlyExport(env))
   },
 } satisfies ExportedHandler<Env>
 export { ModelCallWorkflow } from './aiCalls'

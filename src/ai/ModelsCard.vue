@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useOnline } from '@/composables/useOnline'
 import { storedToken } from '@/auth/signIn'
-import { awaitCall, deleteModel, listModels, ModelsError, outcomeText, presetOf, PRESETS, saveModel, testModel, type ModelView, type Preset } from './models'
+import { awaitCall, deleteModel, listModels, ModelsError, outcomeText, presetOf, PRESETS, saveModel, setDefaultModel, testModel, type ModelView, type Preset } from './models'
 import { reconcileRunModel, runModel, setRunModel, unsetRunModel } from './runWith'
 import GeminiKeyHelp from './GeminiKeyHelp.vue'
 
@@ -17,13 +17,14 @@ const loaded = ref(false)
 const listError = ref<string | null>(null)
 const tests = reactive<Record<string, string>>({}) // model id → outcome line
 const removing = ref<string | null>(null) // armed "Remove?" tap
+const settingDefault = ref<string | null>(null)
 let abort: AbortController | null = null
 
 async function refresh(): Promise<void> {
   listError.value = null
   try {
     models.value = await listModels()
-    // The device's choice must still exist with a key; a device that never chose follows the account's only model (D-102).
+    // A device's saved choice stays local; when absent, use the account default before the legacy first-keyed fallback.
     reconcileRunModel(models.value)
   } catch (err) {
     listError.value = err instanceof ModelsError ? err.message : String(err)
@@ -115,6 +116,19 @@ async function remove(m: ModelView): Promise<void> {
     tests[m.id] = err instanceof ModelsError ? err.message : String(err)
   }
 }
+async function makeDefault(m: ModelView): Promise<void> {
+  if (!m.hasKey || m.isDefault || settingDefault.value) return
+  settingDefault.value = m.id
+  listError.value = null
+  try {
+    await setDefaultModel(m.id)
+    await refresh()
+  } catch (err) {
+    listError.value = err instanceof ModelsError ? err.message : String(err)
+  } finally {
+    settingDefault.value = null
+  }
+}
 // Which model this device runs with is the list's highlighted row; a row's Use makes it the active one (owner, 2026-10-13).
 const choose = (m: ModelView) => setRunModel({ id: m.id, label: m.label })
 </script>
@@ -132,7 +146,7 @@ const choose = (m: ModelView) => setRunModel({ id: m.id, label: m.label })
       <p v-if="listError" class="text-sm text-err" role="alert" data-test="models-error">{{ listError }}</p>
 
       <p class="text-xs text-warn mt-2" data-test="run-with-warning">
-        A device that has not chosen runs with your first model. Add or choose a model only after every device you use has
+        A device with no saved choice follows the account default, then the first model. Add or choose a model only after every device you use has
         opened this version of the app once: an older version drops runs made by a model when it syncs.
       </p>
 
@@ -141,11 +155,13 @@ const choose = (m: ModelView) => setRunModel({ id: m.id, label: m.label })
           <div class="min-w-0">
             <p class="text-sm font-semibold flex items-center min-w-0">
               <span class="truncate">{{ m.label }}</span>
+              <span v-if="m.isDefault" class="text-xs text-emerald-300 ml-2 shrink-0" data-test="model-default">Schedule default</span>
             </p>
             <p class="text-xs text-slate-400 truncate">{{ m.model }} · {{ host(m) }} · {{ m.hasKey ? `key …${m.keyHint}` : 'no key' }}</p>
             <p v-if="tests[m.id]" class="text-xs mt-1" :class="tests[m.id]!.startsWith('Works') ? 'text-emerald-300' : 'text-slate-300'" role="status" data-test="model-test-result">{{ tests[m.id] }}</p>
           </div>
           <div class="flex gap-2 shrink-0">
+            <button v-if="!m.isDefault && m.hasKey" class="btn-ghost btn-sm" :disabled="settingDefault !== null" :aria-label="`Use ${m.label} for schedules`" data-test="model-default-set" @click="makeDefault(m)">{{ settingDefault === m.id ? 'Saving…' : 'Set default' }}</button>
             <button v-if="runModel?.id !== m.id && m.hasKey" class="btn-ghost btn-sm" :aria-label="`Use ${m.label} on this device`" data-test="model-use" @click="choose(m)">Use</button>
             <button class="btn-ghost btn-sm" :disabled="!m.hasKey || tests[m.id] === 'Testing…'" data-test="model-test" @click="test(m)">Test</button>
             <button class="btn-ghost btn-sm" data-test="model-remove" @click="remove(m)">{{ removing === m.id ? 'Remove?' : 'Remove' }}</button>

@@ -1,7 +1,7 @@
 // Per-device state of model runs (H5-MODELS §5): which registered model this device runs with, and the call a run is
 // waiting on. localStorage, like the pending run header (src/harness/pending.ts): synchronous, per device, ids only — never
-// a prompt or a reply. Per device: a device can run with a different model. A device that never chose follows the account's
-// first model (D-102). Copy and paste is retired as a path (D-113): every run goes through a registered model.
+// a prompt or a reply. Per device: a device can run with a different model. A device that never chose follows the account
+// default, then the first usable model (D-102, D-126). Copy and paste is retired as a path (D-113).
 import { ref } from 'vue'
 import { clearPending, pendingRun } from '@/harness/pending'
 
@@ -77,11 +77,11 @@ export function runPath(model: RunModel | null, known: boolean): RunPath {
 
 /**
  * Lines this device's choice up with the account's models (D-102). A chosen model that is gone, or lost its key, is
- * unset. A device that never chose runs with the account's first model that has a key (the oldest): a model added on
- * the desktop is offered on the phone too, and in the home-screen app, which keeps its own storage. This holds for several
+ * unset. A device that never chose follows the account default; if none is set, it uses the oldest model with a key. A
+ * model added on the desktop is offered on the phone too, and in the home-screen app, which keeps its own storage. This holds for several
  * models too (D-113: the model is on by default).
  */
-export function reconcileRunModel(models: readonly { id: string; label: string; hasKey: boolean }[]): void {
+export function reconcileRunModel(models: readonly { id: string; label: string; hasKey: boolean; isDefault?: boolean }[]): void {
   const usable = models.filter((m) => m.hasKey)
   modelsKnown.value = true
   const cur = runModel.value
@@ -91,7 +91,8 @@ export function reconcileRunModel(models: readonly { id: string; label: string; 
     if (still.label !== cur!.label) setRunModel({ id: still.id, label: still.label })
     return
   }
-  if (usable.length > 0) setRunModel({ id: usable[0].id, label: usable[0].label })
+  const fallback = usable.find((m) => m.isDefault) ?? usable[0]
+  if (fallback) setRunModel({ id: fallback.id, label: fallback.label })
 }
 
 let adopting: Promise<void> | null = null
@@ -104,7 +105,7 @@ let generation = 0
  * panels mount together). Resolves once `runModel` is settled. Failure (offline, signed out) leaves the models unknown
  * (`modelsKnown` false): the panel says it could not check, and the next panel or Try again asks again.
  */
-export function adoptAccountModel(list: () => Promise<readonly { id: string; label: string; hasKey: boolean }[]>): Promise<void> {
+export function adoptAccountModel(list: () => Promise<readonly { id: string; label: string; hasKey: boolean; isDefault?: boolean }[]>): Promise<void> {
   // A usable choice stops the ask, not any stored value: a 'manual' written back by an older build in another window, or a
   // value that does not parse, must not leave Try again doing nothing (CodeReview R4-2).
   if (asked || runModel.value !== null) return Promise.resolve()

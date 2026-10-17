@@ -14,6 +14,7 @@ export interface ModelView {
   maxTokens: number
   hasKey: boolean
   keyHint: string | null
+  isDefault?: boolean
   createdAt: number
   updatedAt: number
 }
@@ -98,7 +99,7 @@ export class ModelsError extends Error {
 type Fetch = typeof fetch
 export interface Client { fetchImpl?: Fetch; apiUrl?: string; token?: string | null }
 
-async function request<T>(path: string, init: RequestInit, c: Client = {}): Promise<T> {
+export async function request<T>(path: string, init: RequestInit, c: Client = {}): Promise<T> {
   const token = c.token === undefined ? storedToken() : c.token
   if (!token) throw new ModelsError('Sign in first.', 401)
   let res: Response
@@ -121,6 +122,8 @@ async function request<T>(path: string, init: RequestInit, c: Client = {}): Prom
 export interface ModelInput { label: string; format: Format; baseUrl: string; model: string; maxTokens: number; key?: string }
 
 export const listModels = async (c?: Client) => (await request<{ models: ModelView[] }>('/me/models', { method: 'GET' }, c)).models
+export const setDefaultModel = (modelId: string, c?: Client) =>
+  request<{ defaultModelId: string }>('/me/models/default', { method: 'PUT', body: JSON.stringify({ modelId }) }, c)
 export const saveModel = (id: string, input: ModelInput, c?: Client) =>
   request<ModelView>(`/me/models/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(input) }, c)
 export const deleteModel = (id: string, c?: Client) => request<{ deleted: true }>(`/me/models/${encodeURIComponent(id)}`, { method: 'DELETE' }, c)
