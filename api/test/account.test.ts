@@ -44,6 +44,7 @@ const COUNT_BY_ACCOUNT: Record<string, string> = {
   entries: 'SELECT COUNT(*) AS n FROM entries WHERE user_id = ?',
   record_revisions: 'SELECT COUNT(*) AS n FROM record_revisions WHERE user_id = ?',
   records: 'SELECT COUNT(*) AS n FROM records WHERE user_id = ?',
+  schedules: 'SELECT COUNT(*) AS n FROM schedules WHERE user_id = ?',
   ai_calls: 'SELECT COUNT(*) AS n FROM ai_calls WHERE user_id = ?',
   models: 'SELECT COUNT(*) AS n FROM models WHERE user_id = ?',
   integrations: 'SELECT COUNT(*) AS n FROM integrations WHERE user_id = ?',
@@ -73,6 +74,10 @@ async function populated(email: string) {
     body: JSON.stringify({ label: 'Mine', format: 'openai-chat', baseUrl: 'https://llm.example.com/v1', model: 'm-1', maxTokens: 4000, key: modelKey }),
   })
   expect(put.status).toBe(200)
+  await env.DB.prepare(
+    `INSERT INTO schedules (user_id, id, kind, hour, zone, created_at, updated_at)
+     VALUES (?, ?, 'morning', 8, 'America/Toronto', ?, ?)`,
+  ).bind(a.id, crypto.randomUUID(), Date.now(), Date.now()).run()
   await env.DB.prepare(
     `INSERT INTO ai_calls (user_id, id, model_id, stage, run_id, entry_count, prompt_bytes, prompt, status, reply, started_at, finished_at)
      VALUES (?, ?, 'm1', 'harness', 'run-1', 3, 120, NULL, 'ok', ?, ?, ?)`,

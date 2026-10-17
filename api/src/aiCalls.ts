@@ -15,6 +15,7 @@ import { isFormat } from './modelRules'
 import { overLimit, tooMany } from './ratelimit'
 import type { Env } from './index'
 import { RECORD_ID } from '../../src/domain/records'
+import { composeScheduled, settleSchedule } from './schedules'
 
 export const PROMPT_MAX_BYTES = 150_000
 export const DAILY_CAP_DEFAULT = 30
@@ -31,7 +32,7 @@ export interface CallRow {
   prompt: string | null; status: CallRowStatus; stop: string | null; tokens_in: number | null; tokens_out: number | null
   reply: string | null; started_at: number; claimed_at: number | null; finished_at: number | null; reply_cleared_at: number | null
 }
-export interface CallParams { userId: string; callId: string }
+export interface CallParams { userId: string; callId: string; scheduled?: boolean } // scheduled: compose first, settle after (schedules.ts)
 
 /** The device's view of a call. Never the prompt; `calling` reads as `pending` (both mean "not finished yet"). */
 export const callView = (r: CallRow) => ({
@@ -110,7 +111,14 @@ export class ModelCallWorkflow extends WorkflowEntrypoint<Env, CallParams> {
   async run(event: Readonly<WorkflowEvent<CallParams>>, step: WorkflowStep): Promise<string> {
     // No retries: a retried call can be a second paid call. Whether a failed call is billed differs per provider; retries
     // above 0 wait on that reading (H5-S1-SPIKE §5, carried into S1).
-    return step.do('call', { retries: { limit: 0, delay: 1000 }, timeout: '15 minutes' }, () => runCall(this.env, event.payload))
+    const once = { retries: { limit: 0, delay: 1000 } }
+    const p = event.payload
+    if (!p.scheduled) return step.do('call', { ...once, timeout: '15 minutes' }, () => runCall(this.env, p))
+    // A scheduled call (S3-1, D-133): compose the prompt from the account's rows, call, then count the outcome (D-128).
+    const composed = await step.do('compose', { ...once, timeout: '2 minutes' }, () => composeScheduled(this.env, p))
+    const status = composed === 'ready' ? await step.do('call', { ...once, timeout: '15 minutes' }, () => runCall(this.env, p)) : composed
+    await step.do('settle', { ...once, timeout: '1 minute' }, () => settleSchedule(this.env, p))
+    return status
   }
 }
 

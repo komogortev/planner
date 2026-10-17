@@ -10,12 +10,14 @@ ALLOWED_APP_URLS = "https://koplanner.pages.dev/"
 APP_ENV = "prod"
 # Model calls per user per rolling 24 h (src/aiCalls.ts, H5-MODELS D-86). A full day is about 3–6 calls.
 AI_DAILY_CAP = "30"
+# The operator brake (src/schedules.ts, D-129): set to "true" to stop every account's schedules at once, no deploy of code.
+SCHEDULES_PAUSED = "false"
 # R6 nightly export target (src/nightlyExport.ts). Its token and the exported account's email are secrets the owner sets.
 EXPORT_REPO = "komogortev/planner-data"
 
-# The nightly export, 07:17 UTC: overnight in North America, after the day's last notes and before the morning.
+# Minute 5 of every hour: the schedule tick (src/schedules.ts, D-132). Then the nightly export, 07:17 UTC: overnight in North America, after the day's last notes and before the morning.
 [triggers]
-crons = ["17 7 * * *"]
+crons = ["5 * * * *", "17 7 * * *"]
 
 [[d1_databases]]
 binding = "DB"
