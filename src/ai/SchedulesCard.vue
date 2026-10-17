@@ -4,7 +4,7 @@ import { useOnline } from '@/composables/useOnline'
 import { storedToken } from '@/auth/signIn'
 import { ensureMorning } from '@/harness/scheduled'
 import { listModels, ModelsError, outcomeText, type CallStatus } from './models'
-import { listSchedules, saveMorning, type ScheduleView } from './schedules'
+import { listSchedules, saveMorning, toggleLabel, type ScheduleView } from './schedules'
 
 // Settings → Schedules (H5-S3-SCHEDULES D-124…D-129). One schedule at alpha: Morning, a harness run at a whole hour in this
 // device's zone, started by the Worker while the app is closed. It uses the account's default model (Settings → AI models).
@@ -78,7 +78,7 @@ onMounted(() => { if (signedIn && online.value) void refresh(); else loaded.valu
             <option v-for="o in hours" :key="o.h" :value="o.h">{{ o.label }}</option>
           </select>
           <button class="btn-ghost btn-sm" :disabled="saving" :aria-pressed="schedule.enabled && !schedule.pausedReason" data-test="schedule-toggle" @click="change({ enabled: !(schedule.enabled && !schedule.pausedReason) })">
-            {{ schedule.pausedReason ? 'Turn on again' : schedule.enabled ? 'On' : 'Off' }}
+            {{ toggleLabel(schedule, operatorPaused) }}
           </button>
         </div>
       </div>
