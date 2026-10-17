@@ -99,7 +99,7 @@ export class ModelsError extends Error {
 type Fetch = typeof fetch
 export interface Client { fetchImpl?: Fetch; apiUrl?: string; token?: string | null }
 
-async function request<T>(path: string, init: RequestInit, c: Client = {}): Promise<T> {
+export async function request<T>(path: string, init: RequestInit, c: Client = {}): Promise<T> {
   const token = c.token === undefined ? storedToken() : c.token
   if (!token) throw new ModelsError('Sign in first.', 401)
   let res: Response

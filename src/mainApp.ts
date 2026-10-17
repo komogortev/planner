@@ -7,7 +7,7 @@ import App from './App.vue'
 import { router } from './router'
 import { applyEnvCue } from './env/applyEnvCue'
 import { applyTheme } from './theme/theme'
-import { startSync } from './sync'
+import { startSync, syncEngine } from './sync'
 import { routeAfterSessionChange } from './sync/tokenWatch'
 import { installErrorReporting, reportError } from './log/report'
 import { installLiveTextInput } from './composables/liveTextInput'
@@ -15,6 +15,7 @@ import { db } from './db'
 import { isOlderThanData, storedVersion } from './db/staleBuild'
 import StaleBuild from './components/StaleBuild.vue'
 import { dropStrandedRuns } from './ai/runWith'
+import { applyWaitingSchedules } from './harness/scheduled'
 import './style.css'
 
 // Local / preview builds get a coloured banner, tab title, favicon and status bar; prod is untouched.
@@ -45,6 +46,9 @@ function startApp(): void {
     },
   })
   installErrorReporting()
+  // H5 S3-1 (D-135): once a sync has settled, store any reply a schedule left waiting. Before the sync the device would not
+  // hold the notes the run was composed from.
+  syncEngine.subscribe((s) => { if (s.phase === 'idle' && s.lastSyncedAt !== null) void applyWaitingSchedules() })
 
   // A6, a window already open: when a newer build upgrades the database from another window, Dexie closes this one with
   // auto-open on, and its next query would reopen downward and patch the newer schema. Stay closed and reload instead, so
