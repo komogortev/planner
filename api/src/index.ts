@@ -6,6 +6,7 @@ import { auth, sessionUser } from './auth'
 import { appOrigins, appUrls } from './config'
 import { logApi } from './log'
 import { modelsApi } from './models'
+import { runNightlyExport } from './nightlyExport'
 import { sessionsApi } from './sessions'
 import { integrationsApi } from './integrations'
 import { projectsApi, reposApi } from './projects'
@@ -32,6 +33,11 @@ export interface Env {
   MODEL_KEY_SECRET?: string
   MODEL_CALL: Workflow<import('./aiCalls').CallParams>
   AI_DAILY_CAP: string
+  // R6 nightly export (src/nightlyExport.ts): the private data repo (wrangler.toml) and two secrets the owner sets — a
+  // fine-grained token for that repo only (Contents: read and write) and the one account it exports (D-122 Q1).
+  EXPORT_REPO?: string
+  EXPORT_GITHUB_TOKEN?: string
+  EXPORT_ACCOUNT_EMAIL?: string
 }
 
 const app = new Hono<{ Bindings: Env }>()
@@ -78,5 +84,11 @@ app.get('/me', async (c) => {
   return user ? c.json(user) : c.json(await signedOutBody(c.env.DB, c.req.header('Authorization')), 401)
 })
 
-export default app
+export default {
+  fetch: app.fetch,
+  // The nightly export (wrangler.toml [triggers]); the only cron, so no dispatch on the schedule.
+  scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
+    ctx.waitUntil(runNightlyExport(env))
+  },
+} satisfies ExportedHandler<Env>
 export { ModelCallWorkflow } from './aiCalls'

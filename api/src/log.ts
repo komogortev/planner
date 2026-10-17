@@ -34,9 +34,14 @@ logApi.post('/', async (c) => {
   const nth = await c.env.DB.prepare('SELECT at FROM error_log WHERE id <= (SELECT MAX(id) FROM error_log) - ? ORDER BY id DESC LIMIT 1')
     .bind(LOG_DAILY_CAP - 1).first<{ at: number }>()
   if (nth && nth.at > Date.now() - DAY_MS) return c.json({ error: 'daily cap reached' }, 429)
-  await c.env.DB.batch([
-    c.env.DB.prepare('INSERT INTO error_log (at, kind, route, build) VALUES (?, ?, ?, ?)').bind(Date.now(), kind, route, build),
-    c.env.DB.prepare('DELETE FROM error_log WHERE id <= (SELECT MAX(id) FROM error_log) - ?').bind(LOG_MAX_ROWS),
-  ])
+  await writeErrorLog(c.env.DB, kind, route, build)
   return c.body(null, 204)
 })
+
+/** One error_log row, trimming the table to LOG_MAX_ROWS. Also the Worker's own failures (the nightly export) land here. */
+export async function writeErrorLog(db: D1Database, kind: string, route: string, build: string): Promise<void> {
+  await db.batch([
+    db.prepare('INSERT INTO error_log (at, kind, route, build) VALUES (?, ?, ?, ?)').bind(Date.now(), kind, route, build),
+    db.prepare('DELETE FROM error_log WHERE id <= (SELECT MAX(id) FROM error_log) - ?').bind(LOG_MAX_ROWS),
+  ])
+}
