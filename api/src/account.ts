@@ -58,7 +58,7 @@ export const EXPORT_FORMAT = 1
  * One page of an account export. The client asks `since=0` first and follows `cursor` while `more`; the first page also
  * carries the account itself. Deleted entries are included — the export is everything the server holds for the person.
  */
-export async function exportPage(db: D1Database, s: AuthedSession, since: number, limit: number) {
+export async function exportPage(db: D1Database, s: Pick<AuthedSession, 'id'>, since: number, limit: number) {
   // `pullAll`, not the entry-only pull: records ride the same pages and the same cursor, so an export that read only entries
   // would silently leave every answer, link and report out of the person's copy.
   const page = await pullAll(db, s.id, since, limit)
@@ -76,10 +76,10 @@ export async function exportPage(db: D1Database, s: AuthedSession, since: number
   // same views the API answers with: never a key column, never a prompt.
   if (first) await sweep(db, s.id) // expired replies and stale prompts never reach an export (D-87, D-94)
   const models = first
-    ? (await db.prepare('SELECT * FROM models WHERE user_id = ? ORDER BY created_at').bind(s.id).all<ModelRow>()).results.map(modelView)
+    ? (await db.prepare('SELECT * FROM models WHERE user_id = ? ORDER BY created_at, id').bind(s.id).all<ModelRow>()).results.map(modelView)
     : undefined
   const aiCalls = first
-    ? (await db.prepare('SELECT * FROM ai_calls WHERE user_id = ? ORDER BY started_at').bind(s.id).all<CallRow>()).results.map(callView)
+    ? (await db.prepare('SELECT * FROM ai_calls WHERE user_id = ? ORDER BY started_at, id').bind(s.id).all<CallRow>()).results.map(callView)
     : undefined
   const integrations = first
     ? (await db.prepare('SELECT * FROM integrations WHERE user_id = ? ORDER BY provider').bind(s.id).all<IntegrationRow>()).results.map(integrationView)

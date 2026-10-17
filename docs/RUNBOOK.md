@@ -114,6 +114,29 @@ overwriting**: every stored key was sealed with it and would stop opening (each 
 A rotation adds a second secret and `key_version` 2 (`api/src/keyBox.ts`). Local dev: add the same line, with its own
 value, to `api/.env`.
 
+## Nightly export (R6, A11)
+
+A cron (`api/wrangler.toml` `[triggers]`, 07:17 UTC) writes **one account** (D-122 Q1) to the private repo in
+`EXPORT_REPO` (`komogortev/planner-data`) as one commit on its default branch: `export/entries/<YYYY-MM>.json` per month of
+`createdAt` with that month's revisions, `export/records.json`, `export/account.json` (models and integrations without key
+columns, as in the Settings export) and `export/meta.json` (cursor, months, counts). Everything else in the repo is left
+alone; a file under `export/` that is no longer produced is removed. A night with no change sends nothing and makes no
+commit, so the commit history is the change log. Code: `api/src/nightlyExport.ts`.
+
+Two secrets, set together (`wrangler secret bulk`, as above):
+
+- `EXPORT_GITHUB_TOKEN`: a fine-grained token, **Only select repositories → `planner-data`**, permission **Contents: Read
+  and write** (Metadata read is added by GitHub). When it expires, every night logs `export.github-401`.
+- `EXPORT_ACCOUNT_EMAIL`: the email of the one account to export. No match logs `export.no-account`; nothing is sent.
+
+Failures land in `error_log` with route `/cron/export` (query in "Error log" below). Kinds: `export.not-configured`
+(a secret is missing; this row every night is also proof that the cron fires), `export.no-account`, `export.many-accounts`,
+`export.bad-repo`, `export.github-<status>` (`422` = the branch moved during the run; the next night retries),
+`export.github-unreachable`, `export.tree-truncated` (the `export/` listing was too large to read; no commit is made),
+`export.failed` (anything else). A CPU-limit kill leaves **no** row: if the repo has no commit for days while notes were
+written, read the cron's invocations in the Cloudflare dashboard (Workers → planner-api → Logs/observability, `cpuTime`).
+The repo must have at least one commit (a new empty repo answers 409 on its ref).
+
 ## Before and after a D1 restore (Time Travel, A7)
 
 **What a restore is.** `wrangler d1 time-travel restore planner --timestamp=<ISO>` (or `--bookmark=`) rewinds the **whole
