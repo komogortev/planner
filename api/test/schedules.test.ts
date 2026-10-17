@@ -8,6 +8,9 @@ import { composeScheduled, FAILS_TO_PAUSE, localParts, runSchedules, settleSched
 import type { Env } from '../src/index'
 import app from '../src/index'
 
+// wrangler.toml ships SCHEDULES_PAUSED="true" (the operator brake); these tests exercise the live path, and the paused case builds its own env.
+(env as { SCHEDULES_PAUSED?: string }).SCHEDULES_PAUSED = 'false'
+
 const API = 'https://api.test'
 const ZONE = 'America/Toronto'
 // 2026-10-17 11:30 UTC = 07:30 in Toronto (EDT): after a 6 o'clock schedule, before an 8 o'clock one.
