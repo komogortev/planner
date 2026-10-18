@@ -67,17 +67,17 @@ onMounted(() => { if (signedIn && online.value) void refresh(); else loaded.valu
       <p v-if="operatorPaused" class="text-xs text-warn mb-2" data-test="schedules-operator-paused">Schedules are paused for everyone while the service is checked.</p>
       <p v-if="loaded && !hasModel" class="text-xs text-warn mb-2" data-test="schedules-no-model">Add an AI model first: a schedule runs with your default model.</p>
 
-      <div v-if="schedule" class="flex items-center justify-between gap-3" data-test="schedule-morning">
+      <div v-if="schedule" class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" data-test="schedule-morning">
         <div class="min-w-0">
           <p class="text-sm font-semibold">Morning</p>
           <p class="text-xs text-slate-400" data-test="schedule-last">{{ lastRun }} Zone: {{ schedule.zone }}.</p>
           <p v-if="pausedText" class="text-xs text-warn mt-1" role="status" data-test="schedule-paused">{{ pausedText }}</p>
         </div>
-        <div class="flex items-center gap-2 shrink-0">
+        <div class="flex items-center gap-2 flex-wrap">
           <select class="input" :value="schedule.hour" :disabled="saving" aria-label="Morning schedule hour" data-test="schedule-hour" @change="change({ hour: Number(($event.target as HTMLSelectElement).value) })">
             <option v-for="o in hours" :key="o.h" :value="o.h">{{ o.label }}</option>
           </select>
-          <button class="btn-ghost btn-sm" :disabled="saving" :aria-pressed="schedule.enabled && !schedule.pausedReason" data-test="schedule-toggle" @click="change({ enabled: !(schedule.enabled && !schedule.pausedReason) })">
+          <button class="btn-ghost btn-sm text-left" :disabled="saving" :aria-pressed="schedule.enabled && !schedule.pausedReason" data-test="schedule-toggle" @click="change({ enabled: !(schedule.enabled && !schedule.pausedReason) })">
             {{ toggleLabel(schedule, operatorPaused) }}
           </button>
         </div>
