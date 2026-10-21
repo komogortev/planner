@@ -18,3 +18,8 @@ sources/*/**
 .wrangler
 # wrangler tail captures hold IPs + request metadata
 *.jsonl
+
+# Playwright E2E (e2e/): the wiped local D1 and the run output
+e2e/.state/
+test-results/
+playwright-report/
