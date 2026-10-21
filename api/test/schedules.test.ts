@@ -6,7 +6,8 @@ import { runCall } from '../src/aiCalls'
 import { createSession } from '../src/auth'
 import { composeScheduled, FAILS_TO_PAUSE, localParts, runSchedules, settleSchedule, validZone } from '../src/schedules'
 import type { Env } from '../src/index'
-import app from '../src/index'
+import app, { SCHEDULE_CRON } from '../src/index'
+import worker from '../src/index'
 
 // wrangler.toml ships SCHEDULES_PAUSED="true" (the operator brake); these tests exercise the live path, and the paused case builds its own env.
 (env as { SCHEDULES_PAUSED?: string }).SCHEDULES_PAUSED = 'false'
@@ -289,5 +290,113 @@ describe('/me/schedules', () => {
     await call(b.token, '/me/schedules/morning', { method: 'PUT', body: JSON.stringify({ hour: 9, zone: ZONE }) })
     expect(await schedule(a.id)).toMatchObject({ hour: 5 })
     expect(((await (await call(b.token, '/me/schedules')).json()) as { schedules: { hour: number }[] }).schedules.map((s) => s.hour)).toEqual([9])
+  })
+})
+
+// Gate row A12, second half: "a second account's schedule never runs with the first's key", and the cron routing that decides
+// which job a Worker cron fires. The suite above gives every account the same model id and the same key, so a key mix-up
+// between accounts would pass it; here the keys differ.
+describe('A12: each account tick uses its own key', () => {
+  const KEYS = { a: 'sk-test-KEY-OF-A', b: 'sk-test-KEY-OF-B', c: 'sk-test-KEY-OF-C-REVOKED' }
+
+  async function keyed(key: string) {
+    const a = await account()
+    const res = await call(a.token, '/me/models/m1', {
+      method: 'PUT',
+      body: JSON.stringify({ label: 'M', format: 'openai-chat', baseUrl: 'https://llm.example.com/v1', model: 'm-1', maxTokens: 4000, key }),
+    })
+    expect(res.status).toBe(200)
+    await addNote(a.id, `NOTE-OF-${a.id}`)
+    await addSchedule(a.id)
+    return a
+  }
+  /** Runs one account's due schedule through tick, compose, call, settle; returns the Authorization header the provider saw. */
+  async function runAccount(a: { id: string }, s: ReturnType<typeof stub>, rejectKey?: string) {
+    const p = s.started.find((x) => x.userId === a.id)!
+    expect(p, 'the tick started this account').toBeDefined()
+    expect(await composeScheduled(env, p, NOW)).toBe('ready')
+    const seen: string[] = []
+    const fetchFn = (async (_url: string, init: RequestInit) => {
+      const auth = (init.headers as Record<string, string>).authorization ?? ''
+      seen.push(auth)
+      return rejectKey && auth === `Bearer ${rejectKey}` ? new Response('no', { status: 401 }) : oai(REPLY)
+    }) as unknown as typeof fetch
+    await runCall(env, p, fetchFn)
+    await settleSchedule(env, p)
+    return seen
+  }
+
+  it('known positive: each provider call carries only its own account key; a rejected key counts against that account alone', async () => {
+    const a = await keyed(KEYS.a)
+    const b = await keyed(KEYS.b)
+    const c = await keyed(KEYS.c)
+    const s = stub()
+    await runSchedules(env, NOW, s.start)
+    const seenA = await runAccount(a, s)
+    const seenB = await runAccount(b, s)
+    const seenC = await runAccount(c, s, KEYS.c)
+    expect(seenA).toEqual([`Bearer ${KEYS.a}`])
+    expect(seenB).toEqual([`Bearer ${KEYS.b}`])
+    expect(seenC).toEqual([`Bearer ${KEYS.c}`])
+    expect(await schedule(a.id)).toMatchObject({ fail_count: 0, paused_reason: null })
+    expect(await schedule(b.id)).toMatchObject({ fail_count: 0, paused_reason: null })
+    expect(await schedule(c.id)).toMatchObject({ fail_count: 1 })
+  })
+
+  it('negative control: a call row pointed at another account model cannot open that account key', async () => {
+    const a = await keyed(KEYS.a)
+    const b = await keyed(KEYS.b)
+    const s = stub()
+    await runSchedules(env, NOW, s.start)
+    const p = s.started.find((x) => x.userId === a.id)!
+    await composeScheduled(env, p, NOW)
+    // Model rows are looked up by (user_id, model_id): remove A's model and A's call must find no key, even though B has a model with the same id.
+    await env.DB.prepare('DELETE FROM models WHERE user_id = ?').bind(a.id).run()
+    const seen: string[] = []
+    await runCall(env, p, (async (_u: string, init: RequestInit) => { seen.push(String((init.headers as Record<string, string>).authorization)); return oai(REPLY) }) as unknown as typeof fetch)
+    expect(seen).toEqual([])
+    expect(await callRow(a.id, p.callId)).toMatchObject({ status: 'no_key' })
+    expect(b.id).not.toBe(a.id)
+  })
+})
+
+describe('the Worker cron dispatch', () => {
+  /** The Workflow binding is replaced, so a tick that does start a run never reaches a provider. */
+  function dispatchEnv() {
+    const created: { params: { userId: string } }[] = []
+    const fake = { create: async (o: { params: { userId: string } }) => { created.push(o) } }
+    return { created, e: { ...env, MODEL_CALL: fake } as unknown as Env }
+  }
+  async function fire(cron: string, e: Env) {
+    const waits: Promise<unknown>[] = []
+    worker.scheduled({ cron } as ScheduledController, e, { waitUntil: (p: Promise<unknown>) => waits.push(p), passThroughOnException() {} } as unknown as ExecutionContext)
+    await Promise.all(waits)
+  }
+  const exportRows = async () => (await env.DB.prepare("SELECT COUNT(*) AS n FROM error_log WHERE kind = 'export.not-configured'").first<{ n: number }>())!.n
+
+  // hour 0 in UTC is due at any real time: the dispatcher reads the clock itself.
+  it(`${SCHEDULE_CRON} runs the schedule tick and not the export; the other cron runs the export and not the tick`, async () => {
+    expect(SCHEDULE_CRON).toBe('5 * * * *')
+    const a = await ready({ hour: 0, zone: 'UTC' })
+    const t = dispatchEnv()
+    const before = await exportRows()
+    await fire(SCHEDULE_CRON, t.e)
+    expect(t.created.filter((c) => c.params.userId === a.id), 'tick started a run (known positive)').toHaveLength(1)
+    expect(await exportRows(), 'tick did not run the export').toBe(before)
+
+    const b = await ready({ hour: 0, zone: 'UTC' })
+    const x = dispatchEnv()
+    await fire('17 7 * * *', x.e)
+    expect(x.created.filter((c) => c.params.userId === b.id), 'export cron did not tick').toHaveLength(0)
+    expect(await callCount(b.id)).toBe(0)
+    expect(await exportRows(), 'export ran (not-configured is the row that shows it fired)').toBe(before + 1)
+  })
+
+  it('an unrecognised cron string does not tick any account', async () => {
+    const a = await ready({ hour: 0, zone: 'UTC' })
+    const t = dispatchEnv()
+    await fire('0 3 * * *', t.e)
+    expect(t.created.filter((c) => c.params.userId === a.id)).toHaveLength(0)
+    expect(await callCount(a.id)).toBe(0)
   })
 })
