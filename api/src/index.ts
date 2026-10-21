@@ -44,7 +44,7 @@ export interface Env {
 }
 
 /** Must equal the schedule tick in wrangler.toml. */
-export const SCHEDULE_CRON = '5 * * * *'
+const SCHEDULE_CRON = '5 * * * *'
 
 const app = new Hono<{ Bindings: Env }>()
 
