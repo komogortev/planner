@@ -6,7 +6,7 @@ import { runCall } from '../src/aiCalls'
 import { createSession } from '../src/auth'
 import { composeScheduled, FAILS_TO_PAUSE, localParts, runSchedules, settleSchedule, validZone } from '../src/schedules'
 import type { Env } from '../src/index'
-import app, { SCHEDULE_CRON } from '../src/index'
+import app from '../src/index'
 import worker from '../src/index'
 
 // wrangler.toml ships SCHEDULES_PAUSED="true" (the operator brake); these tests exercise the live path, and the paused case builds its own env.
@@ -360,6 +360,10 @@ describe('A12: each account tick uses its own key', () => {
   })
 })
 
+// The two cron strings in wrangler.toml [triggers]; the entry does not export its constant (workerd rejects non-handler exports).
+const SCHEDULE_CRON = '5 * * * *'
+const EXPORT_CRON = '17 7 * * *'
+
 describe('the Worker cron dispatch', () => {
   /** The Workflow binding is replaced, so a tick that does start a run never reaches a provider. */
   function dispatchEnv() {
@@ -376,7 +380,6 @@ describe('the Worker cron dispatch', () => {
 
   // hour 0 in UTC is due at any real time: the dispatcher reads the clock itself.
   it(`${SCHEDULE_CRON} runs the schedule tick and not the export; the other cron runs the export and not the tick`, async () => {
-    expect(SCHEDULE_CRON).toBe('5 * * * *')
     const a = await ready({ hour: 0, zone: 'UTC' })
     const t = dispatchEnv()
     const before = await exportRows()
@@ -386,7 +389,7 @@ describe('the Worker cron dispatch', () => {
 
     const b = await ready({ hour: 0, zone: 'UTC' })
     const x = dispatchEnv()
-    await fire('17 7 * * *', x.e)
+    await fire(EXPORT_CRON, x.e)
     expect(x.created.filter((c) => c.params.userId === b.id), 'export cron did not tick').toHaveLength(0)
     expect(await callCount(b.id)).toBe(0)
     expect(await exportRows(), 'export ran (not-configured is the row that shows it fired)').toBe(before + 1)
