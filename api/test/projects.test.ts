@@ -455,8 +455,9 @@ describe('C3 loop back: routes', () => {
   it('an older open issue still shows when 20 newer ones are closed: open and recently closed are read apart', async () => {
     const a = await owner()
     const spy = github(file('docs/STATE.md', STATE), pulls([]), (u) => {
+      // closed just now on the real clock: the Worker's 7-day window is measured from Date.now(), so a fixed date goes stale
       if (!u.pathname.endsWith('/planner/issues')) return undefined
-      return Response.json(u.searchParams.get('state') === 'open' ? [issue(3)] : [issue(9, { state: 'closed', closed_at: NOW, created_at: '2026-10-16T11:00:00.000Z' })])
+      return Response.json(u.searchParams.get('state') === 'open' ? [issue(3)] : [issue(9, { state: 'closed', closed_at: new Date().toISOString(), created_at: '2026-10-16T11:00:00.000Z' })])
     })
     const out = (await (await call(a.token, '/projects/state?repo=komogortev/planner')).json()) as { issues: { number: number }[] }
     expect(out.issues.map((i) => i.number)).toEqual([9, 3])
