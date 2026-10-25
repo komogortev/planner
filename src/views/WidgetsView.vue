@@ -10,6 +10,8 @@ import type { SystemWidgetId } from '@/widgets/system'
 // switch; activation is per account (a `widget` record, synced). Custom widgets (D-111) come later. G13 (owner, 2026-10-14:
 // the page read as construction / templates): each row is laid out like its live card — the Dashboard's width and gutter, a
 // header line with the name and the controls, the description below it — and the inert Create placeholder is a plain line.
+// Owner 2026-10-25 reverses the card look (INBOX 5b072959): this page is where widgets are set up, so each row is a dashed
+// template slot, not a live frosted card. A row that is on the Dashboard keeps a stronger edge than one that is off.
 const { widgets, loaded, projects, tintOf } = useWidgets()
 const busy = ref<string | null>(null)
 const error = ref<string | null>(null)
@@ -43,7 +45,7 @@ async function toggle(id: SystemWidgetId, active: boolean) {
     <h2 class="text-lg font-semibold px-1">Widgets</h2>
     <p class="text-sm text-slate-300 mt-0.5 px-1">Switch one on to show it on the Dashboard, on every device you use.</p>
     <ul class="mt-4 flex flex-col gap-3" data-test="widget-list">
-      <li v-for="w in widgets" :key="w.id" class="card w" v-bind="cardTint(tintOf(w.id))" :data-test="`widget-${w.id}`">
+      <li v-for="w in widgets" :key="w.id" class="card w" :class="{ on: w.active }" v-bind="cardTint(tintOf(w.id))" :data-test="`widget-${w.id}`">
         <header class="head">
           <h3 class="font-semibold min-w-0">{{ w.name }} <span v-if="!w.active && !w.defaultActive" class="sub">suggested</span></h3>
           <div class="controls">
@@ -58,7 +60,7 @@ async function toggle(id: SystemWidgetId, active: boolean) {
         </header>
         <p class="desc">{{ w.description }}</p>
       </li>
-      <li v-for="p in projects" :key="p.id" class="card w" v-bind="cardTint(tintOf(p.id))" :data-test="`widget-project-${p.repo}`">
+      <li v-for="p in projects" :key="p.id" class="card w" :class="{ on: p.active }" v-bind="cardTint(tintOf(p.id))" :data-test="`widget-project-${p.repo}`">
         <header class="head">
           <h3 class="font-semibold truncate min-w-0">{{ p.repo }} <span class="sub">project</span></h3>
           <div class="controls">
@@ -81,6 +83,18 @@ async function toggle(id: SystemWidgetId, active: boolean) {
 
 <style scoped>
 .w { color: var(--glass-text); }
+/* Template slot: a dashed outline over a faint wash, no frost, no float shadow, a tighter pad. Unlayered, so it wins over .card. */
+.card.w {
+  padding: 1rem 1.1rem;
+  background: rgb(32 22 14 / 0.16);
+  border: 2px dashed rgb(244 232 214 / 0.55);
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.card.w[data-tint] { background: rgb(var(--tint) / 0.08); border-color: rgb(var(--tint) / 0.75); }
+.card.w:not(.on) { border-color: rgb(244 232 214 / 0.26); }
+.card.w[data-tint]:not(.on) { border-color: rgb(var(--tint) / 0.35); }
 .head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
 .desc { font-size: 0.85rem; color: var(--glass-sub); margin-top: 0.75rem; } /* below the switch's widened tap area (11px) */
 .controls { flex: none; display: flex; align-items: center; gap: 0.5rem; }
