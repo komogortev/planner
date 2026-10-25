@@ -137,6 +137,22 @@ Failures land in `error_log` with route `/cron/export` (query in "Error log" bel
 written, read the cron's invocations in the Cloudflare dashboard (Workers → planner-api → Logs/observability, `cpuTime`).
 The repo must have at least one commit (a new empty repo answers 409 on its ref).
 
+## Break-glass: set a Task state without a session
+
+When no app session or token is at hand, `api/scripts/task-state.mjs` writes the state change the way the push route would
+(`records.ts`): it bumps `users.version_seq`, keeps the replaced row in `record_revisions`, and updates the record on the new
+version, guarded by the version it read. Every device pulls it on the next sync. Dry run by default; `--apply` writes;
+`--remote` targets production. Run it from `api/` with `wrangler` logged in to the account that owns the planner database.
+
+```
+node scripts/task-state.mjs <email> <taskIdPrefix...> --state done --remote
+node scripts/task-state.mjs <email> <taskIdPrefix...> --state done --remote --apply
+```
+
+It reads the rows first, skips a task already in the state, stops on an unknown or ambiguous id, and re-reads every row after
+the write (`OK` or `NOT APPLIED`). Tested on a local database only: apostrophes in the text, the version moving, the old row
+kept, a second run writing nothing. The normal path stays the app; use this one rarely.
+
 ## Before and after a D1 restore (Time Travel, A7)
 
 **What a restore is.** `wrangler d1 time-travel restore planner --timestamp=<ISO>` (or `--bookmark=`) rewinds the **whole
