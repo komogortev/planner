@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 360" role="img" aria-labelledby="t d" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif">
+  <title id="t">How a note becomes a Task</title>
+  <desc id="d">A typeless note is captured offline. On request the Journal reads new notes and open Tasks with your own model. It creates or attaches Tasks, proposes closes, rewrites, splits and merges for the owner to accept, and asks one short question when it would otherwise guess. Only the owner changes records.</desc>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#64748b"/>
+    </marker>
+  </defs>
+  <rect width="760" height="360" rx="16" fill="#f8fafc" stroke="#cbd5e1"/>
+
+  <rect x="24" y="110" width="150" height="90" rx="12" fill="#e2e8f0" stroke="#94a3b8"/>
+  <text x="99" y="148" text-anchor="middle" font-size="18" font-weight="700" fill="#0f172a">Note</text>
+  <text x="99" y="172" text-anchor="middle" font-size="13" fill="#334155">typeless, works offline</text>
+
+  <rect x="238" y="90" width="170" height="130" rx="12" fill="#c7d2fe" stroke="#6366f1"/>
+  <text x="323" y="132" text-anchor="middle" font-size="18" font-weight="700" fill="#1e1b4b">Journal</text>
+  <text x="323" y="158" text-anchor="middle" font-size="13" fill="#312e81">your own model reads</text>
+  <text x="323" y="176" text-anchor="middle" font-size="13" fill="#312e81">new notes + open Tasks</text>
+  <text x="323" y="200" text-anchor="middle" font-size="12" fill="#4338ca">on request</text>
+
+  <rect x="480" y="24" width="256" height="76" rx="12" fill="#bbf7d0" stroke="#22c55e"/>
+  <text x="608" y="56" text-anchor="middle" font-size="16" font-weight="700" fill="#052e16">Tasks</text>
+  <text x="608" y="80" text-anchor="middle" font-size="13" fill="#14532d">created, or later notes attached</text>
+
+  <rect x="480" y="122" width="256" height="76" rx="12" fill="#fde68a" stroke="#f59e0b"/>
+  <text x="608" y="154" text-anchor="middle" font-size="16" font-weight="700" fill="#451a03">Proposals</text>
+  <text x="608" y="178" text-anchor="middle" font-size="13" fill="#78350f">close, rewrite, split, merge: you accept</text>
+
+  <rect x="480" y="220" width="256" height="76" rx="12" fill="#fbcfe8" stroke="#ec4899"/>
+  <text x="608" y="252" text-anchor="middle" font-size="16" font-weight="700" fill="#500724">One short question</text>
+  <text x="608" y="276" text-anchor="middle" font-size="13" fill="#831843">asked instead of guessing: you answer</text>
+
+  <path d="M174 155 H236" stroke="#64748b" stroke-width="2" fill="none" marker-end="url(#a)"/>
+  <path d="M408 140 C444 140 444 62 478 62" stroke="#64748b" stroke-width="2" fill="none" marker-end="url(#a)"/>
+  <path d="M408 155 H478" stroke="#64748b" stroke-width="2" fill="none" marker-end="url(#a)"/>
+  <path d="M408 170 C444 170 444 258 478 258" stroke="#64748b" stroke-width="2" fill="none" marker-end="url(#a)"/>
+  <path d="M608 296 V318 H99 V204" stroke="#64748b" stroke-width="2" stroke-dasharray="6 5" fill="none" marker-end="url(#a)"/>
+  <text x="352" y="312" text-anchor="middle" font-size="12" fill="#475569">your answer is scope input for the next run</text>
+
+  <text x="380" y="347" text-anchor="middle" font-size="13" font-weight="600" fill="#0f172a">The Journal never overwrites a note. Only the owner changes records.</text>
+</svg>
