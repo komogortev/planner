@@ -169,6 +169,9 @@ node scripts/task-add.mjs <email> --source gmail:<threadId> --text "Contact the 
 node scripts/task-add.mjs <email> --source gmail:<threadId> --text "Contact the municipality for details" [--due YYYY-MM-DD] --remote --apply
 ```
 
+Several at once: `--from <file.json>` with a list of `{ "source", "text", "due"? }` (1–50; keep the file outside the
+repo). It reads once, prints one line per task (`add` or `skip` and why), writes all of them in one file and re-reads each.
+
 `--source` is `<system>:<id>`, and the task id is derived from it, so the same email always maps to the same task. It
 writes nothing when that task already exists in any state, including deleted (a task the owner deleted is never brought
 back), or when an open task already has the same text (typed in by hand). After a write it re-reads the row: `OK v<n>` or
