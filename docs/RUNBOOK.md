@@ -135,7 +135,9 @@ Failures land in `error_log` with route `/cron/export` (query in "Error log" bel
 `export.github-unreachable`, `export.tree-truncated` (the `export/` listing was too large to read; no commit is made),
 `export.failed` (anything else). A CPU-limit kill leaves **no** row: if the repo has no commit for days while notes were
 written, read the cron's invocations in the Cloudflare dashboard (Workers → planner-api → Logs/observability, `cpuTime`).
-The repo must have at least one commit (a new empty repo answers 409 on its ref).
+The repo must have at least one commit (a new empty repo answers 409 on its ref). A repo whose files were all deleted
+(head on git's empty tree, as `planner-data` from 2026-10-14 to 11-07) is handled since the fix for it: the Worker writes
+the commit without a base tree. `planner-data` keeps a `README.md` outside `export/` as well.
 
 ## Break-glass: set a Task state without a session
 
