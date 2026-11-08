@@ -11,6 +11,8 @@ import worker from '../src/index'
 import type { Env } from '../src/index'
 
 const REPO = 'owner/planner-data'
+/** Git's empty tree id (`git hash-object -t tree /dev/null`); planner-data's head pointed at it from 2026-10-14 to 11-07. */
+const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
 const OWNER = 'owner@example.com'
 const SHARED_ID = '00000000-0000-4000-8000-999999999999'
 const exportEnv = (over: Partial<Env> = {}): Env =>
@@ -44,7 +46,9 @@ async function fakeGithub(start: Record<string, string> = { 'README.md': 'data\n
   const trees = new Map<string, Map<string, string>>() // sha → files relative to that directory
   const commits = new Map<string, { tree: string; message: string }>()
   const register = (files: Map<string, string>) => {
-    const s = JSON.stringify([...files].sort(([a], [b]) => a.localeCompare(b)))
+    // An emptied repo's commit points at git's empty tree, which GitHub's tree API answers 404 (observed 2026-11-07).
+    if (files.size === 0) return EMPTY_TREE
+    const s =JSON.stringify([...files].sort(([a], [b]) => a.localeCompare(b)))
     let h = 0
     for (let i = 0; i < s.length; i++) h = (Math.imul(h, 31) + s.charCodeAt(i)) | 0
     const sha = `t${(h >>> 0).toString(16)}${s.length}`
@@ -76,12 +80,15 @@ async function fakeGithub(start: Record<string, string> = { 'README.md': 'data\n
     if (method === 'GET' && p === '') return Response.json({ default_branch: 'main' })
     if (method === 'GET' && p === '/git/ref/heads/main') return Response.json({ object: { sha: state.head } })
     if (method === 'GET' && p.startsWith('/git/commits/')) return Response.json({ tree: { sha: commits.get(p.split('/').pop()!)!.tree } })
+    if (method === 'GET' && p === `/git/trees/${EMPTY_TREE}`) return new Response('{"message":"Not Found"}', { status: 404 })
     if (method === 'GET' && p.startsWith('/git/trees/')) {
       const files = trees.get(p.split('/').pop()!)!
       return Response.json({ tree: await listing(files, url.searchParams.get('recursive') === '1'), truncated: !!opts.truncated })
     }
     if (method === 'POST' && p === '/git/trees') {
-      const files = new Map(trees.get(body.base_tree)!)
+      // Not verified against GitHub: whether the empty tree is accepted as base_tree. The fake refuses it, so the code must omit it.
+      if (body.base_tree === EMPTY_TREE) return new Response('{"message":"Not Found"}', { status: 404 })
+      const files = new Map(body.base_tree === undefined ? [] : trees.get(body.base_tree)!)
       for (const t of body.tree) {
         if (t.sha === null) files.delete(t.path)
         else { files.set(t.path, t.content); state.uploads.push(t.path) }
@@ -225,6 +232,16 @@ describe('R6 nightly export', () => {
     expect([...gh.files().keys()].sort()).toEqual([
       'README.md', 'export/account.json', 'export/entries/2026-10.json', 'export/meta.json', 'export/records.json', 'trial/lens.md',
     ])
+  })
+
+  it('an emptied repo (head commit on git\'s empty tree) still gets its export commit', async () => {
+    const owner = await account(OWNER)
+    await pushMutations(env.DB, owner, [upsert(entry('2026-10-10T08:00:00.000Z', 'after the wipe'))])
+    const gh = await fakeGithub({})
+    expect((await runNightlyExport(exportEnv())).status).toBe('committed')
+    expect(gh.state.patches).toBe(1)
+    expect([...gh.files().keys()].sort()).toEqual(['export/account.json', 'export/entries/2026-10.json', 'export/meta.json', 'export/records.json'])
+    expect(await errorKinds()).toEqual([])
   })
 
   it('a truncated export listing makes no commit and logs export.tree-truncated', async () => {

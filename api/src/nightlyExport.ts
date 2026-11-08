@@ -15,6 +15,8 @@ import type { Env } from './index'
 
 export const EXPORT_ROUTE = '/cron/export'
 export const EXPORT_DIR = 'export'
+/** Git's empty tree id (`git hash-object -t tree /dev/null`): the tree of a commit that deleted every file. */
+const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
 const GITHUB_TIMEOUT_MS = 15_000
 const REPO = /^[A-Za-z0-9-]{1,39}\/[A-Za-z0-9._-]{1,100}$/
 
@@ -159,8 +161,11 @@ async function writeCommit(token: string, repo: string, files: Files, message: s
   const parent = ref.object.sha
   const { tree: { sha: baseTree } } = await gh<{ tree: { sha: string } }>(token, `${r}/git/commits/${parent}`)
   type Listing = { tree: { path: string; type: string; sha: string }[]; truncated: boolean }
+  // A repo whose files were all deleted has a head commit on git's empty tree, which GitHub's tree API answers 404:
+  // planner-data sat there from 2026-10-14 (D-112) and every night failed. Treat it as "nothing here", with no base tree.
+  const empty = baseTree === EMPTY_TREE
   // Only the export subtree is listed: whatever else the repo grows (trial/, …) cannot truncate this listing.
-  const root = await gh<Listing>(token, `${r}/git/trees/${baseTree}`)
+  const root = empty ? { tree: [], truncated: false } : await gh<Listing>(token, `${r}/git/trees/${baseTree}`)
   const dir = root.tree.find((t) => t.path === EXPORT_DIR && t.type === 'tree')
   const remote = new Map<string, string>()
   if (dir) {
@@ -174,7 +179,7 @@ async function writeCommit(token: string, repo: string, files: Files, message: s
   }
   const stale = [...remote.keys()].filter((p) => !files.has(p)).map((path) => ({ path, mode: '100644', type: 'blob', sha: null }))
   if (changed.length === 0 && stale.length === 0) return null
-  const { sha: newTree } = await gh<{ sha: string }>(token, `${r}/git/trees`, { method: 'POST', body: { base_tree: baseTree, tree: [...changed, ...stale] } })
+  const { sha: newTree } = await gh<{ sha: string }>(token, `${r}/git/trees`, { method: 'POST', body: { ...(empty ? {} : { base_tree: baseTree }), tree: [...changed, ...stale] } })
   const { sha: commit } = await gh<{ sha: string }>(token, `${r}/git/commits`, { method: 'POST', body: { message, tree: newTree, parents: [parent] } })
   // Not forced: if the branch moved since the read, GitHub refuses (422) and tomorrow's run starts from the new head.
   await gh(token, `${r}/git/refs/heads/${refPath}`, { method: 'PATCH', body: { sha: commit, force: false } })
