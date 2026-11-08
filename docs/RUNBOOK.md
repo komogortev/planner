@@ -155,6 +155,31 @@ It reads the rows first, skips a task already in the state, stops on an unknown 
 the write (`OK` or `NOT APPLIED`). Tested on a local database only: apostrophes in the text, the version moving, the old row
 kept, a second run writing nothing. The normal path stays the app; use this one rarely.
 
+## Add a Task from outside the app (task-add, D-141)
+
+For a task that starts outside the planner, such as an email the weekly Gmail triage routes to the planner (City of
+Longueuil mail → "contact the municipality"). `api/scripts/task-add.mjs` builds the row with the app's own `addTask`
+(an owner task with no source note), checks it with the Worker's validator and inserts it the way the push route inserts
+a new record: version bump, row on the new version. Every device pulls it on the next sync. Dry run by default; `--apply`
+writes; `--remote` targets production. Run it from `api/` with Node 22.18+ and `wrangler` logged in to the account that
+owns the planner database (`npx wrangler whoami` first: a login on another account answers `could not be found [code: 7404]`).
+
+```
+node scripts/task-add.mjs <email> --source gmail:<threadId> --text "Contact the municipality for details" [--due YYYY-MM-DD] --remote
+node scripts/task-add.mjs <email> --source gmail:<threadId> --text "Contact the municipality for details" [--due YYYY-MM-DD] --remote --apply
+```
+
+Several at once: `--from <file.json>` with a list of `{ "source", "text", "due"? }` (1–50; keep the file outside the
+repo). It reads once, prints one line per task (`add` or `skip` and why), writes all of them in one file and re-reads each.
+
+`--source` is `<system>:<id>`, and the task id is derived from it, so the same email always maps to the same task. It
+writes nothing when that task already exists in any state, including deleted (a task the owner deleted is never brought
+back), or when an open task already has the same text (typed in by hand). After a write it re-reads the row: `OK v<n>` or
+`NOT APPLIED`. Exit codes for a caller: 0 added (or would add), 3 already there (nothing written), 1 refused input,
+2 the write did not land. Text with `;`, `--` and apostrophes went through `--apply` on a local D1 intact. Tests: `api/test/taskAdd.test.ts` runs the script's SQL on a local D1 (a device pulls it, a device's replay
+is a `duplicate`, a second run and a deleted task write nothing, other accounts untouched). The source is not stored in
+the row: the triage report keeps the thread id, and the script prints the task id it maps to.
+
 ## Before and after a D1 restore (Time Travel, A7)
 
 **What a restore is.** `wrangler d1 time-travel restore planner --timestamp=<ISO>` (or `--bookmark=`) rewinds the **whole

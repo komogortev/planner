@@ -2,6 +2,7 @@
 
 Filled by the notes intake (skill `notes-intake`); the owner closes lines. Counted at session start.
 
+- [ ] d8b55d63 · 2026-11-08 · chore · Separate wrangler auth for the planner and Cardloft: a scoped CLOUDFLARE_API_TOKEN per repo plus account_id in each wrangler.toml, so logging in for one never breaks the other (today one global login sees only Cardloft `b6d2…`; the planner is `9d0abf…`, so task-add and deploys fail with 7403/7404) · state: open (blocks the D-141 prod dry run) · src: owner, chat 2026-11-08
 - [ ] 0285251f · 2026-10-22 · chore · Create a GitHub token so the planner can connect the Cardloft card (see: cardloft) · state: open · src: task
 - [ ] 954c93b1 · 2026-10-15 · chore · Phone-test the feedback strip end to end · state: open (DEVICE-CHECKS, R9) · src: task
 - [x] 370aace1 · 2026-10-14 · feature · Drop the "Copy instead" button · state: built (#174, copy-paste retired; no such label left in src) · src: task · closed: 2026-10-25 done in the live account (task-state.mjs dry run, account head 226)
