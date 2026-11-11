@@ -2,6 +2,7 @@
 
 Filled by the notes intake (skill `notes-intake`); the owner closes lines. Counted at session start.
 
+- [ ] b41e07d2 · 2026-11-10 · feature · Raise the 200-character text limit: a multi-line session brief could not be pasted (owner hit it 11-10). Known site: Task `text: line(1, 200)` in `src/domain/records.ts`; enumerate every reader and writer of the limit (input, Worker validation, model prompts) and decide the new cap and whether text becomes multi-line · state: open · src: session
 - [ ] cb86a0d7 · 2026-11-10 · feature · "Window" item kind: an item with an end date, one action to take before it, and an end rule (drop, become a task, or ask); shows in Today from a lead time with a countdown and closes itself with one Summary line. First instance is typed as a plain task with a due date. Design decision first · state: open (no such kind in src, checked 11-10) · src: task
 - [ ] 6cdaf72b · 2026-11-09 · chore · The nightly-export GitHub token expires about 11-16 and the owner lets it lapse (decided 11-10); renew it when work returns to the R6 export, where the nightly error will then read `export.github-401` · state: open · src: note
 - [x] 0285251f · 2026-10-22 · chore · Create a GitHub token so the planner can connect the Cardloft card (see: cardloft) · state: open · src: task · closed: 2026-11-10 done in the live account (read at account head 239)
