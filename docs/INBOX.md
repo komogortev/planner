@@ -2,6 +2,7 @@
 
 Filled by the notes intake (skill `notes-intake`); the owner closes lines. Counted at session start.
 
+- [ ] b41e07d2 · 2026-11-10 · feature · Raise the 200-character text limit: a multi-line session brief could not be pasted (owner hit it 11-10). Known site: Task `text: line(1, 200)` in `src/domain/records.ts`; enumerate every reader and writer of the limit (input, Worker validation, model prompts) and decide the new cap and whether text becomes multi-line · state: open · src: session
 - [ ] 0285251f · 2026-10-22 · chore · Create a GitHub token so the planner can connect the Cardloft card (see: cardloft) · state: open · src: task
 - [ ] 954c93b1 · 2026-10-15 · chore · Phone-test the feedback strip end to end · state: open (DEVICE-CHECKS, R9) · src: task
 - [x] 370aace1 · 2026-10-14 · feature · Drop the "Copy instead" button · state: built (#174, copy-paste retired; no such label left in src) · src: task · closed: 2026-10-25 done in the live account (task-state.mjs dry run, account head 226)
