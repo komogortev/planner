@@ -155,6 +155,29 @@ It reads the rows first, skips a task already in the state, stops on an unknown 
 the write (`OK` or `NOT APPLIED`). Tested on a local database only: apostrophes in the text, the version moving, the old row
 kept, a second run writing nothing. The normal path stays the app; use this one rarely.
 
+## Local export (no phone, no token)
+
+`api/scripts/export-local.mjs` writes the file Settings → Export downloads, plus `version_seq` (the account's head), read
+straight from D1 through `wrangler d1 execute --json`. It issues SELECT statements only (`api/scripts/export-core.mjs`
+`assertSelect` refuses anything else) and prints counts, never content. Desktop consumers (Household `commitments.py`, the
+`notes-intake` skill) read the newest `~/Downloads/planner-export-*.json`, so a run refreshes them. Run it on demand, from
+the repo root:
+
+```
+node api/scripts/export-local.mjs <email> --remote
+node api/scripts/export-local.mjs <email> --remote --out <dir>
+```
+
+The file is named by the **local** day (`planner-export-YYYY-MM-DD.json`; Settings names it by the UTC day) and replaces an
+earlier run's file of the same day. `--remote` first runs `wrangler whoami`, then asks each visible account's `d1 list` for
+the planner database id in `wrangler.toml`, and pins the account that has it (`CLOUDFLARE_ACCOUNT_ID`): with two accounts
+on the login, wrangler refuses every non-interactive call otherwise. Without `--remote` it reads the local D1.
+
+Exit codes: `0` written · `1` usage or a wrangler failure · `2` no account has that email (nothing written) · `3` the
+planner account is not visible to this login (it lost it once, 2026-11-07): run `pnpm --dir api exec wrangler login`.
+`api/test/exportLocal.test.ts` asserts the output equals the app's own join of `GET /me/export` (`src/auth/accountExport.ts`),
+one page and several, so a column mapping cannot drift on either side.
+
 ## Before and after a D1 restore (Time Travel, A7)
 
 **What a restore is.** `wrangler d1 time-travel restore planner --timestamp=<ISO>` (or `--bookmark=`) rewinds the **whole
