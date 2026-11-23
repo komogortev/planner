@@ -59,6 +59,7 @@
 
 Full log: PROJECT.md → Decisions log. Latest:
 
+- 2026-11-22 (D-142) — Owner: input types (HIGH) starts now, before R10, amending D-122's "nothing new before R10"; the R10 notice will describe what it adds. Design docs/INPUT-TYPES.md; roadmap docs/ROADMAP.md.
 - 2026-11-21 — Sessions pull planner data locally via wrangler, read-only (#205); R6 nightly export and MCP (D-119) parked — owner won't hand-carry exports.
 - 2026-11-08 (R6 400 read) — wrangler now lists both accounts, so `error_log` was read: 22 `export.github-400` rows, one per night 10-18…11-08, including the run after the README. Never 404, so the empty tree was a real but secondary fault. Probe: malformed tokens (quoted, inner space, doubled Bearer, literal 
 ) all give 401; a NUL-interleaved token throws before sending. So the 400 comes from a call after the reads, most likely `POST /git/trees` or `/git/commits`.
