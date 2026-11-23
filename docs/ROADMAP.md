@@ -34,7 +34,7 @@
 | 2.2 | Pictures in a note: paste, pick or shoot; stored, synced, shown, exported | AUTO + DEPLOY; OWNER turns on R2 if the design picks it (a Cloudflare account setting) | Add a picture on the phone, see it on the PC; the local export carries it |
 | 2.3 | Further types the design names | AUTO + DEPLOY, one slice each | Per slice |
 
-**Sequencing question (§5):** D-122 puts every feature after R10, but Phase 1 now waits mostly on the owner.
+**Sequencing: answered (owner 2026-11-22, D-142): Phase 2 starts now, alongside Phase 1.** Design: [INPUT-TYPES.md](INPUT-TYPES.md).
 
 ## Phase 3: Claude reads the planner from anywhere (5c0a1121, 7c143096)
 
@@ -59,7 +59,7 @@ After 3.1, in-app chat stays parked (fb579731). Auditing stays in Claude session
 | # | Item | Mark | Owner validates |
 |---|---|---|---|
 | 5.1 | Day summary (9e669392): the `day-summary` skill reads the "done today" note from the local pull. Its re-entry (R6 export) is now met another way. The change is in the skill, outside this repo | AUTO | Run `day summary` with no typed text |
-| 5.2 | Evening coverage (541ae15e): the owner says a run started by hand is enough. Check whether Summary v3 on demand already covers it, then close the line or add one button | AUTO | One tap gives the evening view |
+| 5.2 | Evening coverage (541ae15e): covered. The Summary card's "Write the evening brief" is the run started by hand (R3 #173); the owner closes the line | — | Turn on Summary on the Widgets page, tap it in the evening |
 | 5.3 | "Where your data goes" page (850dc28d), written alongside the R10 notice | AUTO + DEPLOY | It matches the notice |
 | 5.4 | "Window" kind (cb86a0d7) | DECIDE first | — |
 | 5.5 | Spend cap and model size per AI feature (53d833a9); re-entry: a second scheduled feature | AUTO + DEPLOY | — |
@@ -71,10 +71,6 @@ Notifications bc72ef5e (after R10, D-127) · R6 nightly export (an off-Cloudflar
 (the owner asks for a proper integration) · in-app chat fb579731 (MCP access doesn't cover the need) · in-app AI audit
 30f106e2 (sessions stop being enough).
 
-## 5. Open question
+## 5. Answered
 
-**Q1.** D-122 says nothing new starts before R10. Input types is HIGH, and Phase 1 now waits mostly on owner steps.
-
-- **(Recommended)** Start Phase 2 now (design 2.0, then 2.1), alongside Phase 1, and fold it into the R10 notice, so
-  testers get the feature and the notice describes it. This amends D-122.
-- Keep D-122 as is: Phase 2 starts after R10.
+**Q1 (D-142, owner 2026-11-22):** start Phase 2 now, alongside Phase 1, and fold it into the R10 notice.
