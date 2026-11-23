@@ -1,6 +1,6 @@
 # Input types (Design, ROADMAP Phase 2)
 
-**Status: proposed (2026-11-22), ends in one owner question (§6).** The owner marked input types HIGH and said on
+**Status: Q1 answered (owner 2026-11-22): input types = press to record, speech to text, saved as text (V1, §3). Pictures deferred (§7).** The owner marked input types HIGH and said on
 2026-11-22 to start it now, before R10 (D-142). INBOX `fe9a6102`, `b41e07d2`. Terms per [VOCABULARY.md](VOCABULARY.md).
 
 ## 1. What the planner takes today (code, 2026-11-22)
@@ -71,10 +71,22 @@ The two don't exclude each other, but they're different projects. Which one the 
 URLs in a note render as links (no fetching). Previews are left out: a Worker that fetches arbitrary URLs is an SSRF
 surface.
 
-### V. Voice memos: not proposed
+### V1. Press to speak, saved as text (owner's choice 2026-11-22), size S
 
-The keyboard's dictation already covers speech to text. A recording needs either a transcription model on the user's
-key or the browser's speech service (audio goes to the browser vendor). Revisit if dictation falls short.
+- **What:** a **Speak** key under the recorder. A tap starts listening, the words appear in the recorder's window as they
+  are heard, and listening ends by itself after a pause (or on a second tap). The text then sits in the window like
+  typed text; the record key saves it as a note. One utterance per tap; the next tap appends.
+- **How:** the browser's own speech service (Web Speech API, `webkitSpeechRecognition`). No key, no Worker change, no
+  audio stored by the planner. **On Chrome the audio goes to Google's speech service**, so the R10 notice says so.
+  Where the browser has none (Firefox), the key doesn't show.
+- **Guards:** while listening the window is read-only (typed and spoken text would race) and the record key stops
+  listening instead of saving, so a note is never saved half-heard. A blocked microphone or a lost connection shows a
+  one-line message.
+- **Code:** `src/capture/dictation.ts` (logic, tested with a fake recognizer), `src/views/HomeView.vue` (the key).
+- **Owner validates (Android, installed app):** tap Speak, say a sentence; it appears in the window; tap the record
+  key; the note syncs.
+- **Later, if the browser's quality falls short:** record audio and transcribe it with a model on the user's own key
+  (OpenAI-compatible `/audio/transcriptions`; Anthropic has no speech to text). Not built.
 
 ## 4. Reading B, in brief
 
@@ -85,15 +97,17 @@ owner writes in practice.
 
 ## 5. Order (reading A)
 
-T1 → P → L. T1 first: the owner already hit the limit, it needs no new infrastructure, and it proves the REPULL path
-for P.
+V1 now (owner). T1 (longer Task text, `b41e07d2`) stays a separate item. P is deferred (§7). L when wanted.
 
-## 6. Owner question
+## 6. Answered
 
-**Q1.** Which input types, in what order?
+**Q1 (owner 2026-11-22):** input types = press to record voice, speech to text, saved as text. Built as V1.
 
-- **(Recommended) Reading A: T1 longer Task text → P pictures → L links;** no voice memos.
-- Reading B: typed notes (with Window as one kind); A waits.
-- Both: T1 now, then the B design before P.
+## 7. Pictures: deferred until two questions are answered (owner 2026-11-22)
 
-Proceeding under the recommendation: T1 starts in the next session turn, since it comes first in every option.
+1. **What a picture is for:** keep the image itself in the note, or have the AI describe it and keep only the text
+   (the picture then needn't be stored at all).
+2. **Where pictures live:** the user's Google Photos (the planner stores a link; needs a Google Photos permission and
+   Google's API limits) or the planner's own storage (Cloudflare R2, §3 P).
+
+Re-entry: the owner answers both. §3 P is the own-storage option, kept as the starting point.
