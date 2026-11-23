@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Read-only: write the planner export of one account to a local file, with no phone and no session token.
 //
-//   node api/scripts/export-local.mjs <email> [--remote] [--out <dir>]
+//   node api/scripts/export-local.mjs <email> [--remote] [--out <dir>] [--max-age-hours <h>]
 //
 // Reads D1 through `wrangler d1 execute planner --json` (SELECT only: export-core.mjs refuses anything else) and writes
 // `planner-export-YYYY-MM-DD.json` (local day) to <dir>, default ~/Downloads: the same file Settings → Export downloads,
@@ -9,27 +9,60 @@
 // wrangler login can see the account that owns the planner database (it once lost it, 2026-11-07) and pins that account.
 // Prints counts only, never content. The email is typed here, never committed (public repo).
 //
+// --max-age-hours <h>: pull only when the newest planner export in <dir> (by its `exportedAt`) is older than h hours, so
+// a consumer can call this before every read (INBOX 7f3d9b02: freshness at read time, no scheduler). On any failure the
+// last line is `STALE: …` with the age of the file a consumer would fall back on, so a failed pull is never silent.
+//
 // Exit: 0 written · 1 usage or wrangler failure · 2 no account has that email · 3 the planner account is not visible.
 import { execFileSync } from 'node:child_process'
 import { createRequire } from 'node:module'
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { buildExport, exportFileName, NoAccountError } from './export-core.mjs'
+import { ageText, buildExport, exportFileName, freshness, NoAccountError } from './export-core.mjs'
 
 const apiDir = join(dirname(fileURLToPath(import.meta.url)), '..')
-const wrangler = join(dirname(createRequire(import.meta.url).resolve('wrangler/package.json')), 'bin', 'wrangler.js')
 
 const args = process.argv.slice(2)
 const opt = (n) => { const i = args.indexOf(n); return i >= 0 ? args[i + 1] : undefined }
 const remote = args.includes('--remote')
 const outDir = resolve(opt('--out') ?? join(homedir(), 'Downloads'))
-const [rawEmail] = args.filter((a, i) => !a.startsWith('--') && args[i - 1] !== '--out')
+const [rawEmail] = args.filter((a, i) => !a.startsWith('--') && args[i - 1] !== '--out' && args[i - 1] !== '--max-age-hours')
+const maxAgeRaw = opt('--max-age-hours')
 
-const die = (m, code = 1) => { console.error(m); process.exit(code) }
+// The exports already in <dir> as { name, exportedAt } (unreadable files left out): what a consumer reads if this run writes nothing.
+const existing = () => {
+  let names = []
+  try { names = readdirSync(outDir).filter((n) => /^planner-export-.*\.json$/.test(n)) } catch { /* no folder: no file */ }
+  return names.flatMap((name) => {
+    try { return [{ name, exportedAt: JSON.parse(readFileSync(join(outDir, name), 'utf8')).exportedAt }] } catch { return [] }
+  })
+}
+const staleLine = () => {
+  const f = freshness(existing(), {})
+  return f.newest ? `STALE: nothing pulled; the newest export is ${f.newest}, ${ageText(f.ageMs)} old (${outDir})` : `STALE: nothing pulled and no planner export in ${outDir}`
+}
+const die = (m, code = 1) => { console.error(m); console.error(staleLine()); process.exit(code) }
 const email = (rawEmail ?? '').trim().toLowerCase()
-if (!/^[a-z0-9._%+-]+@[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/.test(email)) die(`usage: node api/scripts/export-local.mjs <email> [--remote] [--out <dir>]\nnot an email: ${rawEmail ?? '(none)'}`)
+if (!/^[a-z0-9._%+-]+@[a-z0-9-]+(\.[a-z0-9-]+)*\.[a-z]{2,}$/.test(email)) die(`usage: node api/scripts/export-local.mjs <email> [--remote] [--out <dir>] [--max-age-hours <h>]\nnot an email: ${rawEmail ?? '(none)'}`)
+
+if (maxAgeRaw !== undefined) {
+  const hours = Number(maxAgeRaw)
+  if (!(hours >= 0)) die(`--max-age-hours: not a number of hours: ${maxAgeRaw}`)
+  const f = freshness(existing(), { maxAgeMs: hours * 3_600_000 })
+  if (f.fresh) {
+    console.log(`fresh: ${f.newest} is ${ageText(f.ageMs)} old (max ${hours} h), no pull · ${join(outDir, f.newest)}`)
+    process.exit(0)
+  }
+  console.log(f.newest ? `${f.newest} is ${ageText(f.ageMs)} old (max ${hours} h): pulling` : `no planner export in ${outDir}: pulling`)
+}
+
+// Resolved after the freshness check, so a fresh file is reported even where api/ has no node_modules (a new worktree).
+let wrangler
+try { wrangler = join(dirname(createRequire(import.meta.url).resolve('wrangler/package.json')), 'bin', 'wrangler.js') } catch {
+  die(`wrangler is not installed under ${apiDir}: run \`pnpm --dir api install\``)
+}
 
 const run = (argv, env = process.env) =>
   execFileSync(process.execPath, [wrangler, ...argv], { cwd: apiDir, encoding: 'utf8', env, stdio: ['ignore', 'pipe', 'pipe'] })
