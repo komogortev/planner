@@ -80,3 +80,31 @@ export function exportFileName(at = new Date()) {
   const p = (n) => String(n).padStart(2, '0')
   return `planner-export-${at.getFullYear()}-${p(at.getMonth() + 1)}-${p(at.getDate())}.json`
 }
+
+/** An export's `exportedAt` (epoch ms; an ISO string in older files) → epoch ms, or NaN. */
+export const exportedMs = (v) => (typeof v === 'number' ? v : Date.parse(v))
+
+/**
+ * Should a pull run? `files` = the planner exports already in the folder, as `{ name, exportedAt }` (unreadable ones left
+ * out). The newest by `exportedAt` is fresh when it is at most `maxAgeMs` old. `newest` is null when no file has a valid
+ * time. A file dated in the future (clock skew) counts as fresh: its age is 0.
+ */
+export function freshness(files, { now = Date.now(), maxAgeMs }) {
+  let newest = null
+  for (const f of files) {
+    const ms = exportedMs(f.exportedAt)
+    if (Number.isFinite(ms) && (!newest || ms > newest.ms)) newest = { name: f.name, ms }
+  }
+  if (!newest) return { fresh: false, newest: null, ageMs: null }
+  const ageMs = Math.max(0, now - newest.ms)
+  return { fresh: maxAgeMs != null && ageMs <= maxAgeMs, newest: newest.name, ageMs }
+}
+
+/** `ageMs` as `42 min`, `5 h 3 min` or `2 d 4 h`. */
+export function ageText(ageMs) {
+  const m = Math.floor(ageMs / 60_000)
+  if (m < 60) return `${m} min`
+  const h = Math.floor(m / 60)
+  if (h < 48) return `${h} h ${m % 60} min`
+  return `${Math.floor(h / 24)} d ${h % 24} h`
+}

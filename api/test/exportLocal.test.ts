@@ -3,7 +3,7 @@
 // mapping drifts on either side, these comparisons fail.
 import { env } from 'cloudflare:test'
 import { describe, expect, it } from 'vitest'
-import { assertSelect, buildExport, exportFileName, NoAccountError, type Query } from '../scripts/export-core.mjs'
+import { ageText, assertSelect, buildExport, exportFileName, freshness, NoAccountError, type Query } from '../scripts/export-core.mjs'
 import { exportPages } from '../../src/auth/accountExport'
 import { createSession } from '../src/auth'
 import { pushMutations } from '../src/entries'
@@ -134,5 +134,29 @@ describe('assertSelect', () => {
 describe('exportFileName', () => {
   it('names the file by the local calendar day', () => {
     expect(exportFileName(new Date(2026, 10, 3, 23, 59))).toBe('planner-export-2026-11-03.json')
+  })
+})
+
+describe('freshness (--max-age-hours)', () => {
+  const now = Date.UTC(2026, 10, 22, 12, 0)
+  const h = 3_600_000
+  it('is fresh when the newest export is within the window, by exportedAt not by name', () => {
+    const f = freshness([{ name: 'planner-export-2026-11-22.json', exportedAt: now - 5 * h }, { name: 'planner-export-2026-11-21.json', exportedAt: now - 30 * 60_000 }], { now, maxAgeMs: h })
+    expect(f).toEqual({ fresh: true, newest: 'planner-export-2026-11-21.json', ageMs: 30 * 60_000 })
+  })
+  it('is stale past the window, and reads an ISO exportedAt from an older file', () => {
+    const f = freshness([{ name: 'planner-export-2026-10-24.json', exportedAt: new Date(now - 29 * 24 * h).toISOString() }], { now, maxAgeMs: h })
+    expect(f.fresh).toBe(false)
+    expect(ageText(f.ageMs!)).toBe('29 d 0 h')
+  })
+  it('has no newest when the folder holds no file with a valid time (absent or unreadable)', () => {
+    expect(freshness([], { now, maxAgeMs: h })).toEqual({ fresh: false, newest: null, ageMs: null })
+    expect(freshness([{ name: 'planner-export-x.json', exportedAt: 'garbage' }], { now, maxAgeMs: h }).newest).toBeNull()
+  })
+  it('never counts as fresh without a window (the STALE line on failure)', () => {
+    expect(freshness([{ name: 'a', exportedAt: now }], { now }).fresh).toBe(false)
+  })
+  it('formats ages', () => {
+    expect([ageText(59_000), ageText(42 * 60_000), ageText(5 * h + 3 * 60_000), ageText(50 * h)]).toEqual(['0 min', '42 min', '5 h 3 min', '2 d 2 h'])
   })
 })

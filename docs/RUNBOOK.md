@@ -178,6 +178,23 @@ planner account is not visible to this login (it lost it once, 2026-11-07): run 
 `api/test/exportLocal.test.ts` asserts the output equals the app's own join of `GET /me/export` (`src/auth/accountExport.ts`),
 one page and several, so a column mapping cannot drift on either side.
 
+**Fresh at read time (INBOX 7f3d9b02, 2026-11-22).** Nothing schedules the pull; each consumer runs it before it reads:
+
+```
+node api/scripts/export-local.mjs <email> --remote --max-age-hours 1
+```
+
+With `--max-age-hours h` the script pulls only when the newest export in the folder (by its `exportedAt`, not the file
+name) is older than `h` hours, else prints `fresh: …` and exits 0. A pull takes about 15 s (measured 2026-11-22). On any
+failure the last line is `STALE: nothing pulled; the newest export is <file>, <age> old` (or `… no planner export in
+<dir>`), and the exit code is kept, so a consumer can report the age of the file it falls back on. Wired consumers:
+Household `commitments.py` (runs it first and puts a failed pull under Gaps; `--no-refresh` skips it) and the
+`notes-intake` skill (step 0). They call the main checkout's copy, so the main checkout has to be at or past this change.
+A new worktree has no `api/node_modules`: run `pnpm --dir api install` there first (the script says so and exits 1).
+No scheduled task: no unattended routine reads planner data (checked 2026-11-22). Re-entry: a scheduled task starts
+reading the export, and then it calls this same command. Same-day runs replace one file, so Downloads gains at most one
+~100 KB file per day of use; nothing prunes them (re-entry: more than 30 `planner-export-*.json` files there).
+
 ## Before and after a D1 restore (Time Travel, A7)
 
 **What a restore is.** `wrangler d1 time-travel restore planner --timestamp=<ISO>` (or `--bookmark=`) rewinds the **whole

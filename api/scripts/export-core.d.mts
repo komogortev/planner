@@ -21,3 +21,9 @@ export function buildExport(
 }>
 export class NoAccountError extends Error {}
 export function exportFileName(at?: Date): string
+export function exportedMs(v: unknown): number
+export function freshness(
+  files: { name: string; exportedAt: unknown }[],
+  opts: { now?: number; maxAgeMs?: number | null },
+): { fresh: boolean; newest: string | null; ageMs: number | null }
+export function ageText(ageMs: number): string
