@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onBeforeUnmount, ref } from 'vue'
 import { captureEntry } from '@/capture/capture'
 import { isBlank } from '@/capture/draft'
 import { createSubmitter } from '@/capture/submit'
+import { createDictation, speechCtor } from '@/capture/dictation'
 import { db } from '@/db'
 import { useDraft } from '@/composables/useDraft'
 import { useLiveQuery } from '@/composables/useLiveQuery'
@@ -27,7 +28,38 @@ let savedTimer: number | undefined
 // still writing is dropped, and text typed during the write stays.
 const submit = createSubmitter({ get: () => text.value, set: (t) => { text.value = t } }, captureEntry)
 
+// Voice (INPUT-TYPES.md V1): the mic key speaks into the window; the record key still saves. While listening the window
+// is read-only (typed and spoken text would race) and the record key stops listening instead of saving, so a note is
+// never saved half-heard.
+const Speech = speechCtor()
+const listening = ref(false)
+const dictation = Speech
+  ? createDictation({
+      ctor: Speech,
+      lang: navigator.language || 'en-US',
+      get: () => text.value,
+      set: (t) => {
+        text.value = t
+      },
+      onListening: (l) => {
+        listening.value = l
+        if (!l) saveDraftNow()
+      },
+      onError: (m) => {
+        error.value = m
+      },
+    })
+  : null
+function toggleVoice(): void {
+  if (!dictation) return
+  if (dictation.listening) return dictation.stop()
+  error.value = null
+  dictation.start()
+}
+onBeforeUnmount(() => dictation?.abort())
+
 async function capture(): Promise<void> {
+  if (dictation?.listening) return dictation.stop()
   const out = await submit()
   if (!out) return // a second tap while the first was still writing
   if (out.kind === 'empty') return box.value?.focus()
@@ -67,15 +99,32 @@ function onKey(e: KeyboardEvent): void {
           placeholder="What's on your mind?"
           aria-label="New entry"
           data-test="capture-input"
+          :readonly="listening"
           @keydown="onKey"
         />
         <!-- Red LED (top right): lights up when a capture lands. -->
-        <span class="led" :class="{ 'led-on': saved }" aria-hidden="true" />
+        <span class="led" :class="{ 'led-on': saved, 'led-rec': listening }" aria-hidden="true" />
         <!-- Record key = Capture. -->
         <button class="key" data-test="capture-submit" aria-label="Capture" @click="capture" />
       </div>
     </div>
 
+    <button
+      v-if="dictation"
+      type="button"
+      class="mic"
+      :class="{ 'mic-on': listening }"
+      :aria-pressed="listening"
+      :aria-label="listening ? 'Stop speaking' : 'Speak a note'"
+      data-test="capture-voice"
+      @click="toggleVoice"
+    >
+      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="9" y="3" width="6" height="11" rx="3" />
+        <path d="M5 11a7 7 0 0 0 14 0M12 18v3" />
+      </svg>
+      <span>{{ listening ? 'Listening… tap to stop' : 'Speak' }}</span>
+    </button>
     <p v-if="error" class="text-sm text-err px-5 mt-2" data-test="capture-error">{{ error }}</p>
     <p class="text-xs text-slate-500 mt-2 h-4" data-test="capture-status">
       <template v-if="saved">Saved ✓</template>
@@ -152,6 +201,37 @@ function onKey(e: KeyboardEvent): void {
   border-radius: 50%;
   pointer-events: none;
   transition: box-shadow 160ms, background-color 160ms;
+}
+.mic {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+  padding: 0.45rem 0.9rem;
+  border-radius: 999px;
+  border: 1px solid rgb(120 113 108 / 0.5);
+  background: rgb(248 245 232 / 0.7);
+  color: #1c1917;
+  font-size: 0.875rem;
+  -webkit-tap-highlight-color: transparent;
+}
+.mic-on {
+  border-color: rgb(239 68 68);
+  color: rgb(185 28 28);
+}
+.led-rec {
+  background: rgb(239 68 68 / 0.85);
+  animation: rec 1.2s ease-in-out infinite;
+}
+@keyframes rec {
+  50% {
+    box-shadow: 0 0 10px 4px rgb(239 68 68 / 0.6);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .led-rec {
+    animation: none;
+  }
 }
 .led-on {
   background: rgb(239 68 68 / 0.85);
