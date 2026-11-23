@@ -1,8 +1,8 @@
 # Personal Planner — STATE
 
 ## SNAPSHOT
-- **Phase/Last (2026-11-21):** H1 built · HW S3 v2 live · H5 in real use · GitHub bridge G1–G2 + C1–C4 live. **D-122 full-scope alpha** ([ALPHA-TEST-PLAN.md](ALPHA-TEST-PLAN.md)): R1–R6 merged (#169–#177); R7 S3-1 Morning schedule merged, deployed paused (#179–#183). **11-21:** phone-free local pull (#205). Rollback floor `80540b1`.
-- **Working:** sessions refresh planner data without the phone: `node api/scripts/export-local.mjs <email> --remote` reads prod D1 read-only via wrangler and writes `planner-export-<date>.json` to Downloads (RUNBOOK "Local export"); notes-intake and commitments.py read it unchanged. Pages serves `bb7ff29`. Prod Worker `6183100`, D1 `0012`, smoke 17/17, `SCHEDULES_PAUSED="true"`. `pnpm check` app 586 · Worker 317.
+- **Phase/Last (2026-11-22):** H1 built · HW S3 v2 live · H5 in real use · GitHub bridge G1–G2 + C1–C4 live. **D-122 full-scope alpha** ([ALPHA-TEST-PLAN.md](ALPHA-TEST-PLAN.md)): R1–R6 merged (#169–#177); R7 S3-1 Morning schedule merged, deployed paused (#179–#183). **11-21/22:** phone-free pull (#205), fresh at read time (#209). Rollback floor `80540b1`.
+- **Working:** planner data reaches Claude with no owner action: commitments.py and notes-intake run `export-local.mjs --remote --max-age-hours 1` (read-only D1 pull) before reading; a failed pull prints `STALE:` (RUNBOOK "Local export"). No scheduler (owner 11-22). Pages serves `d4a8c88`. Prod Worker `6183100`, D1 `0012`, smoke 17/17, `SCHEDULES_PAUSED="true"`. `pnpm check` app 586 · Worker 317.
 - **Broken/known:** Worker still `6183100`: #195 (`74b17aa`, R6 cause 1) merged, not deployed. R6 export never landed (`export.github-400` nightly). R7 unverified: real Workflow path, compose CPU vs free-plan step limit, Settings → Schedules on a phone. Phone gaps: DEVICE-CHECKS 37–41; `@claude` E2E untested.
 - **Parked:** R6 nightly export (re-entry: owner wants an off-Cloudflare backup) · MCP read endpoint D-119 (re-entry: phone-chat access wanted).
 - **Blocker:** none.
@@ -60,6 +60,7 @@
 Full log: PROJECT.md → Decisions log. Latest:
 
 - 2026-11-22 (D-142) — Owner: input types (HIGH) starts now, before R10, amending D-122's "nothing new before R10"; the R10 notice will describe what it adds. Design docs/INPUT-TYPES.md; roadmap docs/ROADMAP.md.
+- 2026-11-22 — Consumers pull at read time (`--max-age-hours 1`, #209), no scheduled task: no unattended routine reads planner data, and the owner chose "no scheduler". Re-entry: a scheduled task starts reading the export.
 - 2026-11-21 — Sessions pull planner data locally via wrangler, read-only (#205); R6 nightly export and MCP (D-119) parked — owner won't hand-carry exports.
 - 2026-11-08 (R6 400 read) — wrangler now lists both accounts, so `error_log` was read: 22 `export.github-400` rows, one per night 10-18…11-08, including the run after the README. Never 404, so the empty tree was a real but secondary fault. Probe: malformed tokens (quoted, inner space, doubled Bearer, literal 
 ) all give 401; a NUL-interleaved token throws before sending. So the 400 comes from a call after the reads, most likely `POST /git/trees` or `/git/commits`.
