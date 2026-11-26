@@ -31,10 +31,25 @@
 |---|---|---|---|
 | 2.0 | Design doc: which types (pictures, long multi-line text; the owner names any others), storage (D1 rows vs Cloudflare R2), sync, export, what reaches the model, size caps | DECIDE | Answers the doc's questions |
 | 2.1 | Long multi-line text (b41e07d2): every reader and writer of the 200-character limit, a new cap, multi-line input | AUTO + DEPLOY | Paste a multi-line brief on the phone; it survives sync to a second device |
-| 2.2 | Pictures in a note: paste, pick or shoot; stored, synced, shown, exported | AUTO + DEPLOY; OWNER turns on R2 if the design picks it (a Cloudflare account setting) | Add a picture on the phone, see it on the PC; the local export carries it |
+| 2.2 | Pictures in a note: paste, pick or shoot; stored, synced, shown, exported. **Use case (owner 2026-11-25): phone photo capture** of receipts, papers and notices, processed into notes that Claude sessions read. **On the roadmap, not scheduled** (open questions below) | DECIDE first, then AUTO + DEPLOY; OWNER turns on R2 if the design picks it (a Cloudflare account setting) | Shoot a receipt on the phone; the next local export carries it as a note a session can route |
 | 2.3 | Further types the design names | AUTO + DEPLOY, one slice each | Per slice |
 
 **Sequencing: answered (owner 2026-11-22, D-142): Phase 2 starts now, alongside Phase 1.** Design: [INPUT-TYPES.md](INPUT-TYPES.md).
+
+**2.2 phone photo capture (owner 2026-11-25, fe9a6102).** Today a receipt travels photo → Messenger to himself → PC →
+pasted into a Claude session. Wanted: shoot it in the planner, where it accumulates, and have it come out as a note that
+`api/scripts/export-local.mjs` and the `notes-intake` skill pick up. Owner: "we won't solve it today", so no slice is
+scheduled. Open design questions (they extend [INPUT-TYPES.md](INPUT-TYPES.md) §7):
+
+- **Storage:** D1 rows vs Cloudflare R2 on the free plan (a 64 KB record cap and D1 row size rule out storing the image
+  in a record; R2 is an owner account setting), size cap and on-phone downscale, offline capture in Dexie, and the CSP
+  (`img-src` has no `blob:` today; `_headers` is applied only on deployed builds).
+- **Who reads the photo:** the per-device H5 model, if it has vision, or a step in the Claude session; and whether the
+  image is kept at all or only its extracted text (§7 Q1).
+- **How it reaches its home:** a note `kind` (receipt, document, other) so notes-intake routes a receipt to Finances and
+  a household paper to `Household/docs/INBOX.md`.
+- **Privacy:** receipts carry amounts and merchant names. The export, the GitHub bridge (Send as issue) and any model
+  call must never carry them anywhere public; figures stay in Finances.
 
 ## Phase 3: Claude reads the planner from anywhere (5c0a1121, 7c143096)
 
