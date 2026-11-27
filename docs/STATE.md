@@ -59,6 +59,7 @@
 
 Full log: PROJECT.md → Decisions log. Latest:
 
+- 2026-11-27 — day-summary: INBOX 541ae15e (the hand-run evening brief covers the evening run) and 7a02705d (superseded by ROADMAP 4.0/4.1) closed on the owner's yes; #216.
 - 2026-11-22 (D-142) — Owner: input types (HIGH) starts now, before R10, amending D-122's "nothing new before R10"; the R10 notice will describe what it adds. Design docs/INPUT-TYPES.md; roadmap docs/ROADMAP.md.
 - 2026-11-22 — Consumers pull at read time (`--max-age-hours 1`, #209), no scheduled task: no unattended routine reads planner data, and the owner chose "no scheduler". Re-entry: a scheduled task starts reading the export.
 - 2026-11-21 — Sessions pull planner data locally via wrangler, read-only (#205); R6 nightly export and MCP (D-119) parked — owner won't hand-carry exports.
